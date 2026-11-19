@@ -10,6 +10,23 @@ import {
   UNIVERSAL_DEFAULT_RUBRIC,
   type UniversalRubricDimension
 } from './pilotCriteriaService';
+import {
+  openRouterKeyPoolManager,
+  parseApiKeyPool,
+  maskApiKey,
+  sanitizeSingleKey,
+  type KeyTestResult,
+  type KeyPoolItemStatus
+} from './openRouterKeyPoolService';
+
+export {
+  openRouterKeyPoolManager,
+  parseApiKeyPool,
+  maskApiKey,
+  sanitizeSingleKey,
+  type KeyTestResult,
+  type KeyPoolItemStatus
+};
 
 export type CoffeeGroupKey = 'mocha' | 'cappuccino' | 'americano' | 'espresso' | 'latte' | string;
 
@@ -3481,6 +3498,9 @@ export async function fetchAiConfigFromDb(): Promise<{
           generatorPrompt: data.generatorPrompt || '',
           updatedAt: data.updatedAt
         };
+        if (data.apiKey) {
+          openRouterKeyPoolManager.setKeys(data.apiKey);
+        }
         if (typeof window !== 'undefined') {
           if (data.apiKey) {
             localStorage.setItem('ai_api_key', data.apiKey);
@@ -3513,7 +3533,7 @@ export async function fetchAiConfigFromDb(): Promise<{
     console.warn('fetchAiConfigFromDb fallback to local:', err);
   }
   return {
-    apiKey: getStoredOpenRouterApiKey(),
+    apiKey: getStoredOpenRouterApiKeyString(),
     model: getStoredOpenRouterModel(),
     systemPrompt: typeof window !== 'undefined' ? localStorage.getItem('ai_system_prompt') || '' : '',
     generatorPrompt: typeof window !== 'undefined' ? localStorage.getItem('ai_generator_prompt') || '' : '',
@@ -3527,17 +3547,21 @@ export async function saveAiConfigToDb(config: {
   systemPrompt?: string;
   generatorPrompt?: string;
 }): Promise<{ ok: boolean; message: string }> {
-  const cleanKey = sanitizeApiKey(config.apiKey);
+  const rawKey = config.apiKey.trim();
   const cleanModel = sanitizeModel(config.model);
+  
+  // ซิงค์เข้า Key Pool Manager ทันที
+  openRouterKeyPoolManager.setKeys(rawKey);
+
   cachedAiConfig = {
-    apiKey: cleanKey,
+    apiKey: rawKey,
     model: cleanModel,
     systemPrompt: config.systemPrompt || '',
     generatorPrompt: config.generatorPrompt || ''
   };
 
   if (typeof window !== 'undefined') {
-    localStorage.setItem('ai_api_key', cleanKey);
+    localStorage.setItem('ai_api_key', rawKey);
     localStorage.setItem('ai_model', cleanModel);
     if (config.systemPrompt !== undefined) {
       localStorage.setItem('ai_system_prompt', config.systemPrompt);
@@ -3547,7 +3571,7 @@ export async function saveAiConfigToDb(config: {
     }
     try {
       window.dispatchEvent(new CustomEvent('openrouter_config_changed', {
-        detail: { apiKey: cleanKey, model: cleanModel }
+        detail: { apiKey: rawKey, model: cleanModel }
       }));
     } catch {}
   }
@@ -3557,7 +3581,7 @@ export async function saveAiConfigToDb(config: {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        apiKey: cleanKey,
+        apiKey: rawKey,
         model: cleanModel,
         systemPrompt: config.systemPrompt || '',
         generatorPrompt: config.generatorPrompt || ''
@@ -3579,7 +3603,28 @@ if (typeof window !== 'undefined' && !isFetchingAiConfig) {
   fetchAiConfigFromDb().catch(() => {}).finally(() => { isFetchingAiConfig = false; });
 }
 
+/**
+ * ดึง Key เดี่ยวสำหรับใช้งาน Round-Robin
+ */
 export function getStoredOpenRouterApiKey(): string {
+  // 1. ลองดึงจาก Key Pool Manager
+  const poolKey = openRouterKeyPoolManager.getNextKey().key;
+  if (poolKey) return poolKey;
+
+  // 2. ถ้าใน pool ยังไม่มี ลอง parse จาก raw string
+  const raw = getStoredOpenRouterApiKeyString();
+  const parsed = parseApiKeyPool(raw);
+  if (parsed.length > 0) {
+    openRouterKeyPoolManager.setKeys(parsed);
+    return openRouterKeyPoolManager.getNextKey().key;
+  }
+  return '';
+}
+
+/**
+ * ดึง Raw Key String (อาจมีหลายคีย์คั่นด้วย comma หรือ newline) สำหรับแสดงผลใน Settings UI
+ */
+export function getStoredOpenRouterApiKeyString(): string {
   if (cachedAiConfig?.apiKey) return cachedAiConfig.apiKey;
   if (typeof window === 'undefined') return '';
   const candidates = [
@@ -3591,10 +3636,26 @@ export function getStoredOpenRouterApiKey(): string {
     (import.meta as any).env?.VITE_OPENROUTER_API_KEY
   ];
   for (const c of candidates) {
-    const clean = sanitizeApiKey(c);
-    if (clean.length > 0) return clean;
+    if (c && typeof c === 'string' && c.trim().length > 0) {
+      return c.trim();
+    }
   }
   return '';
+}
+
+/**
+ * ดึงรายการคีย์ทั้งหมดที่อยู่ใน Pool ปัจจุบัน
+ */
+export function getOpenRouterKeyPool(): string[] {
+  const pool = openRouterKeyPoolManager.getKeys();
+  if (pool.length > 0) return pool;
+  const raw = getStoredOpenRouterApiKeyString();
+  const parsed = parseApiKeyPool(raw);
+  if (parsed.length > 0) {
+    openRouterKeyPoolManager.setKeys(parsed);
+    return parsed;
+  }
+  return [];
 }
 
 export function getStoredOpenRouterModel(): string {
@@ -3608,79 +3669,75 @@ export function saveStoredOpenRouterConfig(apiKey: string, model: string): void 
   saveAiConfigToDb({ apiKey, model }).catch(() => {});
 }
 
+export interface OpenRouterTestResult {
+  success: boolean;
+  message: string;
+  latencyMs?: number;
+  model?: string;
+  poolResults?: KeyTestResult[];
+}
+
+/**
+ * ทดสอบการเชื่อมต่อ OpenRouter (รองรับการทดสอบรายคีย์ และทดสอบทั้ง Pool แบบขนาน)
+ */
 export async function testOpenRouterConnection(
   customKey?: string,
   customModel?: string
-): Promise<{ success: boolean; message: string; latencyMs?: number; model?: string }> {
-  const key = sanitizeApiKey(customKey !== undefined ? customKey : getStoredOpenRouterApiKey());
+): Promise<OpenRouterTestResult> {
+  const rawKey = customKey !== undefined ? customKey : getStoredOpenRouterApiKeyString();
   const model = sanitizeModel(customModel !== undefined ? customModel : getStoredOpenRouterModel());
+  const parsedKeys = parseApiKeyPool(rawKey);
 
-  if (!key) {
+  if (parsedKeys.length === 0) {
     return {
       success: false,
       message: 'ไม่พบ OpenRouter API Key ในระบบ กรุณาระบุ API Key ที่ขึ้นต้นด้วย sk-or-v1-...'
     };
   }
 
-  const startTime = Date.now();
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 12000);
+  // กรณีมีหลาย Key ใน Pool ให้รัน Parallel Ping Test พร้อมกันทุกคีย์!
+  if (parsedKeys.length > 1) {
+    console.log(`[KeyPool Test] Parallel ping testing ${parsedKeys.length} keys in pool...`);
+    const poolResults = await openRouterKeyPoolManager.testAllKeys(parsedKeys, model);
+    const successList = poolResults.filter((r) => r.success);
+    const successCount = successList.length;
+    const avgLatency = Math.round(
+      (successList.reduce((sum, r) => sum + r.latencyMs, 0) || 0) / (successCount || 1)
+    );
 
-  try {
-    console.log('[OpenRouter Test] Ping testing OpenRouter connection...', { model, keyPrefix: key.slice(0, 8) + '...' });
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${key}`,
-        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173',
-        'X-Title': 'Moral Center Connection Test',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: 'user', content: 'Say pong' }],
-        max_tokens: 5
-      })
-    });
-    clearTimeout(timeoutId);
-
-    const latencyMs = Date.now() - startTime;
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      let errMsg = `HTTP ${res.status}`;
-      try {
-        const json = JSON.parse(errText);
-        errMsg = json.error?.message || errText;
-      } catch {
-        errMsg = errText || `HTTP ${res.status} ${res.statusText}`;
-      }
-      console.warn('[OpenRouter Test Error]', res.status, errMsg);
-      return {
-        success: false,
-        message: `OpenRouter ส่งข้อผิดพลาด (${errMsg})`,
-        latencyMs,
-        model
-      };
-    }
-
-    const data = await res.json();
-    console.log('[OpenRouter Test Success]', { latencyMs, model, choices: data.choices });
     return {
-      success: true,
-      message: `เชื่อมต่อ OpenRouter สำเร็จ! โมเดล "${model}" พร้อมใช้งานจริง (${latencyMs}ms)`,
-      latencyMs,
-      model
-    };
-  } catch (err: any) {
-    clearTimeout(timeoutId);
-    console.error('[OpenRouter Test Exception]', err);
-    return {
-      success: false,
-      message: `เกิดข้อผิดพลาดในการเชื่อมต่อ: ${err?.message || 'Network Timeout / ขัดข้อง'}`,
-      model
+      success: successCount > 0,
+      message:
+        successCount === parsedKeys.length
+          ? `✓ คีย์ใน Pool ทั้งหมด (${successCount}/${parsedKeys.length} Keys) พร้อมใช้งานปกติ! (ความเร็วเฉลี่ย ${avgLatency}ms)`
+          : `⚠️ ตรวจพบ ${successCount}/${parsedKeys.length} คีย์ที่พร้อมใช้งาน (${parsedKeys.length - successCount} คีย์ขัดข้อง)`,
+      latencyMs: avgLatency,
+      model,
+      poolResults
     };
   }
+
+  // กรณีมี Key เดี่ยว
+  const singleKey = parsedKeys[0];
+  const res = await openRouterKeyPoolManager.testSingleKey(singleKey, model);
+  return {
+    success: res.success,
+    message: res.success
+      ? `เชื่อมต่อ OpenRouter สำเร็จ! โมเดล "${model}" พร้อมใช้งานจริง (${res.latencyMs}ms)`
+      : `OpenRouter ส่งข้อผิดพลาด (${res.message})`,
+    latencyMs: res.latencyMs,
+    model,
+    poolResults: [
+      {
+        key: singleKey,
+        maskedKey: maskApiKey(singleKey),
+        index: 0,
+        success: res.success,
+        message: res.message,
+        latencyMs: res.latencyMs
+      }
+    ]
+  };
 }
 
 export interface FetchWithBackoffOptions {
@@ -3692,9 +3749,9 @@ export interface FetchWithBackoffOptions {
 }
 
 /**
- * ฟังก์ชันกลางสำหรับเรียก OpenRouter API พร้อมระบบ Exponential Backoff & Retry + Jitter
- * - ดักจับสถานะ HTTP 429 (Rate Limited) และ Network Timeout / Server Overload (5xx)
- * - คำนวณเวลาหน่วงแบบ Exponential Backoff (1s, 2s, 4s...) ผสมการสุ่ม Jitter 1–3 วินาที (1,000–3,000ms)
+ * ฟังก์ชันกลางสำหรับเรียก OpenRouter API พร้อมระบบ Exponential Backoff & Retry + Key Pool Failover
+ * - ดักจับสถานะ HTTP 429 (Rate Limited) และสลับคีย์อัตโนมัติจาก Key Pool (Automatic Failover)
+ * - คำนวณเวลาหน่วงแบบ Exponential Backoff + สุ่ม Jitter 1–3 วินาที (1,000–3,000ms)
  * - ทำการ Retry อัตโนมัติ 2–3 ครั้ง (สูงสุด 3 ครั้ง) ก่อนจะยอมแพ้
  * - ขยาย Timeout ต่อรอบจากเดิม 25,000ms เป็น 45,000ms สำหรับช่วงที่มีผู้ใช้งานหนาแน่น
  */
@@ -3713,6 +3770,24 @@ export async function fetchOpenRouterWithBackoff(
 
   let lastResponse: Response | null = null;
   let lastError: any = null;
+
+  // คัดลอก Headers
+  const baseHeaders: Record<string, string> = {
+    ...((options.headers as Record<string, string>) || {})
+  };
+
+  // ดึงคีย์ที่กำลังใช้งาน: จาก Header หรือสุ่มเลือกจาก Key Pool Manager
+  let activeKey = '';
+  const initialAuth = baseHeaders['Authorization'] || baseHeaders['authorization'] || '';
+  if (initialAuth.startsWith('Bearer ')) {
+    activeKey = sanitizeSingleKey(initialAuth.slice(7));
+  }
+  if (!activeKey) {
+    const keyInfo = openRouterKeyPoolManager.getNextKey();
+    if (keyInfo.key) {
+      activeKey = keyInfo.key;
+    }
+  }
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (parentSignal?.aborted) {
@@ -3734,14 +3809,22 @@ export async function fetchOpenRouterWithBackoff(
     }, timeoutMs);
 
     try {
+      const attemptHeaders = { ...baseHeaders };
+      if (activeKey) {
+        attemptHeaders['Authorization'] = `Bearer ${activeKey}`;
+      }
+
       if (attempt > 0) {
         console.warn(
-          `[${logContext}] กำลัง Retry รอบที่ ${attempt}/${maxRetries} (Timeout: ${timeoutMs}ms)...`
+          `[${logContext}] กำลัง Retry รอบที่ ${attempt}/${maxRetries} (ใช้คีย์ [${maskApiKey(
+            activeKey
+          )}], Timeout: ${timeoutMs}ms)...`
         );
       }
 
       const res = await fetch(url, {
         ...options,
+        headers: attemptHeaders,
         signal: controller.signal
       });
 
@@ -3751,6 +3834,9 @@ export async function fetchOpenRouterWithBackoff(
       }
 
       if (res.ok) {
+        if (activeKey) {
+          openRouterKeyPoolManager.markSuccess(activeKey);
+        }
         return res;
       }
 
@@ -3760,14 +3846,33 @@ export async function fetchOpenRouterWithBackoff(
       const isServerError = res.status >= 500 && res.status <= 504;
 
       if ((isRateLimited || isServerError) && attempt < maxRetries) {
-        // Exponential Backoff (1s, 2s, 4s...) + Jitter สุ่ม 1-3 วินาที (1,000 - 3,000ms)
-        const exponentialDelay = Math.pow(2, attempt) * baseBackoffMs;
+        if (isRateLimited && activeKey) {
+          openRouterKeyPoolManager.markRateLimited(activeKey, 60000);
+        }
+
+        // Automatic Failover: สลับไปใช้คีย์อื่นใน Pool ทันที!
+        let hasSwitchedKey = false;
+        if (openRouterKeyPoolManager.getKeyCount() > 1) {
+          const nextKeyInfo = openRouterKeyPoolManager.getNextKey(activeKey ? [activeKey] : []);
+          if (nextKeyInfo.key && nextKeyInfo.key !== activeKey) {
+            console.log(
+              `[${logContext}] 🔄 Failover: สลับจากคีย์ [${maskApiKey(activeKey)}] ไปใช้คีย์สำรอง [${maskApiKey(
+                nextKeyInfo.key
+              )}] (Key ${nextKeyInfo.index + 1}/${nextKeyInfo.total}) ทันที!`
+            );
+            activeKey = nextKeyInfo.key;
+            hasSwitchedKey = true;
+          }
+        }
+
+        // ถ้าสลับคีย์ใหม่ได้สำเร็จ ใช้เพียง Jitter 1-3 วินาทีเพื่อความรวดเร็ว
+        // แต่ถ้ายังเป็นคีย์เดิม ให้ใช้ Exponential Backoff
+        const exponentialDelay = hasSwitchedKey ? 0 : Math.pow(2, attempt) * baseBackoffMs;
         const jitterMs = Math.floor(Math.random() * 2000) + 1000;
         let waitTimeMs = exponentialDelay + jitterMs;
 
-        // รองรับ header Retry-After จาก OpenRouter (ถ้ามี)
         const retryAfter = res.headers.get('retry-after');
-        if (retryAfter) {
+        if (retryAfter && !hasSwitchedKey) {
           const parsedSec = parseFloat(retryAfter);
           if (!isNaN(parsedSec) && parsedSec > 0) {
             waitTimeMs = Math.max(waitTimeMs, Math.min(parsedSec * 1000, 15000));
@@ -3775,7 +3880,9 @@ export async function fetchOpenRouterWithBackoff(
         }
 
         console.warn(
-          `[${logContext}] พบ HTTP ${res.status} (${isRateLimited ? 'Rate Limited 429' : 'Server Busy'}) - หน่วงเวลา ${(waitTimeMs / 1000).toFixed(1)} วินาที (Exponential Backoff + Jitter ${jitterMs}ms) ก่อน Retry (รอบที่ ${attempt + 1}/${maxRetries})...`
+          `[${logContext}] พบ HTTP ${res.status} (${isRateLimited ? 'Rate Limited 429' : 'Server Busy'}) - ${
+            hasSwitchedKey ? 'สลับคีย์สำเร็จ' : 'ใช้คีย์เดิม'
+          } หน่วงเวลา ${(waitTimeMs / 1000).toFixed(1)}s (Jitter ${jitterMs}ms) ก่อน Retry (รอบที่ ${attempt + 1}/${maxRetries})...`
         );
 
         await new Promise((resolve) => setTimeout(resolve, waitTimeMs));
@@ -3800,12 +3907,26 @@ export async function fetchOpenRouterWithBackoff(
       const isNetworkError = err?.name === 'TypeError' || /failed to fetch|network/i.test(err?.message || '');
 
       if ((isNetworkTimeout || isNetworkError) && attempt < maxRetries) {
-        const exponentialDelay = Math.pow(2, attempt) * baseBackoffMs;
-        const jitterMs = Math.floor(Math.random() * 2000) + 1000; // Jitter 1-3 วินาที
+        let hasSwitchedKey = false;
+        if (openRouterKeyPoolManager.getKeyCount() > 1) {
+          const nextKeyInfo = openRouterKeyPoolManager.getNextKey(activeKey ? [activeKey] : []);
+          if (nextKeyInfo.key && nextKeyInfo.key !== activeKey) {
+            console.log(
+              `[${logContext}] 🔄 Failover on Error: สลับไปใช้คีย์ [${maskApiKey(
+                nextKeyInfo.key
+              )}] (Key ${nextKeyInfo.index + 1}/${nextKeyInfo.total})`
+            );
+            activeKey = nextKeyInfo.key;
+            hasSwitchedKey = true;
+          }
+        }
+
+        const exponentialDelay = hasSwitchedKey ? 0 : Math.pow(2, attempt) * baseBackoffMs;
+        const jitterMs = Math.floor(Math.random() * 2000) + 1000;
         const waitTimeMs = exponentialDelay + jitterMs;
 
         console.warn(
-          `[${logContext}] เกิดข้อผิดพลาด ${isNetworkTimeout ? `Network Timeout (${timeoutMs}ms)` : 'Network Error'} (${err?.message || 'ขัดข้อง'}) - หน่วงเวลา ${(waitTimeMs / 1000).toFixed(1)} วินาที (Exponential Backoff + Jitter ${jitterMs}ms) ก่อน Retry (รอบที่ ${attempt + 1}/${maxRetries})...`
+          `[${logContext}] เกิดข้อผิดพลาด ${isNetworkTimeout ? `Network Timeout (${timeoutMs}ms)` : 'Network Error'} (${err?.message || 'ขัดข้อง'}) - หน่วงเวลา ${(waitTimeMs / 1000).toFixed(1)}s ก่อน Retry (รอบที่ ${attempt + 1}/${maxRetries})...`
         );
 
         await new Promise((resolve) => setTimeout(resolve, waitTimeMs));

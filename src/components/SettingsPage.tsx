@@ -22,7 +22,9 @@ import {
   Eye,
   EyeOff,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  Layers,
+  Zap
 } from 'lucide-react';
 import { useMoralTheme, type MoralThemeMode } from './moral-center/utils/moralThemeManager';
 import { ThemeSwitcherDropdown } from './moral-center/components/ThemeSwitcherDropdown';
@@ -40,8 +42,14 @@ import {
   resetRegistrationsDatabaseFromApi,
   testOpenRouterConnection,
   fetchAiConfigFromDb,
-  saveAiConfigToDb
+  saveAiConfigToDb,
+  type OpenRouterTestResult
 } from './moral-center/data/pilotHackathonService';
+import {
+  parseApiKeyPool,
+  maskApiKey,
+  type KeyTestResult
+} from './moral-center/data/openRouterKeyPoolService';
 import { DatabaseTablesExplorer } from './moral-center/components/DatabaseTablesExplorer';
 
 export interface SettingsPageProps {
@@ -202,12 +210,10 @@ You MUST respond with a valid JSON object ONLY, strictly matching this structure
 
   const [showApiKey, setShowApiKey] = useState<boolean>(false);
   const [isTestingAiConnection, setIsTestingAiConnection] = useState<boolean>(false);
-  const [aiTestResult, setAiTestResult] = useState<{
-    success: boolean;
-    message: string;
-    latencyMs?: number;
-    model?: string;
-  } | null>(null);
+  const [aiTestResult, setAiTestResult] = useState<OpenRouterTestResult | null>(null);
+
+  // Compute parsed keys from input string in real-time
+  const parsedKeys = parseApiKeyPool(apiKey);
 
   const POPULAR_AI_MODELS = [
     { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', desc: 'แนะนำ: เร็ว ฉลาด ประหยัด' },
@@ -269,6 +275,7 @@ You MUST respond with a valid JSON object ONLY, strictly matching this structure
     const cleanKey = apiKey.trim().replace(/^["']|["']$/g, '');
     const cleanModel = (model.trim() && model.trim() !== 'openai/gpt-3.5-turbo') ? model.trim() : 'openai/gpt-4o-mini';
     
+    const parsed = parseApiKeyPool(cleanKey);
     const res = await saveAiConfigToDb({
       apiKey: cleanKey,
       model: cleanModel,
@@ -276,7 +283,11 @@ You MUST respond with a valid JSON object ONLY, strictly matching this structure
       generatorPrompt
     });
 
-    alert(res.message || 'บันทึกการตั้งค่า AI ลง SQLite และ Server File เรียบร้อยแล้ว (ทุกเครื่องสามารถเชื่อมต่อ AI ได้ทันทีโดยไม่ต้องใส่ Key ใหม่)');
+    const poolSuffix = parsed.length > 1
+      ? `\n\n🚀 เปิดใช้งานโหมด Multi-Key Pool จำนวน ${parsed.length} คีย์ สำเร็จ (ขยายโควตา ${parsed.length}x เท่า + Auto-Failover อัตโนมัติ)`
+      : (parsed.length === 1 ? '\n\n🔑 ใช้งานโหมด Single API Key สำเร็จ' : '');
+
+    alert((res.message || 'บันทึกการตั้งค่า AI ลง SQLite และ Server File เรียบร้อยแล้ว (ทุกเครื่องสามารถเชื่อมต่อ AI ได้ทันทีโดยไม่ต้องใส่ Key ใหม่)') + poolSuffix);
   };
 
   const handleResetPrompt = () => {
@@ -642,7 +653,25 @@ You MUST respond with a valid JSON object ONLY, strictly matching this structure
 
           {/* Right Status Badge & Down Arrow Button */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            {apiKey.trim() ? (
+            {parsedKeys.length > 1 ? (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  padding: '3px 10px',
+                  borderRadius: '20px',
+                  background: '#eff6ff',
+                  color: '#1d4ed8',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  border: '1.5px solid #93c5fd'
+                }}
+              >
+                <Layers size={13} color="#2563eb" />
+                <span>Pool: {parsedKeys.length} Keys ({parsedKeys.length}x)</span>
+              </span>
+            ) : parsedKeys.length === 1 ? (
               <span
                 style={{
                   display: 'inline-flex',
@@ -760,12 +789,63 @@ You MUST respond with a valid JSON object ONLY, strictly matching this structure
         {/* Inner Content - Displayed only when expanded */}
         {isAiExpanded && (
           <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '20px', marginTop: '18px' }}>
-            {/* OpenRouter API Key Field */}
+            {/* OpenRouter API Key Field (Multi-Key Pool Support) */}
             <div style={{ marginBottom: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, color: '#334155' }}>
-                  <Key size={16} /> OpenRouter API Key <span style={{ color: '#ef4444' }}>*</span>
-                </label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, color: '#334155' }}>
+                    <Key size={16} /> OpenRouter API Key(s) <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  {parsedKeys.length > 1 ? (
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      padding: '2px 9px',
+                      borderRadius: '12px',
+                      background: '#eff6ff',
+                      color: '#1d4ed8',
+                      fontSize: '11.5px',
+                      fontWeight: 700,
+                      border: '1px solid #93c5fd'
+                    }}>
+                      <Layers size={12} />
+                      Multi-Key Pool Mode: {parsedKeys.length} Keys (ขยายโควตา {parsedKeys.length}x เท่า + Auto Failover)
+                    </span>
+                  ) : parsedKeys.length === 1 ? (
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '2px 8px',
+                      borderRadius: '12px',
+                      background: '#f0fdf4',
+                      color: '#15803d',
+                      fontSize: '11.5px',
+                      fontWeight: 600,
+                      border: '1px solid #bbf7d0'
+                    }}>
+                      <Check size={12} />
+                      Single Key Mode (1 Key)
+                    </span>
+                  ) : (
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '2px 8px',
+                      borderRadius: '12px',
+                      background: '#fffbeb',
+                      color: '#b45309',
+                      fontSize: '11.5px',
+                      fontWeight: 600,
+                      border: '1px solid #fde68a'
+                    }}>
+                      <AlertTriangle size={12} />
+                      ยังไม่ได้ระบุ Key
+                    </span>
+                  )}
+                </div>
                 <a
                   href="https://openrouter.ai/keys"
                   target="_blank"
@@ -777,22 +857,25 @@ You MUST respond with a valid JSON object ONLY, strictly matching this structure
                 </a>
               </div>
               <div style={{ position: 'relative' }}>
-                <input
-                  type={showApiKey ? 'text' : 'password'}
+                <textarea
                   value={apiKey}
                   onChange={e => {
                     setApiKey(e.target.value);
                     localStorage.setItem('ai_api_key', e.target.value);
                   }}
-                  placeholder="sk-or-v1-xxxxxxxxxxxxxxxx..."
+                  rows={Math.min(Math.max(parsedKeys.length + 1, 3), 7)}
+                  placeholder={'sk-or-v1-xxxxxxxxxxxxxxxx...\nsk-or-v1-yyyyyyyyyyyyyyyy...\n(รองรับหลาย Key: คั่นด้วยเครื่องหมายจุลภาค , หรือขึ้นบรรทัดใหม่)'}
                   style={{
                     width: '100%',
                     padding: '11px 44px 11px 12px',
                     borderRadius: '8px',
                     border: '1.5px solid #cbd5e1',
-                    fontSize: '14px',
+                    fontSize: '13.5px',
                     fontFamily: 'monospace',
-                    boxSizing: 'border-box'
+                    boxSizing: 'border-box',
+                    resize: 'vertical',
+                    lineHeight: '1.6',
+                    ...({ WebkitTextSecurity: showApiKey ? 'none' : 'disc' } as any)
                   }}
                 />
                 <button
@@ -801,8 +884,7 @@ You MUST respond with a valid JSON object ONLY, strictly matching this structure
                   style={{
                     position: 'absolute',
                     right: '12px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
+                    top: '16px',
                     background: 'none',
                     border: 'none',
                     color: '#64748b',
@@ -813,8 +895,54 @@ You MUST respond with a valid JSON object ONLY, strictly matching this structure
                   {showApiKey ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
-              <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '5px' }}>
-                * API Key จะถูกบันทึกไว้ในเบราว์เซอร์เครื่องนี้เท่านั้น (Local Storage) ปลอดภัยและไม่ถูกส่งไปเซิร์ฟเวอร์อื่น
+
+              {/* Masked Key Pool Preview (when multi-key) */}
+              {parsedKeys.length > 1 && (
+                <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {parsedKeys.map((k, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        fontSize: '11.5px',
+                        fontFamily: 'monospace',
+                        background: '#f1f5f9',
+                        border: '1px solid #cbd5e1',
+                        padding: '3px 8px',
+                        borderRadius: '6px',
+                        color: '#334155',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px'
+                      }}
+                    >
+                      <span style={{ fontWeight: 700, color: '#2563eb' }}>#{idx + 1}</span>
+                      <span>{maskApiKey(k)}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Key Pool Explanatory Note */}
+              <div style={{
+                marginTop: '10px',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                fontSize: '12.5px',
+                color: '#475569',
+                lineHeight: '1.55'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                  <Zap size={16} color="#2563eb" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <span style={{ fontWeight: 700, color: '#1e293b' }}>ระบบรองรับ API Key Pool (Round-Robin Rotation & Failover):</span>
+                    <div style={{ marginTop: '2px' }}>
+                      ใส่ได้ทั้ง Key เดี่ยว หรือหลาย Key โดยคั่นด้วยเครื่องหมายจุลภาค (<code style={{ background: '#e2e8f0', padding: '1px 4px', borderRadius: '4px' }}>,</code>) หรือขึ้นบรรทัดใหม่ (<code style={{ background: '#e2e8f0', padding: '1px 4px', borderRadius: '4px' }}>Enter</code>)
+                      ระบบจะกระจายโหลดแบบ Round-Robin และสลับคีย์สำรองอัตโนมัติ (Failover) ทันทีหากมี Key ใดติด HTTP 429 Rate Limit ช่วยรองรับผู้ใช้งานพร้อมกันในงาน Workshop ได้อย่างราบรื่น
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -927,25 +1055,69 @@ You MUST respond with a valid JSON object ONLY, strictly matching this structure
               </span>
             </div>
 
-            {/* Test Connection Result Box */}
+            {/* Test Connection Result Box with Multi-Key Pool Breakdown */}
             {aiTestResult && (
               <div
                 style={{
-                  padding: '12px 16px',
+                  padding: '14px 18px',
                   borderRadius: '10px',
                   backgroundColor: aiTestResult.success ? '#f0fdf4' : '#fef2f2',
                   border: `1.5px solid ${aiTestResult.success ? '#86efac' : '#fecaca'}`,
                   color: aiTestResult.success ? '#15803d' : '#b91c1c',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  marginBottom: '20px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px'
+                  marginBottom: '20px'
                 }}
               >
-                {aiTestResult.success ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
-                <span>{aiTestResult.message}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, fontSize: '13.5px' }}>
+                  {aiTestResult.success ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
+                  <span>{aiTestResult.message}</span>
+                </div>
+
+                {/* Multi-Key Pool Breakdown */}
+                {aiTestResult.poolResults && aiTestResult.poolResults.length > 0 && (
+                  <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: `1px dashed ${aiTestResult.success ? '#bbf7d0' : '#fecaca'}` }}>
+                    <div style={{ fontSize: '12.5px', fontWeight: 700, marginBottom: '8px', color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Layers size={14} color="#2563eb" />
+                      <span>สถานะการทดสอบคีย์ในระบบ Key Pool ({aiTestResult.poolResults.length} คีย์):</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {aiTestResult.poolResults.map((r: KeyTestResult, idx: number) => (
+                        <div
+                          key={idx}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '7px 12px',
+                            borderRadius: '6px',
+                            background: r.success ? '#ffffff' : '#fff1f2',
+                            border: `1px solid ${r.success ? '#dcfce7' : '#fecdd3'}`,
+                            fontSize: '12.5px',
+                            fontFamily: 'monospace'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontWeight: 700, color: '#2563eb' }}>#{idx + 1}</span>
+                            <span style={{ color: '#0f172a', fontWeight: 600 }}>{r.maskedKey}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            {r.latencyMs !== undefined && (
+                              <span style={{ color: '#64748b', fontSize: '11.5px', fontFamily: 'sans-serif' }}>{r.latencyMs} ms</span>
+                            )}
+                            {r.success ? (
+                              <span style={{ color: '#16a34a', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px', fontFamily: 'sans-serif', fontSize: '12px' }}>
+                                <CheckCircle2 size={13} /> พร้อมใช้งาน
+                              </span>
+                            ) : (
+                              <span style={{ color: '#dc2626', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px', fontFamily: 'sans-serif', fontSize: '12px' }}>
+                                <AlertTriangle size={13} /> {r.message}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
