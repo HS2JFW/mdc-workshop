@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 dist
+dist_temp
 dist-ssr
 *.local
 
@@ -22,3 +23,44 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local scratch, temporary scripts, and debug images
+.agents/
+__pycache__/
+scratch/
+scripts/
+preview_slides/
+preview_slides_v2/
+*.sqlite-shm
+*.sqlite-wal
+data/moral_index_datasets.duckdb
+_*.html
+*.py
+*.cjs
+*.bat
+*.pptx
+build_errors.txt
+extracted_docx_text.txt
+scratch*
+test_*
+thumb_*
+prev_*
+preview_*
+raw_*
+ref_slide_*
+card_*
+cards_strip.png
+badge_*
+banner_*
+final_test_*
+page9_*
+presentation_deck*
+ayutthaya_orig_right.jpg
+city_pillar.jpg
+don_tao.jpg
+lampang_floating.jpg
+lampang_luang_5_wiki.jpg
+lampang_luang_6.jpg
+phothisomphon.jpg
+submenu_crop.png
+surat_orig_right.jpg

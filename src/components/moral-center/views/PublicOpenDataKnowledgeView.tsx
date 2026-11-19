@@ -1,0 +1,1 @@
+﻿import React from 'react'; export const PublicOpenDataKnowledgeView: React.FC = () => <div style={{padding:'20px'}}><h2>ฐานความรู้และชุดข้อมูลเปิดสำหรับภาคประชาชน (รอการฟื้นฟูข้อมูลจาก Backup)</h2></div>;

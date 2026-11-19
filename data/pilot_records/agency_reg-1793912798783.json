@@ -1,0 +1,19 @@
+{
+  "id": "reg-1793912798783",
+  "province": "พระนครศรีอยุธยา",
+  "region": "ภาคกลาง",
+  "agency_name": "หน่วยงานภาคีเครือข่ายคุณธรรม",
+  "agency_type": "ภาคประชาสังคม/วิชาการ",
+  "coordinator_name": "นางสาวสมศรี พอเพียงดี",
+  "participant_role": "ผู้ร่วมกิจกรรม (ระดับผู้ปฏิบัติการ)",
+  "district": "",
+  "subdistrict": "",
+  "contact_info": "",
+  "activity_date": "2026-11-05",
+  "synergy_topic": "กิจกรรม Hackathon คุณธรรม 4 ภาค (กลุ่มกาแฟ: mocha)",
+  "trial_project_name": "การลงทะเบียนผู้ร่วมกิจกรรม นางสาวสมศรี พอเพียงดี",
+  "trial_project_summary": "ลงทะเบียนเข้าร่วมกิจกรรมคุณธรรม 4 ภาค จังหวัดพระนครศรีอยุธยา โดย นางสาวสมศรี พอเพียงดี (ผู้ร่วมกิจกรรม - เครือข่ายคุณธรรม)",
+  "created_at": "2026-11-05 21:06",
+  "savedAt": "2026-11-05 21:06",
+  "sqliteDb": "data/pilot_activities_4regions.sqlite"
+}

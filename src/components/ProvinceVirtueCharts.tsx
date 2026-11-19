@@ -144,13 +144,13 @@ export const ProvinceVirtueCharts: React.FC<ProvinceVirtueChartsProps> = ({ acti
               >
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="province" hide />
-                <YAxis domain={[0, 10]} tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                <YAxis domain={[0, 10]} tick={{ fontSize: 12, fill: '#64748b', fontFamily: 'var(--font-thai)' }} axisLine={false} tickLine={false} />
                 <RechartsTooltip 
                   cursor={{ fill: 'transparent' }}
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', fontFamily: 'var(--font-thai)' }}
                   formatter={(value: any) => [`${typeof value === 'number' ? value.toFixed(1) : value}`, 'คะแนน']}
                 />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', paddingTop: '10px', fontFamily: 'var(--font-thai)' }} />
                 <Bar dataKey="discipline" name="วินัย" fill={colors.discipline} radius={[4, 4, 0, 0]} barSize={30} />
                 <Bar dataKey="sufficiency" name="พอเพียง" fill={colors.sufficiency} radius={[4, 4, 0, 0]} barSize={30} />
                 <Bar dataKey="honesty" name="สุจริต" fill={colors.honesty} radius={[4, 4, 0, 0]} barSize={30} />

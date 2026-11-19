@@ -1,0 +1,19 @@
+{
+  "id": "reg-1793877428369",
+  "province": "ระยอง",
+  "region": "ภาคกลาง",
+  "agency_name": "a1",
+  "agency_type": "ภาคประชาสังคม/วิชาการ",
+  "coordinator_name": "a1",
+  "participant_role": "a1 (ระดับผู้ปฏิบัติการ)",
+  "district": "เมืองระยอง",
+  "subdistrict": "มาดตาพุด",
+  "contact_info": "",
+  "activity_date": "2026-11-05",
+  "synergy_topic": "กิจกรรม Hackathon คุณธรรม 4 ภาค (กลุ่มกาแฟ: mocha)",
+  "trial_project_name": "การลงทะเบียนผู้ร่วมกิจกรรม a1",
+  "trial_project_summary": "ลงทะเบียนเข้าร่วมกิจกรรมคุณธรรม 4 ภาค จังหวัดระยอง โดย a1 (a1 - a1)",
+  "created_at": "2026-11-05 11:17",
+  "savedAt": "2026-11-05 11:17",
+  "sqliteDb": "data/pilot_activities_4regions.sqlite"
+}

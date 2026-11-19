@@ -1,0 +1,18 @@
+{
+  "projectId": "PRJ-TEST-01",
+  "projectName": "ทดสอบโครงการ",
+  "province": "ระยอง",
+  "tasks": [
+    {
+      "id": "t1",
+      "task_code": "T-1",
+      "task_name": "งานทดสอบ 1",
+      "start_date": "2026-07-01",
+      "end_date": "2026-07-10",
+      "duration_days": 10,
+      "status": "รอเริ่ม",
+      "progress_percent": 0
+    }
+  ],
+  "savedAt": "2026-10-15 14:56"
+}

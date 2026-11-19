@@ -128,10 +128,10 @@ export const SocialEyeDashboard: React.FC<SocialEyeDashboardProps> = ({
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={trendData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="date" tick={{fontSize: 12, fill: '#64748b'}} />
-                        <YAxis tick={{fontSize: 12, fill: '#64748b'}} />
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: '12px' }} layout="horizontal" verticalAlign="bottom" align="center" />
+                        <XAxis dataKey="date" tick={{fontSize: 12, fill: '#64748b', fontFamily: 'var(--font-thai)'}} />
+                        <YAxis tick={{fontSize: 12, fill: '#64748b', fontFamily: 'var(--font-thai)'}} />
+                        <Tooltip contentStyle={{ fontFamily: 'var(--font-thai)' }} />
+                        <Legend wrapperStyle={{ fontSize: '12px', fontFamily: 'var(--font-thai)' }} layout="horizontal" verticalAlign="bottom" align="center" />
                         <Line type="monotone" dataKey="วินัย" stroke={colors.วินัย} strokeWidth={2} dot={false} />
                         <Line type="monotone" dataKey="สุจริต" stroke={colors.สุจริต} strokeWidth={2} dot={false} />
                         <Line type="monotone" dataKey="จิตอาสา" stroke={colors.จิตอาสา} strokeWidth={2} dot={false} />
@@ -149,10 +149,10 @@ export const SocialEyeDashboard: React.FC<SocialEyeDashboardProps> = ({
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={trendData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="date" tick={{fontSize: 12, fill: '#64748b'}} />
-                        <YAxis domain={[0, 1]} tick={{fontSize: 12, fill: '#64748b'}} />
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: '12px' }} layout="horizontal" verticalAlign="bottom" align="center" />
+                        <XAxis dataKey="date" tick={{fontSize: 12, fill: '#64748b', fontFamily: 'var(--font-thai)'}} />
+                        <YAxis domain={[0, 1]} tick={{fontSize: 12, fill: '#64748b', fontFamily: 'var(--font-thai)'}} />
+                        <Tooltip contentStyle={{ fontFamily: 'var(--font-thai)' }} />
+                        <Legend wrapperStyle={{ fontSize: '12px', fontFamily: 'var(--font-thai)' }} layout="horizontal" verticalAlign="bottom" align="center" />
                         <Line type="monotone" dataKey="us_วินัย" name="วินัย" stroke={colors.วินัย} strokeWidth={2} dot={false} />
                         <Line type="monotone" dataKey="us_สุจริต" name="สุจริต" stroke={colors.สุจริต} strokeWidth={2} dot={false} />
                         <Line type="monotone" dataKey="us_จิตอาสา" name="จิตอาสา" stroke={colors.จิตอาสา} strokeWidth={2} dot={false} />
@@ -181,7 +181,7 @@ export const SocialEyeDashboard: React.FC<SocialEyeDashboardProps> = ({
                   <ResponsiveContainer width="100%" height="100%">
                     <RadarChart cx="50%" cy="50%" outerRadius="70%" data={moralChartData}>
                       <PolarGrid />
-                      <PolarAngleAxis dataKey="subject" tick={{fontSize: 12, fill: '#334155'}} />
+                      <PolarAngleAxis dataKey="subject" tick={{fontSize: 12, fill: '#334155', fontFamily: 'var(--font-thai)'}} />
                       <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} />
                       <Radar name="Score" dataKey="A" stroke="#3b82f6" fill="#bfdbfe" fillOpacity={0.6} />
                     </RadarChart>
@@ -200,10 +200,10 @@ export const SocialEyeDashboard: React.FC<SocialEyeDashboardProps> = ({
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={sentimentData} margin={{ top: 20, right: 10, left: -20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" tick={{fontSize: 12, fill: '#64748b'}} />
-                    <YAxis tick={{fontSize: 12, fill: '#64748b'}} />
-                    <Tooltip />
-                    <Legend wrapperStyle={{ fontSize: '12px', top: -10 }} />
+                    <XAxis dataKey="name" tick={{fontSize: 12, fill: '#64748b', fontFamily: 'var(--font-thai)'}} />
+                    <YAxis tick={{fontSize: 12, fill: '#64748b', fontFamily: 'var(--font-thai)'}} />
+                    <Tooltip contentStyle={{ fontFamily: 'var(--font-thai)' }} />
+                    <Legend wrapperStyle={{ fontSize: '12px', top: -10, fontFamily: 'var(--font-thai)' }} />
                     <Bar dataKey="Positive" fill={colors.Positive} />
                     <Bar dataKey="Neutral" fill={colors.Neutral} />
                     <Bar dataKey="Negative" fill={colors.Negative} />
@@ -222,10 +222,10 @@ export const SocialEyeDashboard: React.FC<SocialEyeDashboardProps> = ({
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={platformData} margin={{ top: 20, right: 10, left: -20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" tick={{fontSize: 12, fill: '#64748b'}} />
-                    <YAxis tick={{fontSize: 12, fill: '#64748b'}} />
-                    <Tooltip />
-                    <Legend wrapperStyle={{ fontSize: '12px', top: -10 }} />
+                    <XAxis dataKey="name" tick={{fontSize: 12, fill: '#64748b', fontFamily: 'var(--font-thai)'}} />
+                    <YAxis tick={{fontSize: 12, fill: '#64748b', fontFamily: 'var(--font-thai)'}} />
+                    <Tooltip contentStyle={{ fontFamily: 'var(--font-thai)' }} />
+                    <Legend wrapperStyle={{ fontSize: '12px', top: -10, fontFamily: 'var(--font-thai)' }} />
                     <Bar dataKey="Facebook" stackId="a" fill={colors.Facebook} />
                     <Bar dataKey="TikTok" stackId="a" fill={colors.TikTok} />
                     <Bar dataKey="X" stackId="a" fill={colors.X} />
@@ -245,10 +245,10 @@ export const SocialEyeDashboard: React.FC<SocialEyeDashboardProps> = ({
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart layout="vertical" data={regionData} margin={{ top: 20, right: 10, left: -10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                    <XAxis type="number" tick={{fontSize: 12, fill: '#64748b'}} />
-                    <YAxis type="category" dataKey="name" tick={{fontSize: 12, fill: '#64748b'}} width={80} />
-                    <Tooltip />
-                    <Legend wrapperStyle={{ fontSize: '12px', top: -10 }} />
+                    <XAxis type="number" tick={{fontSize: 12, fill: '#64748b', fontFamily: 'var(--font-thai)'}} />
+                    <YAxis type="category" dataKey="name" tick={{fontSize: 12, fill: '#64748b', fontFamily: 'var(--font-thai)'}} width={80} />
+                    <Tooltip contentStyle={{ fontFamily: 'var(--font-thai)' }} />
+                    <Legend wrapperStyle={{ fontSize: '12px', top: -10, fontFamily: 'var(--font-thai)' }} />
                     <Bar dataKey="Pos" name="พอเพียง" stackId="a" fill={colors.พอเพียง} />
                     <Bar dataKey="Neu" name="กตัญญู" stackId="a" fill={colors.กตัญญู} />
                     <Bar dataKey="Neg" name="จิตอาสา" stackId="a" fill={colors.จิตอาสา} />

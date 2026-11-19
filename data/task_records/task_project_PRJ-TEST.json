@@ -1,0 +1,23 @@
+{
+  "projectId": "PRJ-TEST",
+  "projectName": "ทดสอบระบบ",
+  "province": "ลำปาง",
+  "tasks": [
+    {
+      "id": "t-test-1",
+      "project_id": "PRJ-TEST",
+      "project_name": "ทดสอบระบบ",
+      "province": "ลำปาง",
+      "phase_no": 1,
+      "phase_name": "ระยะ 1",
+      "task_code": "T-1",
+      "task_name": "งานทดสอบ",
+      "start_date": "2026-10-01",
+      "end_date": "2026-10-10",
+      "duration_days": 10,
+      "status": "รอเริ่ม",
+      "progress_percent": 0
+    }
+  ],
+  "savedAt": "2026-10-15 15:01"
+}

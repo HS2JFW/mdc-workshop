@@ -4,6 +4,7 @@ import { AgencyHierarchy } from './AgencyHierarchy';
 import { ActionWidgets, CommunityWidget } from './ActionWidgets';
 import type { ProposedProject } from './ActionWidgets';
 import { ChartsPanel } from './ChartsPanel';
+import { CommunityChat } from './CommunityChat';
 import { CommunityRanking } from './CommunityRanking';
 import { 
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, 
@@ -323,6 +324,12 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
                     <div>
                       <h3 style={{ margin: 0, fontSize: '20px', color: '#0f172a' }}>{selectedCommunity.name}</h3>
                       <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '14px' }}>จำนวนสมาชิก: {selectedCommunity.members} คน | โครงการ: {communityProjects.length}</p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                        <span style={{ fontSize: '13px', color: '#475569' }}>ช่วงเวลา:</span>
+                        <input type="date" style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '13px', color: '#334155', outline: 'none' }} />
+                        <span style={{ fontSize: '13px', color: '#475569' }}>-</span>
+                        <input type="date" style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '13px', color: '#334155', outline: 'none' }} />
+                      </div>
                     </div>
                   </div>
 
@@ -643,6 +650,7 @@ export const CommunityPage: React.FC<CommunityPageProps> = ({
                   stats={mockStats} 
                   activeAgencies={[]} 
                 />
+                <CommunityChat />
               </div>
             </div>
             </> }

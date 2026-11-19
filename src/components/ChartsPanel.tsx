@@ -37,7 +37,8 @@ const CustomTooltip = ({ active, payload, label }: any) => {
         borderRadius: '8px',
         boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
         minWidth: '200px',
-        maxWidth: '350px'
+        maxWidth: '350px',
+        fontFamily: 'var(--font-thai)'
       }}>
         <p style={{ margin: '0 0 8px 0', fontSize: '12px', fontWeight: 600, color: '#1e293b', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.4' }}>
           {label}
@@ -69,12 +70,12 @@ export const ChartsPanel: React.FC<ChartsPanelProps> = ({ stats, activeAgencies,
 
   const fetchTopAgencies = async () => {
     let query = supabase
-      .from('agencies')
+      .from('tor_projects_prepare')
       .select('*')
       .order('calculated_average', { ascending: false });
 
     if (activeAgencies && activeAgencies.length > 0) {
-      query = query.in('parent_id', activeAgencies);
+      query = query.in('agency_id', activeAgencies);
     }
 
     const { data } = await query.limit(10);
@@ -82,22 +83,22 @@ export const ChartsPanel: React.FC<ChartsPanelProps> = ({ stats, activeAgencies,
     if (data && data.length > 0) {
       const formattedBarData = data.map((agency: any) => ({
         name: agency.name || 'Unknown',
-        'วินัย': agency.discipline || 0,
-        'พอเพียง': agency.sufficiency || 0,
-        'สุจริต': agency.honesty || 0,
-        'จิตอาสา': agency.volunteer || 0,
-        'กตัญญู': agency.gratitude || 0
+        'วินัย': Number(agency.discipline) || 0,
+        'พอเพียง': Number(agency.sufficiency) || 0,
+        'สุจริต': Number(agency.honesty) || 0,
+        'จิตอาสา': Number(agency.volunteer) || 0,
+        'กตัญญู': Number(agency.gratitude) || 0
       }));
       setBarData(formattedBarData);
 
       // Calculate averages for radar chart
       let sumDiscipline = 0, sumSufficiency = 0, sumHonesty = 0, sumVolunteer = 0, sumGratitude = 0;
       data.forEach((agency: any) => {
-        sumDiscipline += agency.discipline || 0;
-        sumSufficiency += agency.sufficiency || 0;
-        sumHonesty += agency.honesty || 0;
-        sumVolunteer += agency.volunteer || 0;
-        sumGratitude += agency.gratitude || 0;
+        sumDiscipline += Number(agency.discipline) || 0;
+        sumSufficiency += Number(agency.sufficiency) || 0;
+        sumHonesty += Number(agency.honesty) || 0;
+        sumVolunteer += Number(agency.volunteer) || 0;
+        sumGratitude += Number(agency.gratitude) || 0;
       });
       
       const count = data.length;
@@ -142,7 +143,7 @@ export const ChartsPanel: React.FC<ChartsPanelProps> = ({ stats, activeAgencies,
         <div className="chart-header">
           <div className="chart-title-group">
             <h4 className="chart-title">Moral Chart</h4>
-            <span className="chart-subtitle">ผลการประเมินคุณธรรม 5 ด้านของประเทศไทย</span>
+            <span className="chart-subtitle">ผลการประเมินคุณธรรม 5 ด้านของหน่วยงาน</span>
           </div>
           <button className="chart-more-btn">
             <MoreVertical size={16} />
@@ -157,10 +158,10 @@ export const ChartsPanel: React.FC<ChartsPanelProps> = ({ stats, activeAgencies,
                 <PolarGrid stroke="#e2e8f0" />
                 <PolarAngleAxis 
                   dataKey="displayName" 
-                  tick={{ fill: '#0f172a', fontSize: 10, fontWeight: 700 }} 
+                  tick={{ fill: '#0f172a', fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-thai)' }} 
                 />
                 {/* Domain set from 0 to 10 since average scores are up to 10 */}
-                <PolarRadiusAxis angle={30} domain={[0, 10]} tick={false} axisLine={false} />
+                <PolarRadiusAxis angle={30} domain={[-5, 5]} tick={false} axisLine={false} />
                 <Radar 
                   name="คะแนนเฉลี่ย" 
                   dataKey="score" 
@@ -205,8 +206,8 @@ export const ChartsPanel: React.FC<ChartsPanelProps> = ({ stats, activeAgencies,
         <div className="chart-card">
           <div className="chart-header">
             <div className="chart-title-group">
-              <h4 className="chart-title">Top 10 Sub Government Offices</h4>
-              <span className="chart-subtitle">คะแนนสูงสุด 10 หน่วยงาน</span>
+              <h4 className="chart-title">รายการโครงการโดยละเอียด</h4>
+              <span className="chart-subtitle">ข้อมูลโครงการและดัชนีคุณธรรม 5 ด้าน</span>
             </div>
             <button className="chart-more-btn">
               <MoreVertical size={16} />
@@ -247,7 +248,7 @@ export const ChartsPanel: React.FC<ChartsPanelProps> = ({ stats, activeAgencies,
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis 
                   dataKey="name" 
-                  tick={{ fill: '#64748b', fontSize: 10, fontWeight: 600 }}
+                  tick={{ fill: '#64748b', fontSize: 10, fontWeight: 600, fontFamily: 'var(--font-thai)' }}
                   axisLine={false}
                   tickLine={false}
                   angle={-90}
@@ -255,7 +256,7 @@ export const ChartsPanel: React.FC<ChartsPanelProps> = ({ stats, activeAgencies,
                   interval={0}
                 />
                 <YAxis 
-                  tick={{ fill: '#64748b', fontSize: 8 }}
+                  tick={{ fill: '#64748b', fontSize: 8, fontFamily: 'var(--font-thai)' }}
                   domain={[0, 25]}
                   axisLine={false}
                   tickLine={false}

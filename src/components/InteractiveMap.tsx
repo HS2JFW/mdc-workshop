@@ -1314,7 +1314,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
                               <PolarGrid stroke="#e2e8f0" />
                               <PolarAngleAxis 
                                 dataKey="displayName" 
-                                tick={{ fill: '#0f172a', fontSize: 10, fontWeight: 600 }} 
+                                tick={{ fill: '#0f172a', fontSize: 10, fontWeight: 600, fontFamily: 'var(--font-thai)' }} 
                               />
                               <PolarRadiusAxis angle={30} domain={[0, 10]} tick={false} axisLine={false} />
                               <Radar 

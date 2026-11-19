@@ -105,12 +105,12 @@ export const AIWorkspaceZone: React.FC<AIWorkspaceZoneProps> = ({ currentContext
         <ResponsiveContainer>
           <RadarChart data={data} margin={{ top: 20, right: 30, bottom: 20, left: 30 }}>
             <PolarGrid stroke="#e2e8f0" />
-            <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 12 }} />
-            <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: '#94a3b8', fontSize: 10 }} />
+            <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 12, fontFamily: 'var(--font-thai)' }} />
+            <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: '#94a3b8', fontSize: 10, fontFamily: 'var(--font-thai)' }} />
             <Radar name="ก่อนเริ่มโครงการ" dataKey="ก่อนเริ่มโครงการ" stroke="#94a3b8" fill="#cbd5e1" fillOpacity={0.4} />
             <Radar name="หลังจบโครงการ" dataKey="หลังจบโครงการ" stroke="#10b981" fill="#34d399" fillOpacity={0.6} />
-            <Legend wrapperStyle={{ fontSize: '12px' }} />
-            <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} />
+            <Legend wrapperStyle={{ fontSize: '12px', fontFamily: 'var(--font-thai)' }} />
+            <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', fontFamily: 'var(--font-thai)' }} />
           </RadarChart>
         </ResponsiveContainer>
       </div>

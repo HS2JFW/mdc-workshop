@@ -1,0 +1,949 @@
+{
+  "updatedAt": "2026-10-26T01:30:00Z",
+  "database": "moral_index_datasets.duckdb",
+  "totalTables": 20,
+  "tables": [
+    {
+      "tableName": "mdc_moral_national_overview",
+      "module": "moral_index",
+      "displayName": "ภาพรวมระดับประเทศ (2565–2568)",
+      "description": "คะแนนเฉลี่ยคุณธรรม 5 มิติระดับประเทศ จำแนกตามปี พ.ศ. 2565–2568",
+      "icon": "TrendingUp",
+      "rowCount": 4,
+      "columns": [
+        {
+          "name": "ปี พ.ศ.",
+          "type": "BIGINT"
+        },
+        {
+          "name": "จำนวนผู้ประเมิน (คน)",
+          "type": "BIGINT"
+        },
+        {
+          "name": "ด้านพอเพียง",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ด้านวินัยรับผิดชอบ",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ด้านสุจริต",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ด้านจิตสาธารณะ",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ด้านกตัญญู",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "คะแนนรวมเฉลี่ยทั้งประเทศ",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ระดับคุณธรรม",
+          "type": "VARCHAR"
+        }
+      ],
+      "sourceAgency": "ศูนย์คุณธรรม (องค์การมหาชน)",
+      "synergyDimension": "ข้อมูลมาตรฐานระดับประเทศ (Ground Truth)"
+    },
+    {
+      "tableName": "mdc_moral_regional_breakdown",
+      "module": "moral_index",
+      "displayName": "จำแนกรายภูมิภาค",
+      "description": "คะแนนเฉลี่ยคุณธรรม 5 มิติจำแนกตามรายภูมิภาค (กทม., กลาง, เหนือ, ตะวันออกเฉียงเหนือ, ใต้)",
+      "icon": "MapPin",
+      "rowCount": 24,
+      "columns": [
+        {
+          "name": "ปี พ.ศ.",
+          "type": "BIGINT"
+        },
+        {
+          "name": "ภูมิภาค",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "จำนวนผู้ประเมิน (คน)",
+          "type": "BIGINT"
+        },
+        {
+          "name": "สัดส่วน (%)",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ด้านพอเพียง",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ด้านวินัยรับผิดชอบ",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ด้านสุจริต",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ด้านจิตสาธารณะ",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ด้านกตัญญู",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "คะแนนรวมเฉลี่ย",
+          "type": "DOUBLE"
+        }
+      ],
+      "sourceAgency": "ศูนย์คุณธรรม (องค์การมหาชน)",
+      "synergyDimension": "ข้อมูลมาตรฐานระดับประเทศ (Ground Truth)"
+    },
+    {
+      "tableName": "mdc_moral_regional_trends",
+      "module": "moral_index",
+      "displayName": "เปรียบเทียบแนวโน้มภูมิภาค",
+      "description": "เปรียบเทียบแนวโน้มและการเปลี่ยนแปลงคะแนนเฉลี่ยแต่ละภูมิภาคระหว่างปี 2565 ถึง 2568",
+      "icon": "BarChart3",
+      "rowCount": 6,
+      "columns": [
+        {
+          "name": "ภูมิภาค",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "คะแนนเฉลี่ย ปี 2565",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "คะแนนเฉลี่ย ปี 2566",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "คะแนนเฉลี่ย ปี 2567",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "คะแนนเฉลี่ย ปี 2568",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "การเปลี่ยนแปลง (ปี 2567 สู่ 2568)",
+          "type": "VARCHAR"
+        }
+      ],
+      "sourceAgency": "ศูนย์คุณธรรม (องค์การมหาชน)",
+      "synergyDimension": "ข้อมูลมาตรฐานระดับประเทศ (Ground Truth)"
+    },
+    {
+      "tableName": "mdc_moral_gender_breakdown",
+      "module": "moral_index",
+      "displayName": "จำแนกตามกลุ่มเพศ",
+      "description": "คะแนนเฉลี่ยคุณธรรม 5 มิติจำแนกตามเพศ (ชาย, หญิง) และสัดส่วนผู้ประเมิน",
+      "icon": "Users",
+      "rowCount": 13,
+      "columns": [
+        {
+          "name": "ปี พ.ศ.",
+          "type": "BIGINT"
+        },
+        {
+          "name": "กลุ่มเพศ",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "จำนวนผู้ประเมิน (คน)",
+          "type": "BIGINT"
+        },
+        {
+          "name": "สัดส่วน (%)",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ด้านพอเพียง",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "ด้านวินัยรับผิดชอบ",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "ด้านสุจริต",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "ด้านจิตสาธารณะ",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "ด้านกตัญญู",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "คะแนนรวมเฉลี่ย",
+          "type": "VARCHAR"
+        }
+      ],
+      "sourceAgency": "ศูนย์คุณธรรม (องค์การมหาชน)",
+      "synergyDimension": "ข้อมูลมาตรฐานระดับประเทศ (Ground Truth)"
+    },
+    {
+      "tableName": "mdc_moral_age_breakdown",
+      "module": "moral_index",
+      "displayName": "จำแนกตามช่วงวัย",
+      "description": "คะแนนเฉลี่ยคุณธรรม 5 มิติจำแนกตามกลุ่มช่วงวัย (เด็ก/เยาวชน, วัยทำงาน, ผู้สูงอายุ)",
+      "icon": "Calendar",
+      "rowCount": 12,
+      "columns": [
+        {
+          "name": "ปี พ.ศ.",
+          "type": "BIGINT"
+        },
+        {
+          "name": "ช่วงอายุ",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "กลุ่มวัย",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "จำนวนผู้ประเมิน (คน)",
+          "type": "BIGINT"
+        },
+        {
+          "name": "สัดส่วน (%)",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ด้านพอเพียง",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ด้านวินัยรับผิดชอบ",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ด้านสุจริต",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ด้านจิตสาธารณะ",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ด้านกตัญญู",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "คะแนนรวมเฉลี่ย",
+          "type": "DOUBLE"
+        }
+      ],
+      "sourceAgency": "ศูนย์คุณธรรม (องค์การมหาชน)",
+      "synergyDimension": "ข้อมูลมาตรฐานระดับประเทศ (Ground Truth)"
+    },
+    {
+      "tableName": "mdc_lifecapital_national_overview",
+      "module": "life_capital",
+      "displayName": "ภาพรวมทุนชีวิตระดับประเทศ",
+      "description": "คะแนนเฉลี่ย 4+1 พลังทุนชีวิตระดับประเทศ จำแนกตามปี พ.ศ. 2565–2568",
+      "icon": "TrendingUp",
+      "rowCount": 4,
+      "columns": [
+        {
+          "name": "ปี_พศ",
+          "type": "BIGINT"
+        },
+        {
+          "name": "พลังตัวตน",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "พลังครอบครัว",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "พลังสร้างปัญญา_หรือ_ที่ทำงาน",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "พลังเพื่อนและกิจกรรม",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "พลังชุมชน",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ทุนชีวิตโดยรวม",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ระดับคุณภาพ",
+          "type": "VARCHAR"
+        }
+      ],
+      "sourceAgency": "ศูนย์คุณธรรม (องค์การมหาชน)",
+      "synergyDimension": "ข้อมูลมาตรฐานระดับประเทศ (Ground Truth)"
+    },
+    {
+      "tableName": "mdc_lifecapital_regional_breakdown",
+      "module": "life_capital",
+      "displayName": "จำแนกทุนชีวิตรายภูมิภาค",
+      "description": "คะแนนเฉลี่ยพลังทุนชีวิตจำแนกตามรายภูมิภาคและระดับคุณภาพ",
+      "icon": "MapPin",
+      "rowCount": 24,
+      "columns": [
+        {
+          "name": "ปี_พศ",
+          "type": "BIGINT"
+        },
+        {
+          "name": "ภูมิภาค",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "พลังตัวตน",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "พลังครอบครัว",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "พลังสร้างปัญญา_หรือ_ที่ทำงาน",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "พลังเพื่อนและกิจกรรม",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "พลังชุมชน",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ทุนชีวิตโดยรวม",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ระดับคุณภาพ",
+          "type": "VARCHAR"
+        }
+      ],
+      "sourceAgency": "ศูนย์คุณธรรม (องค์การมหาชน)",
+      "synergyDimension": "ข้อมูลมาตรฐานระดับประเทศ (Ground Truth)"
+    },
+    {
+      "tableName": "mdc_lifecapital_regional_trends",
+      "module": "life_capital",
+      "displayName": "เปรียบเทียบแนวโน้มทุนชีวิต",
+      "description": "เปรียบเทียบแนวโน้มและอัตราการเติบโตของทุนชีวิตแต่ละภูมิภาค",
+      "icon": "BarChart3",
+      "rowCount": 7,
+      "columns": [
+        {
+          "name": "ภูมิภาค",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "คะแนน_2565",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "คะแนน_2566",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "คะแนน_2567",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "คะแนน_2568",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ค่าเฉลี่ยสะสม",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "อัตราการเปลี่ยนแปลง_2565_ถึง_2568_เปอร์เซ็นต์",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "ระดับคุณภาพภาพรวม",
+          "type": "VARCHAR"
+        }
+      ],
+      "sourceAgency": "ศูนย์คุณธรรม (องค์การมหาชน)",
+      "synergyDimension": "ข้อมูลมาตรฐานระดับประเทศ (Ground Truth)"
+    },
+    {
+      "tableName": "mdc_lifecapital_gender_breakdown",
+      "module": "life_capital",
+      "displayName": "จำแนกทุนชีวิตตามเพศ",
+      "description": "คะแนนเฉลี่ย 4+1 พลังทุนชีวิตจำแนกตามกลุ่มเพศชายและหญิง",
+      "icon": "Users",
+      "rowCount": 12,
+      "columns": [
+        {
+          "name": "ปี_พศ",
+          "type": "BIGINT"
+        },
+        {
+          "name": "เพศ",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "พลังตัวตน",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "พลังครอบครัว",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "พลังสร้างปัญญา_หรือ_ที่ทำงาน",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "พลังเพื่อนและกิจกรรม",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "พลังชุมชน",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ทุนชีวิตโดยรวม",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ระดับคุณภาพ",
+          "type": "VARCHAR"
+        }
+      ],
+      "sourceAgency": "ศูนย์คุณธรรม (องค์การมหาชน)",
+      "synergyDimension": "ข้อมูลมาตรฐานระดับประเทศ (Ground Truth)"
+    },
+    {
+      "tableName": "mdc_lifecapital_age_breakdown",
+      "module": "life_capital",
+      "displayName": "จำแนกทุนชีวิตตามช่วงวัย",
+      "description": "คะแนนเฉลี่ยพลังทุนชีวิตจำแนกตามกลุ่มช่วงวัยของประชากร",
+      "icon": "Calendar",
+      "rowCount": 12,
+      "columns": [
+        {
+          "name": "ปี_พศ",
+          "type": "BIGINT"
+        },
+        {
+          "name": "กลุ่มช่วงวัย",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "พลังตัวตน",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "พลังครอบครัว",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "พลังสร้างปัญญา_หรือ_ที่ทำงาน",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "พลังเพื่อนและกิจกรรม",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "พลังชุมชน",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ทุนชีวิตโดยรวม",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ระดับคุณภาพ",
+          "type": "VARCHAR"
+        }
+      ],
+      "sourceAgency": "ศูนย์คุณธรรม (องค์การมหาชน)",
+      "synergyDimension": "ข้อมูลมาตรฐานระดับประเทศ (Ground Truth)"
+    },
+    {
+      "tableName": "ext_traffic_accidents_provincial",
+      "module": "external_synergy",
+      "displayName": "อุบัติเหตุทางถนนรายจังหวัด (2568/2026)",
+      "description": "สถิติผู้เสียชีวิตราย 77 จังหวัด จำแนกตามเพศ และพฤติกรรมการสวมหมวกนิรภัย (คค.–สธ.–สตช.)",
+      "icon": "Car",
+      "rowCount": 77,
+      "columns": [
+        {
+          "name": "ปี พ.ศ.",
+          "type": "BIGINT"
+        },
+        {
+          "name": "จังหวัด",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "ผู้เสียชีวิตรวม (คน)",
+          "type": "BIGINT"
+        },
+        {
+          "name": "เพศชาย (คน)",
+          "type": "BIGINT"
+        },
+        {
+          "name": "เพศหญิง (คน)",
+          "type": "BIGINT"
+        },
+        {
+          "name": "ไม่สวมหมวกนิรภัย (คน)",
+          "type": "BIGINT"
+        },
+        {
+          "name": "สวมหมวกนิรภัย (คน)",
+          "type": "BIGINT"
+        }
+      ],
+      "sourceAgency": "ศูนย์ข้อมูลอุบัติเหตุทางถนน (ThaiRSC) ร่วมกับ คค. - สธ. - สตช.",
+      "synergyDimension": "วินัยรับผิดชอบ / พลังเพื่อนและกิจกรรม",
+      "sourceUrl": "https://www.thairsc.com/",
+      "directDownloadUrl": "https://data.go.th/dataset/road-accidents-thailand",
+      "directDownloadLabel": "ฐานข้อมูลสถิติอุบัติเหตุทางถนน (ThaiRSC / data.go.th)"
+    },
+    {
+      "tableName": "ext_police_crimes",
+      "module": "external_synergy",
+      "displayName": "สถิติคดีอาญา พ.ศ. 2562–2567",
+      "description": "สถิติคดีอาญาจำแนกตามประเภทความผิด (ทรัพย์, ชีวิตร่างกาย, เพศ, พิเศษ) รับแจ้ง vs จับกุม (สตช.)",
+      "icon": "ShieldAlert",
+      "rowCount": 28,
+      "columns": [
+        {
+          "name": "ปี พ.ศ.",
+          "type": "BIGINT"
+        },
+        {
+          "name": "ประเภทความผิด",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "รับแจ้ง",
+          "type": "BIGINT"
+        },
+        {
+          "name": "จับกุม",
+          "type": "BIGINT"
+        },
+        {
+          "name": "หน่วย",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "ที่มา",
+          "type": "VARCHAR"
+        }
+      ],
+      "sourceAgency": "สำนักงานตำรวจแห่งชาติ (สตช.)",
+      "synergyDimension": "วินัยรับผิดชอบ และ สุจริต / พลังชุมชน",
+      "sourceUrl": "https://www.royalthaipolice.go.th/",
+      "directDownloadUrl": "https://www.nso.go.th/nsoweb/nso/statistics_and_indicators?impt_branch=310",
+      "directDownloadLabel": "สถิติคดีอาชญากรรม สำนักงานสถิติแห่งชาติ (สสช.)"
+    },
+    {
+      "tableName": "ext_vulnerable_households",
+      "module": "external_synergy",
+      "displayName": "ครัวเรือนเปราะบางรายจังหวัด (TPMAP 2568)",
+      "description": "จำนวนครัวเรือนและคนเปราะบางราย 76 จังหวัด จำแนกตามระดับความเปราะบาง 0–3 (กระทรวง พม.)",
+      "icon": "Home",
+      "rowCount": 76,
+      "columns": [
+        {
+          "name": "ปี พ.ศ.",
+          "type": "BIGINT"
+        },
+        {
+          "name": "พื้นที่",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "จำนวนครัวเรือนเปราะบางทั้งหมด",
+          "type": "BIGINT"
+        },
+        {
+          "name": "จำนวนครัวเรือนเปราะบาง ระดับ 0",
+          "type": "BIGINT"
+        },
+        {
+          "name": "จำนวนครัวเรือนเปราะบาง ระดับ 1",
+          "type": "BIGINT"
+        },
+        {
+          "name": "จำนวนครัวเรือนเปราะบาง ระดับ 2",
+          "type": "BIGINT"
+        },
+        {
+          "name": "จำนวนครัวเรือนเปราะบาง ระดับ 3",
+          "type": "BIGINT"
+        },
+        {
+          "name": "จำนวนคนเปราะบางทั้งหมด",
+          "type": "BIGINT"
+        },
+        {
+          "name": "จำนวนคนเปราะบาง ระดับ 0",
+          "type": "BIGINT"
+        },
+        {
+          "name": "จำนวนคนเปราะบาง ระดับ 1",
+          "type": "BIGINT"
+        },
+        {
+          "name": "จำนวนคนเปราะบาง ระดับ 2",
+          "type": "BIGINT"
+        },
+        {
+          "name": "จำนวนคนเปราะบาง ระดับ 3",
+          "type": "BIGINT"
+        }
+      ],
+      "sourceAgency": "กระทรวงการพัฒนาสังคมและความมั่นคงของมนุษย์ (พม.) ร่วมกับ NECTEC/สวทช.",
+      "synergyDimension": "จิตสาธารณะ และ กตัญญู / พลังครอบครัว",
+      "sourceUrl": "https://www.tpmap.in.th/",
+      "directDownloadUrl": "https://data.go.th/dataset/dataset_10_2012",
+      "directDownloadLabel": "ชุดข้อมูลครัวเรือนเปราะบาง TPMAP (data.go.th)"
+    },
+    {
+      "tableName": "ext_elderly_health_depression",
+      "module": "external_synergy",
+      "displayName": "สุขภาพและภาวะซึมเศร้าผู้สูงอายุรายจังหวัด (2567)",
+      "description": "สถิติผู้สูงอายุหกล้ม ภาวะซึมเศร้า และการทำร้ายตัวเองราย 77 จังหวัด (กรมกิจการผู้สูงอายุ 2567)",
+      "icon": "HeartPulse",
+      "rowCount": 77,
+      "columns": [
+        {
+          "name": "ปี พ.ศ.",
+          "type": "BIGINT"
+        },
+        {
+          "name": "ลำดับ",
+          "type": "BIGINT"
+        },
+        {
+          "name": "จังหวัด",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "จำนวนผู้สูงอายุที่เคยหกล้ม",
+          "type": "BIGINT"
+        },
+        {
+          "name": "จำนวนผู้สูงอายุที่มีภาวะซึมเศร้า",
+          "type": "BIGINT"
+        },
+        {
+          "name": "จำนวนผู้สูงอายุที่มีการฆ่าตัวตาย",
+          "type": "BIGINT"
+        }
+      ],
+      "sourceAgency": "กรมกิจการผู้สูงอายุ (ผส.) กระทรวงการพัฒนาสังคมและความมั่นคงของมนุษย์",
+      "synergyDimension": "กตัญญู / พลังตัวตน",
+      "sourceUrl": "https://www.dop.go.th/th/knowledge/6",
+      "directDownloadUrl": "https://opendata.m-society.go.th/",
+      "directDownloadLabel": "คลังข้อมูลและสถิติผู้สูงอายุ กรมกิจการผู้สูงอายุ (ผส.)"
+    },
+    {
+      "tableName": "ext_elderly_welfare_allowance",
+      "module": "external_synergy",
+      "displayName": "ผู้รับเบี้ยยังชีพผู้สูงอายุรายจังหวัด (2567)",
+      "description": "สถิติผู้รับเบี้ยยังชีพผู้สูงอายุรายจังหวัด จำแนกตามช่วงอายุ 60–69, 70–79, 80–89, 90+ ปี (สถ./พม. 2567)",
+      "icon": "Coins",
+      "rowCount": 78,
+      "columns": [
+        {
+          "name": "ปี พ.ศ.",
+          "type": "BIGINT"
+        },
+        {
+          "name": "ลำดับ",
+          "type": "BIGINT"
+        },
+        {
+          "name": "จังหวัด",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "อายุ 60-69 ปี",
+          "type": "BIGINT"
+        },
+        {
+          "name": "อายุ 70-79 ปี",
+          "type": "BIGINT"
+        },
+        {
+          "name": "อายุ 80-89 ปี",
+          "type": "BIGINT"
+        },
+        {
+          "name": "อายุ 90 ปีขึ้นไป",
+          "type": "BIGINT"
+        },
+        {
+          "name": "รวม",
+          "type": "BIGINT"
+        }
+      ],
+      "sourceAgency": "กรมส่งเสริมการปกครองท้องถิ่น (สถ.) ร่วมกับ กระทรวงการพัฒนาสังคมฯ (พม.)",
+      "synergyDimension": "พอเพียง และ กตัญญู / พลังชุมชน",
+      "sourceUrl": "https://opendata.m-society.go.th/",
+      "directDownloadUrl": "https://www.dla.go.th/",
+      "directDownloadLabel": "ระบบข้อมูลสถิติเบี้ยยังชีพผู้สูงอายุ กรมส่งเสริมการปกครองท้องถิ่น"
+    },
+    {
+      "tableName": "ext_elderly_living_arrangements",
+      "module": "external_synergy",
+      "displayName": "ที่พักอาศัยและบ้านมั่นคงผู้สูงอายุ (2567)",
+      "description": "โครงการบ้านมั่นคงและบ้านพอเพียงเพื่อผู้สูงอายุและคนพิการรายจังหวัด (พอช. / พม. 2567)",
+      "icon": "Building2",
+      "rowCount": 77,
+      "columns": [
+        {
+          "name": "ปี พ.ศ.",
+          "type": "BIGINT"
+        },
+        {
+          "name": "ลำดับ",
+          "type": "BIGINT"
+        },
+        {
+          "name": "จังหวัด",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "กรมส่งเสริมและพัฒนาคุณภาพชีวิตคนพิการ",
+          "type": "BIGINT"
+        },
+        {
+          "name": "โครงการบ้านมั่นคงและชนบท (พอช.)",
+          "type": "BIGINT"
+        },
+        {
+          "name": "โครงการบ้านพอเพียง (พอช.)",
+          "type": "BIGINT"
+        }
+      ],
+      "sourceAgency": "สถาบันพัฒนาองค์กรชุมชน (พอช.) ร่วมกับ กรมส่งเสริมและพัฒนาคุณภาพชีวิตคนพิการ",
+      "synergyDimension": "กตัญญู และ จิตสาธารณะ / พลังครอบครัว",
+      "sourceUrl": "https://web.codi.or.th/",
+      "directDownloadUrl": "https://opendata.m-society.go.th/",
+      "directDownloadLabel": "สถิติโครงการบ้านมั่นคง สถาบันพัฒนาองค์กรชุมชน (องค์การมหาชน)"
+    },
+    {
+      "tableName": "ext_demographics_age_gender",
+      "module": "external_synergy",
+      "displayName": "โครงสร้างประชากรศาสตร์ตามช่วงอายุ 2568",
+      "description": "สถิติประชากรไทยรายอายุ 0–100+ ปี แยกเพศชาย–หญิง ทั่วประเทศ (สำนักบริหารการทะเบียน กรมการปกครอง 2568)",
+      "icon": "Users",
+      "rowCount": 104,
+      "columns": [
+        {
+          "name": "ปี พ.ศ.",
+          "type": "BIGINT"
+        },
+        {
+          "name": "อายุ",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "ชาย (ไทย)",
+          "type": "BIGINT"
+        },
+        {
+          "name": "หญิง (ไทย)",
+          "type": "BIGINT"
+        },
+        {
+          "name": "รวม (ไทย)",
+          "type": "BIGINT"
+        },
+        {
+          "name": "ชาย (ไม่ใช่ไทย)",
+          "type": "BIGINT"
+        },
+        {
+          "name": "หญิง (ไม่ใช่ไทย)",
+          "type": "BIGINT"
+        },
+        {
+          "name": "รวม (ไม่ใช่ไทย)",
+          "type": "BIGINT"
+        },
+        {
+          "name": "ชาย (ทั้งหมด)",
+          "type": "BIGINT"
+        },
+        {
+          "name": "หญิง (ทั้งหมด)",
+          "type": "BIGINT"
+        },
+        {
+          "name": "รวมประชากรทั้งสิ้น",
+          "type": "BIGINT"
+        }
+      ],
+      "sourceAgency": "สำนักบริหารการทะเบียน กรมการปกครอง (ปค.) กระทรวงมหาดไทย",
+      "synergyDimension": "กลุ่มเป้าหมายเชิงนโยบาย (เด็ก, วัยทำงาน, ผู้สูงอายุ)",
+      "sourceUrl": "https://stat.bora.dopa.go.th/stat/statnew/statMONTH/statmonth/",
+      "directDownloadUrl": "https://stat.bora.dopa.go.th/",
+      "directDownloadLabel": "สถิติประชากรทางการทะเบียน กรมการปกครอง (BORA DOPA)"
+    },
+    {
+      "tableName": "ext_bot_financial_literacy",
+      "module": "external_synergy",
+      "displayName": "ทักษะทางการเงินและหนี้สินครัวเรือน ธปท. (2567)",
+      "description": "ระดับ Financial Literacy ความรู้ พฤติกรรม ทัศนคติทางการเงิน จำแนกตามเพศ อายุ ภาค อาชีพ (ธปท. 2567 / OECD INFE)",
+      "icon": "Banknote",
+      "rowCount": 17,
+      "columns": [
+        {
+          "name": "ปี พ.ศ.",
+          "type": "BIGINT"
+        },
+        {
+          "name": "มิติการวิเคราะห์",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "กลุ่มย่อย",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "ทักษะการเงิน_FL",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ความรู้การเงิน_FK",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "พฤติกรรมการเงิน_FB",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ทัศนคติการเงิน_FA",
+          "type": "DOUBLE"
+        }
+      ],
+      "sourceAgency": "ธนาคารแห่งประเทศไทย (ธปท.) ร่วมกับ สำนักงานสถิติแห่งชาติ (สสช.)",
+      "synergyDimension": "พอเพียง / พลังสร้างปัญญา",
+      "sourceUrl": "https://www.bot.or.th/th/research-and-publications/articles-and-publications/financial-literacy-survey.html",
+      "directDownloadUrl": "https://www.bot.or.th/",
+      "directDownloadLabel": "รายงานผลการสำรวจทักษะทางการเงินของไทย ธนาคารแห่งประเทศไทย"
+    },
+    {
+      "tableName": "ext_ita_regional_evaluation",
+      "module": "external_synergy",
+      "displayName": "การประเมินคุณธรรมและความโปร่งใส (ITA) รายจังหวัด (2568)",
+      "description": "ผลการประเมิน ITA ราย 77 จังหวัด จำแนกตามอันดับ คะแนนเฉลี่ย และระดับผลการประเมิน (สำนักงาน ป.ป.ช. 2568)",
+      "icon": "ShieldAlert",
+      "rowCount": 78,
+      "columns": [
+        {
+          "name": "ปี พ.ศ.",
+          "type": "BIGINT"
+        },
+        {
+          "name": "อันดับ",
+          "type": "BIGINT"
+        },
+        {
+          "name": "จังหวัด",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "คะแนนเฉลี่ย ITA",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "ระดับผลการประเมิน",
+          "type": "VARCHAR"
+        }
+      ],
+      "sourceAgency": "สำนักงานคณะกรรมการป้องกันและปราบปรามการทุจริตแห่งชาติ (ป.ป.ช.)",
+      "synergyDimension": "สุจริต และ วินัยรับผิดชอบ / พลังสร้างปัญญา และ พลังชุมชน",
+      "sourceUrl": "https://itas.nacc.go.th/",
+      "directDownloadUrl": "https://itas.nacc.go.th/",
+      "directDownloadLabel": "ระบบประเมินคุณธรรมและความโปร่งใส ITA (สำนักงาน ป.ป.ช.)"
+    },
+    {
+      "tableName": "ext_household_debt_regional",
+      "module": "external_synergy",
+      "displayName": "หนี้สินเฉลี่ยต่อครัวเรือนและวัตถุประสงค์การกู้ยืมรายจังหวัด (2566–2568)",
+      "description": "สถิติหนี้สินเฉลี่ยต่อครัวเรือน 77 จังหวัด จำแนกตามวัตถุประสงค์ (ที่อยู่อาศัย, การศึกษา, อุปโภคบริโภค) และหนี้ใน/นอกระบบ (สสช.)",
+      "icon": "Banknote",
+      "rowCount": 154,
+      "columns": [
+        {
+          "name": "ปี พ.ศ.",
+          "type": "BIGINT"
+        },
+        {
+          "name": "จังหวัด",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "หนี้สินเฉลี่ยรวม (บาท)",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "หนี้นอกระบบ (บาท)",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "หนี้อื่น ๆ",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "หนี้ในระบบ (บาท)",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "หนี้เพื่ออุปโภคบริโภค (บาท)",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "หนี้เพื่อที่อยู่อาศัย (บาท)",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "หนี้เพื่อทำธุรกิจ (บาท)",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "หนี้เพื่อการเกษตร (บาท)",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "หนี้เพื่อการศึกษา (บาท)",
+          "type": "DOUBLE"
+        }
+      ],
+      "sourceAgency": "สำนักงานสถิติแห่งชาติ (สสช.) กระทรวงดิจิทัลเพื่อเศรษฐกิจและสังคม",
+      "synergyDimension": "พอเพียง และ วินัยรับผิดชอบ / พลังสร้างปัญญา",
+      "sourceUrl": "https://www.nso.go.th/",
+      "directDownloadUrl": "https://data.go.th/",
+      "directDownloadLabel": "สถิติการสำรวจภาวะเศรษฐกิจและสังคมของครัวเรือน (สสช. / data.go.th)"
+    }
+  ]
+}

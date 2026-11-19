@@ -1,0 +1,536 @@
+/* =========================================================================
+   MoralCenterFooter.css - Global Center for Morality Promotion Footer
+   ========================================================================= */
+
+.moral-center-global-footer {
+  width: 100% !important;
+  background-color: #ffffff !important;
+  border-top: 1px solid #e2e8f0 !important;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.02) !important;
+  color: #334155 !important;
+  font-family: 'Kanit', 'Noto Sans Thai', sans-serif !important;
+  box-sizing: border-box !important;
+  margin-top: auto !important;
+  flex-shrink: 0 !important;
+  position: relative !important;
+  z-index: 10 !important;
+}
+
+.moral-footer-inner {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 24px 32px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Main 2-Column Row */
+.moral-footer-main-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+
+/* Left Column */
+.moral-footer-left-col {
+  flex: 1 1 540px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.moral-footer-brand-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 2px;
+}
+
+.moral-footer-logo {
+  height: 48px;
+  width: auto;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.moral-footer-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.moral-footer-org-th {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: #1e3a8a; /* Deep Royal Navy */
+  letter-spacing: -0.2px;
+}
+
+.moral-footer-org-th span {
+  font-weight: 600;
+  color: #475569;
+  font-size: 14px;
+}
+
+.moral-footer-org-en {
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.moral-footer-address {
+  margin: 0;
+  font-size: 11.5px;
+  color: #475569;
+  line-height: 1.6;
+}
+
+.moral-footer-contacts {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.moral-footer-contact-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e293b;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.moral-footer-contact-item:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.moral-footer-contact-icon {
+  color: #2563eb;
+  flex-shrink: 0;
+}
+
+.moral-footer-links-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.moral-footer-link {
+  color: #475569;
+  text-decoration: none;
+  transition: color 0.18s ease;
+  font-weight: 500;
+}
+
+.moral-footer-link:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.moral-footer-link-sep {
+  color: #cbd5e1;
+  font-size: 10px;
+}
+
+.moral-footer-browser-note {
+  margin: 2px 0 0 0;
+  font-size: 10.5px;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+/* Right Column */
+.moral-footer-right-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+/* Sitemap Button & Dropdown */
+.moral-footer-sitemap-wrap {
+  position: relative;
+}
+
+.moral-footer-sitemap-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 20px;
+  padding: 4px 14px 4px 16px;
+  font-family: 'Kanit', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.moral-footer-sitemap-btn:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+  background: #f8fafc;
+}
+
+.moral-sitemap-arrow {
+  transition: transform 0.2s ease;
+}
+
+.moral-sitemap-arrow.open {
+  transform: rotate(180deg);
+}
+
+.moral-footer-sitemap-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  width: 260px;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.15);
+  padding: 8px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.moral-footer-sitemap-header {
+  font-size: 11px;
+  font-weight: 800;
+  color: #64748b;
+  padding: 4px 8px;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 4px;
+}
+
+.moral-footer-sitemap-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  font-family: 'Kanit', sans-serif;
+  font-size: 11.5px;
+  color: #1e293b;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.moral-footer-sitemap-item:hover {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+/* Social Media Follow Us */
+.moral-footer-social-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.moral-footer-social-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.moral-footer-social-icons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.moral-social-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.12);
+  text-decoration: none;
+}
+
+.moral-social-circle:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.moral-social-circle.fb {
+  background: #1877f2;
+}
+
+.moral-social-circle.ig {
+  background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285aeb 90%);
+}
+
+.moral-social-circle.yt {
+  background: #ff0000;
+}
+
+/* Visitor Counter & Mascot Row */
+.moral-footer-counter-mascot-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.moral-footer-visitor-counter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.moral-footer-counter-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.moral-footer-counter-digits {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.moral-digit-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 24px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-family: 'Kanit', sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  color: #0f172a;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Mascot Graphic */
+.moral-footer-mascot-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.moral-footer-mascot {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.08));
+  transition: transform 0.2s ease;
+}
+
+.moral-footer-mascot:hover {
+  transform: scale(1.1) rotate(4deg);
+}
+
+/* Bottom Copyright Strip */
+.moral-footer-copyright-bar {
+  border-top: 1px solid #f1f5f9;
+  padding-top: 10px;
+  text-align: center;
+}
+
+.moral-footer-copyright-bar p {
+  margin: 0;
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* Responsive adjustments */
+@media (max-width: 900px) {
+  .moral-footer-main-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+  .moral-footer-right-col {
+    align-items: flex-start;
+  }
+}
+
+/* --- Mobile Specific Tight / Compact Layout (หน้าโทรศัพท์มือถือ ลดช่องว่างบรรทัดให้ชิดกัน) --- */
+@media (max-width: 768px) {
+  .moral-footer-inner {
+    padding: 12px 16px 8px !important;
+    gap: 6px !important;
+  }
+
+  .moral-footer-main-row {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  .moral-footer-left-col {
+    gap: 4px !important;
+    flex: 1 1 100% !important;
+  }
+
+  .moral-footer-brand-wrap {
+    gap: 8px !important;
+    margin-bottom: 0 !important;
+  }
+
+  .moral-footer-logo {
+    height: 36px !important;
+  }
+
+  .moral-footer-org-th {
+    font-size: 14px !important;
+    line-height: 1.25 !important;
+  }
+
+  .moral-footer-org-th span {
+    font-size: 12.5px !important;
+  }
+
+  .moral-footer-org-en {
+    font-size: 9px !important;
+    line-height: 1.2 !important;
+  }
+
+  .moral-footer-address {
+    font-size: 11px !important;
+    line-height: 1.35 !important;
+    margin: 1px 0 0 0 !important;
+  }
+
+  .moral-footer-contacts {
+    gap: 10px 14px !important;
+    margin-top: 1px !important;
+  }
+
+  .moral-footer-contact-item {
+    font-size: 11px !important;
+    gap: 4px !important;
+  }
+
+  .moral-footer-contact-icon {
+    width: 12px !important;
+    height: 12px !important;
+  }
+
+  .moral-footer-links-row {
+    gap: 2px 6px !important;
+    margin-top: 2px !important;
+    font-size: 10px !important;
+    line-height: 1.3 !important;
+  }
+
+  .moral-footer-link {
+    font-size: 10px !important;
+  }
+
+  .moral-footer-link-sep {
+    font-size: 8px !important;
+    opacity: 0.6 !important;
+  }
+
+  .moral-footer-browser-note {
+    margin: 1px 0 0 0 !important;
+    font-size: 9px !important;
+    line-height: 1.25 !important;
+  }
+
+  .moral-footer-right-col {
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 6px 12px !important;
+    padding-top: 6px !important;
+    border-top: 1px dashed #e2e8f0 !important;
+    width: 100% !important;
+  }
+
+  .moral-footer-sitemap-btn {
+    padding: 3px 10px !important;
+    font-size: 11px !important;
+    border-radius: 14px !important;
+  }
+
+  .moral-footer-social-wrap {
+    gap: 6px !important;
+  }
+
+  .moral-footer-social-label {
+    font-size: 11px !important;
+  }
+
+  .moral-social-circle {
+    width: 24px !important;
+    height: 24px !important;
+  }
+
+  .moral-social-circle svg {
+    width: 12px !important;
+    height: 12px !important;
+  }
+
+  .moral-footer-counter-mascot-row {
+    gap: 8px !important;
+  }
+
+  .moral-footer-visitor-counter {
+    gap: 4px !important;
+  }
+
+  .moral-footer-counter-label {
+    font-size: 10.5px !important;
+  }
+
+  .moral-digit-box {
+    width: 16px !important;
+    height: 18px !important;
+    font-size: 10.5px !important;
+    border-radius: 3px !important;
+  }
+
+  .moral-footer-mascot {
+    width: 28px !important;
+    height: 28px !important;
+  }
+
+  .moral-footer-copyright-bar {
+    padding-top: 4px !important;
+    margin-top: 0 !important;
+  }
+
+  .moral-footer-copyright-bar p {
+    font-size: 9.5px !important;
+    line-height: 1.2 !important;
+  }
+}

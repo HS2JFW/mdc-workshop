@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { LogIn } from 'lucide-react';
+import { LogIn, User } from 'lucide-react';
+import { authenticateAccount } from './moral-center/utils/adminAuthService';
 
 interface LoginPageProps {
   onLoginSuccess: () => void;
@@ -12,11 +13,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (username === 'user01' && password === 'admin') {
+    const cleanUser = (username || '').trim().toLowerCase();
+    const cleanPass = (password || '').trim();
+
+    const res = authenticateAccount(cleanUser, cleanPass);
+    if (res.success) {
+      sessionStorage.setItem('current_user', cleanUser);
       onLoginSuccess();
-    } else {
-      setError('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+      return;
     }
+
+    setError(res.message || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง (Username หรือ Password ไม่ถูกต้อง)');
   };
 
   return (
@@ -52,13 +59,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           ระบบวิเคราะห์และประเมินผลโครงการ
         </p>
 
-        <form onSubmit={handleLogin} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <form onSubmit={handleLogin} autoComplete="off" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>
               Username
             </label>
             <input 
               type="text" 
+              name="login_user"
+              autoComplete="off"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               style={{ 
@@ -79,6 +88,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             </label>
             <input 
               type="password" 
+              name="login_pwd"
+              autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               style={{ 
@@ -98,6 +109,54 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               {error}
             </div>
           )}
+
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '12px 14px', borderRadius: '10px', fontSize: '12px', color: '#475569', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ fontSize: '11px', color: '#64748b', textAlign: 'center', paddingBottom: '4px', borderBottom: '1px dashed #cbd5e1' }}>
+              * สำหรับบัญชีผู้ดูแลระบบ (Admin) จะต้องพิมพ์ Username และ Password ด้วยตนเองเท่านั้น
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                <User size={14} color="#64748b" />
+                <span><strong>User a1:</strong> <code style={{ color: '#475569', fontWeight: 700 }}>a1</code> / <code style={{ color: '#475569', fontWeight: 700 }}>test</code> (ดร.อนันต์)</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => { setUsername('a1'); setPassword('test'); setError(''); }}
+                style={{ padding: '3px 8px', fontSize: '11px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '5px', color: '#475569', cursor: 'pointer', fontWeight: 700 }}
+              >
+                เลือก a1
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                <User size={14} color="#64748b" />
+                <span><strong>User a2:</strong> <code style={{ color: '#475569', fontWeight: 700 }}>a2</code> / <code style={{ color: '#475569', fontWeight: 700 }}>test</code> (พญ.กานดา)</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => { setUsername('a2'); setPassword('test'); setError(''); }}
+                style={{ padding: '3px 8px', fontSize: '11px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '5px', color: '#475569', cursor: 'pointer', fontWeight: 700 }}
+              >
+                เลือก a2
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                <User size={14} color="#64748b" />
+                <span><strong>User a3:</strong> <code style={{ color: '#475569', fontWeight: 700 }}>a3</code> / <code style={{ color: '#475569', fontWeight: 700 }}>test</code> (อ.วิชัย)</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => { setUsername('a3'); setPassword('test'); setError(''); }}
+                style={{ padding: '3px 8px', fontSize: '11px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '5px', color: '#475569', cursor: 'pointer', fontWeight: 700 }}
+              >
+                เลือก a3
+              </button>
+            </div>
+          </div>
 
           <button 
             type="submit"

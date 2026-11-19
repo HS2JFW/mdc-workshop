@@ -25,7 +25,9 @@ export const CommunityWidget: React.FC<CommunityWidgetProps> = ({ onNavigateToCo
     if (onNavigateToCommunity) {
       onNavigateToCommunity();
     } else {
-      window.dispatchEvent(new CustomEvent('navigate', { detail: 'community' }));
+      window.dispatchEvent(new CustomEvent('navigate', { 
+        detail: { tab: 'dashboard', viewMode: 'overview', overviewTab: 'policy', showAiInsights: true } 
+      }));
     }
   };
 

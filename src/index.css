@@ -1,7 +1,7 @@
 :root {
   --sidebar-dark: #121e36;
   --sidebar-dark-active: #1d2c4e;
-  --bg-page: #e6ebf3;
+  --bg-page: #dbe3ed;
   --bg-card: #ffffff;
   --bg-hover: #f1f5f9;
   --border-light: #e2e8f0;
@@ -11,16 +11,20 @@
   
   /* Integrity and Virtue Theme Colors */
   --color-integrity: #1a60cc;
-  --color-virtue: #b91c1c;
+  --color-virtue: #a13434;
   
   /* Status Colors */
   --status-green: #10b981;
   --status-yellow: #f59e0b;
-  --status-red: #ef4444;
+  --status-red: #d55e5e;
   --status-orange: #f97316;
   --status-blue: #3b82f6;
 
-  font-family: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
+  /* Font Variables: Thai Typography & Latin / Numerals */
+  --font-thai: 'Prompt', 'Noto Sans Thai', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-latin-num: 'Inter', 'Poppins', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+
+  font-family: var(--font-thai);
   color: var(--text-main);
   background-color: var(--bg-page);
   box-sizing: border-box;
@@ -28,6 +32,17 @@
 
 *, *::before, *::after {
   box-sizing: inherit;
+  margin: 0;
+  padding: 0;
+}
+
+body, button, input, select, textarea {
+  font-family: var(--font-thai);
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
   margin: 0;
   padding: 0;
 }
@@ -40,6 +55,13 @@ body {
   min-height: 100vh;
   padding: 0;
   overflow-x: hidden;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Scrollbar Customization */
@@ -100,7 +122,7 @@ body {
 .sidebar-brand {
   width: 42px;
   height: 42px;
-  background: linear-gradient(135deg, #ef4444 0%, #1e40af 100%);
+  background: linear-gradient(135deg, #d55e5e 0%, #1e40af 100%);
   border-radius: 12px;
   display: flex;
   align-items: center;
@@ -199,7 +221,7 @@ body {
   border-right: 1px solid var(--border-light);
   display: flex;
   flex-direction: column;
-  background-color: #f8fafc;
+  background-color: #eef2f6;
   flex-shrink: 0;
   position: relative;
 }
@@ -382,7 +404,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background-color: #f1f5f9;
+  background-color: #eef2f6;
 }
 
 /* Top Header */
@@ -421,7 +443,7 @@ body {
 
 .search-input:focus {
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-  background-color: #e2e8f0;
+  background-color: #eef2f6;
 }
 
 .search-icon {
@@ -911,7 +933,7 @@ body {
 }
 
 .table-control-btn:hover {
-  background-color: #e2e8f0;
+  background-color: #eef2f6;
   color: #0f172a;
 }
 
@@ -1225,4 +1247,138 @@ body {
 }
 .social-card-body {
   padding: 20px;
+}
+
+/* =========================================
+   TOP HEADER NAVIGATION TABS
+========================================= */
+.header-top-navigation {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 20px;
+}
+
+.header-top-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.header-top-tab-btn:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+  border-color: #cbd5e1;
+}
+
+.header-top-tab-btn.active {
+  background: #3b76dc;
+  color: #ffffff;
+  border-color: #3b76dc;
+  box-shadow: 0 4px 14px rgba(58, 117, 219, 0.3);
+}
+
+.header-top-badge {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.25);
+  color: inherit;
+}
+
+/* =========================================
+   UNIVERSAL CHART TYPOGRAPHY (DESIGNATED THAI FONT)
+   Ensures all charts, legends, colored series, axes, and tooltips
+   use the designated Thai font: Prompt, Noto Sans Thai
+========================================= */
+.recharts-wrapper,
+.recharts-surface,
+.recharts-surface text,
+.recharts-surface tspan,
+.recharts-text,
+.recharts-cartesian-axis-tick,
+.recharts-cartesian-axis-tick text,
+.recharts-cartesian-axis-tick tspan,
+.recharts-cartesian-axis-tick-value,
+.recharts-polar-angle-axis-tick,
+.recharts-polar-angle-axis-tick text,
+.recharts-polar-angle-axis-tick tspan,
+.recharts-polar-radius-axis-tick,
+.recharts-polar-radius-axis-tick text,
+.recharts-polar-radius-axis-tick tspan,
+.recharts-legend-wrapper,
+.recharts-default-legend,
+.recharts-legend-item,
+.recharts-legend-item-text,
+.recharts-tooltip-wrapper,
+.recharts-default-tooltip,
+.recharts-tooltip-item,
+.recharts-tooltip-item-name,
+.recharts-tooltip-item-value,
+.recharts-tooltip-label,
+.recharts-pie-label-text,
+.recharts-label-list text {
+  font-family: var(--font-thai) !important;
+}
+
+.recharts-cartesian-axis-tick-value {
+  font-feature-settings: 'tnum' on, 'lnum' on;
+}
+
+/* Custom chart legends and color keys */
+.radar-legend-container,
+.radar-legend-item,
+.radar-legend-label,
+.radar-legend-sub,
+.radar-legend-text,
+.services-legend-card,
+.legend-title,
+.legend-list,
+.legend-item,
+.moral-donut-legend,
+.moral-donut-legend-item,
+.moral-donut-legend-row,
+.moral-quadrant-legend,
+.moral-quadrant-tag,
+.moral-map-overlay-legend,
+.moral-map-legend-item,
+.moral-province-horiz-item,
+.moral-province-horiz-meta,
+.moral-province-horiz-name,
+.moral-province-horiz-score {
+  font-family: var(--font-thai) !important;
+}
+
+
+
+/* Global button interactive hover: 3D elevation like dialog with no outline */
+button {
+  outline: none;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), filter 0.15s ease;
+}
+
+button:hover:not(:disabled) {
+  outline: none !important;
+  transform: translateY(-2px);
+  box-shadow: 
+    0 3.5px 0 rgba(0, 0, 0, 0.12),
+    0 10px 20px -2px rgba(30, 58, 138, 0.12),
+    0 3px 6px -1px rgba(15, 23, 42, 0.05),
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.35);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1.5px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15), inset 0 1.5px 3px rgba(0, 0, 0, 0.12);
+  outline: none !important;
 }

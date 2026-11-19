@@ -3,8 +3,7 @@ import {
   Map, 
   Building2, 
   User, 
-  Mail, 
-  Settings, 
+  Monitor, 
   LogOut,
   Bot,
   Users,
@@ -23,7 +22,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
       <div>
 
         {/* Moral Center Logo */}
-        <div className="sidebar-emblem" style={{ border: 'none', background: 'transparent', width: '72px', height: '72px', padding: 0, borderRadius: 0 }}>
+        <div 
+          className="sidebar-emblem" 
+          style={{ border: 'none', background: 'transparent', width: '72px', height: '72px', padding: 0, borderRadius: 0, cursor: 'pointer' }}
+          onClick={() => setActiveTab('moral-center')}
+          title="ศูนย์คุณธรรม Dashboard (หน้าหลัก)"
+        >
           <img src="/moral-center-logo.png" alt="Moral Center Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
         </div>
 
@@ -87,21 +91,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
 
 
           <div 
-            className={`sidebar-item ${activeTab === 'messages' ? 'active' : ''}`}
-            onClick={() => setActiveTab('messages')}
-            title="Messages"
+            className={`sidebar-item ${activeTab === 'monitor' ? 'active' : ''}`}
+            onClick={() => setActiveTab('monitor')}
+            title="Monitor"
           >
-            <Mail size={20} />
-            <span className="sidebar-badge" style={{ backgroundColor: '#3b82f6' }}>1</span>
+            <Monitor size={20} />
           </div>
 
-          <div 
-            className={`sidebar-item ${activeTab === 'settings' ? 'active' : ''}`}
-            onClick={() => setActiveTab('settings')}
-            title="Settings"
-          >
-            <Settings size={20} />
-          </div>
           <div className="sidebar-item" title="Logout">
             <LogOut size={20} />
           </div>

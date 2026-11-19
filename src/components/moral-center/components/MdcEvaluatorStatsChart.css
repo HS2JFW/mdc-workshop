@@ -1,0 +1,677 @@
+/* ==========================================================================
+   MdcEvaluatorStatsChart.css
+   Modern, responsive styling for Evaluator Statistics (ตามปี, ตามเพศ, ตามภูมิภาค)
+   Sourced from verified Moral & Life Capital DuckDB datasets.
+   ========================================================================== */
+
+.mdc-eval-card {
+  background: #ffffff !important;
+  border: 1.5px solid #e4eafc !important;
+  border-radius: 16px !important;
+  padding: 16px 18px 16px !important;
+  box-shadow: 0 4px 16px rgba(63, 98, 211, 0.05) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  flex: 1 !important;
+  transition: all 0.25s ease !important;
+}
+
+.mdc-eval-card:hover {
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 8px 24px rgba(63, 98, 211, 0.08) !important;
+}
+
+/* Header Section */
+.mdc-eval-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  padding-bottom: 4px !important;
+}
+
+.mdc-eval-header-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+
+.mdc-eval-icon-badge {
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 10px !important;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%) !important;
+  border: 1px solid #bfdbfe !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #2563eb !important;
+  flex-shrink: 0 !important;
+}
+
+.mdc-eval-title-wrap {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.mdc-eval-title {
+  font-family: 'Kanit', sans-serif !important;
+  font-size: 15.5px !important;
+  font-weight: 700 !important;
+  color: #1e293b !important;
+  margin: 0 !important;
+  line-height: 1.25 !important;
+}
+
+.mdc-eval-subtitle {
+  font-family: 'Kanit', sans-serif !important;
+  font-size: 11px !important;
+  color: #64748b !important;
+  margin: 2px 0 0 0 !important;
+  line-height: 1.2 !important;
+}
+
+.mdc-eval-total-pill {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  background: linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%) !important;
+  border: 1px solid #bfdbfe !important;
+  padding: 4px 10px !important;
+  border-radius: 999px !important;
+  font-family: 'Kanit', sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #1d4ed8 !important;
+  white-space: nowrap !important;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.08) !important;
+}
+
+/* Category Tabs (ตามปี, ตามเพศ, ตามภูมิภาค) */
+.mdc-eval-tabs {
+  display: flex !important;
+  background: #f1f5f9 !important;
+  padding: 3px !important;
+  border-radius: 10px !important;
+  gap: 4px !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.mdc-eval-tab-btn {
+  flex: 1 !important;
+  padding: 6px 8px !important;
+  border: none !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  font-family: 'Kanit', sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: #64748b !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 5px !important;
+  transition: all 0.2s ease !important;
+}
+
+.mdc-eval-tab-btn:hover {
+  color: #1e293b !important;
+  background: rgba(255, 255, 255, 0.6) !important;
+}
+
+.mdc-eval-tab-btn.active {
+  background: #ffffff !important;
+  color: #2563eb !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Year Selector Row (for Gender & Regional tabs) */
+.mdc-eval-year-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 4px 6px !important;
+  background: #f8fafc !important;
+  border: 1px solid #f1f5f9 !important;
+  border-radius: 8px !important;
+}
+
+.mdc-eval-year-label {
+  font-family: 'Kanit', sans-serif !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  color: #475569 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+}
+
+.mdc-eval-year-pills {
+  display: flex !important;
+  gap: 4px !important;
+}
+
+.mdc-eval-year-chip {
+  padding: 3px 8px !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 6px !important;
+  background: #ffffff !important;
+  font-family: 'Kanit', sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #64748b !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+.mdc-eval-year-chip:hover {
+  border-color: #93c5fd !important;
+  color: #2563eb !important;
+}
+
+.mdc-eval-year-chip.active {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  border-color: #2563eb !important;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.25) !important;
+}
+
+/* Main Content Area */
+.mdc-eval-body {
+  min-height: 220px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+}
+
+/* Tab 1: By Year Vertical Bars */
+.mdc-eval-year-bars {
+  display: flex !important;
+  align-items: flex-end !important;
+  justify-content: space-between !important;
+  height: 175px !important;
+  gap: 10px !important;
+  padding: 10px 10px 0 !important;
+  border-bottom: 1.5px solid #edf2fb !important;
+}
+
+.mdc-eval-year-col {
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  height: 100% !important;
+  cursor: pointer !important;
+  transition: transform 0.2s ease !important;
+  position: relative !important;
+}
+
+.mdc-eval-year-col:hover {
+  transform: translateY(-2px) !important;
+}
+
+.mdc-eval-year-val-wrap {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  margin-bottom: 6px !important;
+}
+
+.mdc-eval-year-val {
+  font-family: 'Kanit', sans-serif !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  color: #1e293b !important;
+  white-space: nowrap !important;
+}
+
+.mdc-eval-year-pct {
+  font-family: 'Kanit', sans-serif !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  color: #2563eb !important;
+  background: #eff6ff !important;
+  padding: 1px 5px !important;
+  border-radius: 4px !important;
+  margin-top: 2px !important;
+}
+
+.mdc-eval-year-track {
+  width: 100% !important;
+  max-width: 44px !important;
+  height: 105px !important;
+  background: #f1f5f9 !important;
+  border-radius: 8px 8px 0 0 !important;
+  display: flex !important;
+  align-items: flex-end !important;
+  overflow: hidden !important;
+}
+
+.mdc-eval-year-fill {
+  width: 100% !important;
+  background: linear-gradient(180deg, #93c5fd 0%, #bfdbfe 100%) !important;
+  border-radius: 8px 8px 0 0 !important;
+  transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.mdc-eval-year-col.active .mdc-eval-year-fill {
+  background: linear-gradient(180deg, #2563eb 0%, #3b82f6 100%) !important;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35) !important;
+}
+
+.mdc-eval-year-col:hover .mdc-eval-year-fill {
+  background: linear-gradient(180deg, #1d4ed8 0%, #3b82f6 100%) !important;
+}
+
+.mdc-eval-year-label-wrap {
+  margin-top: 8px !important;
+  text-align: center !important;
+}
+
+.mdc-eval-year-label {
+  font-family: 'Kanit', sans-serif !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  color: #64748b !important;
+  white-space: nowrap !important;
+}
+
+.mdc-eval-year-col.active .mdc-eval-year-label {
+  color: #2563eb !important;
+  font-weight: 700 !important;
+}
+
+/* Tab 2 & 3: Horizontal Rows List (Gender & Region) */
+.mdc-eval-rows-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 7px !important;
+  padding: 4px 0 !important;
+}
+
+.mdc-eval-row-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 5px 8px !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  border: 1px solid #f1f5f9 !important;
+  transition: all 0.15s ease !important;
+}
+
+.mdc-eval-row-item:hover {
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+.mdc-eval-row-info {
+  width: 168px !important;
+  flex-shrink: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.mdc-eval-row-dot {
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 50% !important;
+  flex-shrink: 0 !important;
+}
+
+.mdc-eval-row-name {
+  font-family: 'Kanit', sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: #334155 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.mdc-eval-row-bar-wrap {
+  flex: 1 !important;
+  height: 9px !important;
+  background: #f1f5f9 !important;
+  border-radius: 999px !important;
+  overflow: hidden !important;
+  position: relative !important;
+}
+
+.mdc-eval-row-bar-fill {
+  height: 100% !important;
+  border-radius: 999px !important;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.mdc-eval-row-stats {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  width: 110px !important;
+  justify-content: flex-end !important;
+  flex-shrink: 0 !important;
+}
+
+.mdc-eval-row-count {
+  font-family: 'Kanit', sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+  white-space: nowrap !important;
+}
+
+.mdc-eval-row-pct {
+  font-family: 'Kanit', sans-serif !important;
+  font-size: 10.5px !important;
+  font-weight: 600 !important;
+  color: #475569 !important;
+  background: #f1f5f9 !important;
+  padding: 1px 6px !important;
+  border-radius: 4px !important;
+  white-space: nowrap !important;
+}
+
+/* Callout Note */
+.mdc-eval-callout {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  background: #f8fafc !important;
+  border: 1px dashed #cbd5e1 !important;
+  border-radius: 8px !important;
+  padding: 7px 10px !important;
+  font-family: 'Kanit', sans-serif !important;
+  font-size: 11px !important;
+  color: #475569 !important;
+  line-height: 1.35 !important;
+}
+
+.mdc-eval-callout-icon {
+  color: #2563eb !important;
+  flex-shrink: 0 !important;
+}
+
+/* Footer Citation */
+.mdc-eval-footer {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  font-family: 'Kanit', sans-serif !important;
+  font-size: 10.5px !important;
+  color: #94a3b8 !important;
+  padding-top: 6px !important;
+  border-top: 1px solid #f1f5f9 !important;
+}
+
+.mdc-eval-footer-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+.mdc-eval-footer-badge {
+  color: #2563eb !important;
+  font-weight: 600 !important;
+}
+
+/* ==========================================================================
+   TAB 0: 3 Sub-Tables Layout (แสดง 3 ตารางย่อยพร้อมกัน)
+   ========================================================================== */
+.mdc-eval-all-container {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  width: 100% !important;
+}
+
+.mdc-eval-subtables-toolbar {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  padding: 6px 10px !important;
+  gap: 10px !important;
+}
+
+.mdc-eval-toolbar-info {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.mdc-eval-badge-sub {
+  background: #dbeafe !important;
+  color: #1d4ed8 !important;
+  font-family: 'Kanit', sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  padding: 2px 8px !important;
+  border-radius: 6px !important;
+  letter-spacing: -0.1px !important;
+  white-space: nowrap !important;
+}
+
+.mdc-eval-toolbar-desc {
+  font-family: 'Kanit', sans-serif !important;
+  font-size: 11.5px !important;
+  color: #64748b !important;
+  font-weight: 500 !important;
+}
+
+.mdc-eval-subtables-grid {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 12px !important;
+  width: 100% !important;
+  align-items: stretch !important;
+}
+
+@media (max-width: 900px) {
+  .mdc-eval-subtables-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+.mdc-eval-regional-fullwidth-card {
+  width: 100% !important;
+  box-sizing: border-box !important;
+  margin-top: 4px !important;
+}
+
+.mdc-eval-regional-split-grid {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 12px !important;
+  width: 100% !important;
+  align-items: stretch !important;
+}
+
+@media (max-width: 900px) {
+  .mdc-eval-regional-split-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+.mdc-eval-subtable-card {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  padding: 10px 12px 10px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.02) !important;
+  transition: all 0.2s ease !important;
+}
+
+.mdc-eval-subtable-card:hover {
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 4px 12px rgba(63, 98, 211, 0.06) !important;
+}
+
+.mdc-eval-subtable-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding-bottom: 6px !important;
+  border-bottom: 1.5px solid #f1f5f9 !important;
+}
+
+.mdc-eval-subtable-title-wrap {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.mdc-eval-subtable-num {
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 50% !important;
+  background: #eff6ff !important;
+  color: #2563eb !important;
+  font-family: 'Kanit', sans-serif !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: 1px solid #bfdbfe !important;
+  flex-shrink: 0 !important;
+}
+
+.mdc-eval-subtable-title {
+  font-family: 'Kanit', sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #1e293b !important;
+  white-space: nowrap !important;
+}
+
+.mdc-eval-subtable-tag {
+  font-family: 'Kanit', sans-serif !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  color: #64748b !important;
+  background: #f1f5f9 !important;
+  padding: 1px 6px !important;
+  border-radius: 4px !important;
+  white-space: nowrap !important;
+}
+
+.mdc-eval-table-wrap {
+  width: 100% !important;
+  overflow-x: auto !important;
+  border-radius: 6px !important;
+}
+
+.mdc-eval-table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  font-family: 'Kanit', sans-serif !important;
+  font-size: 11.5px !important;
+}
+
+.mdc-eval-table thead th {
+  background: #f8fafc !important;
+  color: #64748b !important;
+  font-weight: 600 !important;
+  font-size: 10.5px !important;
+  padding: 5px 6px !important;
+  border-bottom: 1.5px solid #e2e8f0 !important;
+  white-space: nowrap !important;
+}
+
+.mdc-eval-table tbody td {
+  padding: 5px 6px !important;
+  color: #334155 !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  vertical-align: middle !important;
+  transition: background 0.15s ease !important;
+}
+
+.mdc-eval-table tbody tr:hover td {
+  background: #f8fafc !important;
+}
+
+.mdc-eval-table tbody tr.selected-row td {
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
+.mdc-eval-table tfoot td {
+  padding: 6px 6px !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+  background: #f8fafc !important;
+  border-top: 1.5px solid #cbd5e1 !important;
+  border-bottom: none !important;
+}
+
+.mdc-eval-cell-with-dot {
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  white-space: nowrap !important;
+}
+
+.mdc-eval-color-dot {
+  width: 7px !important;
+  height: 7px !important;
+  border-radius: 50% !important;
+  flex-shrink: 0 !important;
+}
+
+.mdc-eval-row-year-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  font-weight: 600 !important;
+}
+
+.mdc-eval-active-dot {
+  width: 5px !important;
+  height: 5px !important;
+  border-radius: 50% !important;
+  background: #2563eb !important;
+  display: inline-block !important;
+  margin-right: 4px !important;
+}
+
+.mdc-eval-pct-pill {
+  font-family: 'Kanit', sans-serif !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  color: #2563eb !important;
+  white-space: nowrap !important;
+}
+
+.mdc-eval-pct-with-bar {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+  gap: 2px !important;
+}
+
+.mdc-eval-mini-track {
+  width: 44px !important;
+  height: 4px !important;
+  background: #e2e8f0 !important;
+  border-radius: 999px !important;
+  overflow: hidden !important;
+}
+
+.mdc-eval-mini-fill {
+  height: 100% !important;
+  border-radius: 999px !important;
+  transition: width 0.3s ease !important;
+}

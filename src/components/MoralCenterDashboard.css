@@ -1,0 +1,1765 @@
+/* MoralCenterDashboard.css - Full-screen Moral Center Dashboard */
+
+:root {
+  --font-thai: 'Prompt', 'Noto Sans Thai', -apple-system, sans-serif;
+  --font-latin-num: 'Inter', 'Poppins', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+}
+
+.moral-fullscreen-root {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  background-color: #eef2f6;
+  display: flex;
+  overflow: hidden;
+  font-family: var(--font-thai);
+  color: #1e293b;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.moral-fullscreen-frame {
+  width: 100vw;
+  height: 100vh;
+  background: #eef2f6;
+  border-radius: 0;
+  overflow: hidden;
+  display: flex;
+  box-shadow: none;
+}
+
+/* =========================================
+   1. FAR-LEFT SLIM VERTICAL ICON SIDEBAR & SUBMENU
+========================================= */
+.moral-sidebar-wrapper {
+  position: relative;
+  display: flex;
+  height: 100%;
+  flex-shrink: 0;
+  z-index: 50;
+}
+
+.moral-slim-sidebar {
+  width: 165px;
+  height: 100%;
+  background: linear-gradient(180deg, #10233f 0%, #132847 45%, #0e1e37 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 14px 8px 12px;
+  flex-shrink: 0;
+  z-index: 10;
+  box-sizing: border-box;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+.moral-slim-top {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  position: relative;
+  z-index: 2;
+}
+
+.moral-slim-brand-header {
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 4px 0 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.moral-slim-brand-btn {
+  width: 100%;
+  background: transparent;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 6px 0;
+  text-align: center;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: 14px;
+  position: relative;
+  z-index: 21;
+  pointer-events: auto;
+}
+
+.moral-slim-brand-btn:hover {
+  opacity: 1;
+  transform: scale(1.07);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.35);
+}
+
+.moral-slim-brand-btn:active {
+  transform: scale(0.96);
+}
+
+.moral-slim-logo-img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  flex-shrink: 0;
+  display: block;
+  margin: 0 auto;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.28));
+  pointer-events: none;
+  user-select: none;
+}
+
+.moral-slim-brand-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.moral-slim-brand-title {
+  font-family: var(--font-thai);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.2;
+  letter-spacing: -0.2px;
+}
+
+.moral-slim-brand-sub {
+  font-family: var(--font-latin-num);
+  font-size: 10px;
+  font-weight: 500;
+  color: #8da4be;
+  line-height: 1.2;
+  margin-top: 1px;
+}
+
+.moral-sidebar-section-title {
+  font-family: var(--font-thai);
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #708aa8;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding: 8px 8px 3px;
+  width: 100%;
+  box-sizing: border-box;
+  position: relative;
+  z-index: 2;
+}
+
+.moral-slim-nav-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 0 2px 8px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+.moral-slim-nav-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.moral-slim-nav-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
+}
+
+.moral-slim-icon-btn {
+  width: 100%;
+  height: 34px;
+  min-height: 34px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 0 10px;
+  color: #cbd5e1;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  text-align: left;
+  z-index: 2;
+}
+
+.moral-slim-icon-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  transform: translateX(2px);
+}
+
+.moral-slim-icon-btn:hover .moral-nav-item-icon {
+  color: #ffffff;
+}
+
+.moral-slim-icon-btn.active {
+  color: #ffffff !important;
+  background: linear-gradient(90deg, #3275db 0%, #1fa2bb 38%, #2ec28d 100%) !important;
+  border-color: transparent !important;
+  border-radius: 14px !important;
+  box-shadow: 0 4px 14px rgba(46, 194, 141, 0.35) !important;
+  font-weight: 700;
+}
+
+.moral-nav-item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #94a3b8;
+  transition: color 0.18s ease;
+}
+
+.moral-slim-icon-btn.active .moral-nav-item-icon {
+  color: #ffffff !important;
+}
+
+.moral-slim-icon-btn.active .moral-slim-btn-label {
+  color: #ffffff !important;
+  font-weight: 700;
+}
+
+.moral-slim-btn-label {
+  font-family: var(--font-thai);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.25;
+  color: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  text-align: left;
+}
+
+.moral-nav-item-indicator {
+  display: none !important;
+}
+
+.moral-slim-nav-divider {
+  width: 100%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 6px 0;
+  flex-shrink: 0;
+}
+
+.moral-slim-bottom {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding-top: 10px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.moral-sidebar-bottom-card {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+}
+
+.moral-sidebar-user-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.moral-sidebar-user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  flex-shrink: 0;
+}
+
+.moral-sidebar-user-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.moral-sidebar-user-name {
+  font-family: var(--font-thai);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.moral-sidebar-user-role {
+  font-family: var(--font-latin-num);
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.65);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.moral-sidebar-actions-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+.moral-sidebar-action-btn {
+  height: 32px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  font-family: var(--font-thai);
+  font-size: 11.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0 6px;
+}
+
+.moral-sidebar-action-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.moral-sidebar-action-btn.active {
+  background: #ffffff;
+  color: #00247c;
+  border-color: #ffffff;
+}
+
+.moral-sidebar-action-btn.logout:hover {
+  background: rgba(239, 68, 68, 0.35);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+/* =========================================
+   VERTICAL FULL-WIDTH ACTIONS & BOTTOM USER
+========================================= */
+.moral-sidebar-action-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  position: relative;
+  z-index: 5;
+}
+
+.moral-sidebar-full-btn {
+  width: 100%;
+  height: 34px;
+  min-height: 34px;
+  border-radius: 14px;
+  background: #ffffff;
+  border: none;
+  color: #102a45;
+  font-family: var(--font-thai);
+  font-size: 12.5px;
+  font-weight: 700;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 0 12px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+  text-align: left;
+  position: relative;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+  z-index: 2;
+}
+
+.moral-sidebar-full-btn:hover {
+  background: #f8fafc;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+  color: #0c2035;
+}
+
+.moral-sidebar-full-btn .moral-nav-item-icon {
+  color: #102a45;
+}
+
+.moral-sidebar-full-btn.active {
+  background: linear-gradient(90deg, #3275db 0%, #1fa2bb 38%, #2ec28d 100%);
+  color: #ffffff;
+  border-color: transparent;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(46, 194, 141, 0.35);
+}
+
+.moral-sidebar-full-btn.active .moral-nav-item-icon {
+  color: #ffffff;
+}
+
+.moral-sidebar-full-btn.logout {
+  background: linear-gradient(90deg, #10233f 0%, #1a3862 100%) !important;
+  border: 1px solid rgba(147, 197, 253, 0.25) !important;
+  color: #ffffff !important;
+  border-radius: 14px !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 8px rgba(10, 23, 42, 0.35) !important;
+}
+
+.moral-sidebar-full-btn.logout:hover {
+  background: linear-gradient(90deg, #152d52 0%, #1f457a 100%) !important;
+  border-color: rgba(147, 197, 253, 0.45) !important;
+  color: #ffffff !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(16, 35, 63, 0.5) !important;
+}
+
+.moral-sidebar-full-btn.logout .moral-nav-item-icon {
+  color: #93c5fd !important;
+}
+
+.moral-sidebar-full-btn.logout:hover .moral-nav-item-icon {
+  color: #ffffff !important;
+}
+
+.moral-sidebar-user-bottom-card {
+  width: 100%;
+  margin-top: 6px;
+  background: #ffffff;
+  border: none;
+  border-radius: 14px;
+  padding: 4px 10px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+  position: relative;
+  z-index: 5;
+}
+
+.moral-sidebar-user-avatar-wrap {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.moral-sidebar-user-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid #ffffff;
+  flex-shrink: 0;
+}
+
+.moral-sidebar-user-name {
+  font-family: var(--font-thai);
+  font-size: 12px;
+  font-weight: 700;
+  color: #102a45;
+  line-height: 1.2;
+}
+
+.moral-user-status-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  background-color: #10b981;
+  border: 1.5px solid #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 0 4px rgba(16, 185, 129, 0.6);
+}
+
+.moral-slim-sidebar-wave {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 240px;
+  background-image: url('/theme/sidebar_bottom_wave_hd.png');
+  background-repeat: no-repeat;
+  background-position: bottom left;
+  background-size: 100% 100%;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 1;
+}
+
+.moral-global-bottom-wave {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  background: linear-gradient(90deg, #059669 0%, #0284c7 45%, #00247c 100%);
+  clip-path: polygon(0 45%, 15% 15%, 35% 55%, 60% 20%, 85% 50%, 100% 25%, 100% 100%, 0 100%);
+  opacity: 0.85;
+  pointer-events: none;
+  z-index: 30;
+}
+
+.moral-global-bottom-wave.calendar-hidden {
+  display: none !important;
+}
+
+/* =========================================
+   BLUE FLYOUT SUBMENU (ON ICON HOVER)
+========================================= */
+.moral-flyout-submenu {
+  position: absolute;
+  left: 165px;
+  top: 0;
+  bottom: 0;
+  width: 290px;
+  background: #082b80;
+  background: color-mix(in srgb, #00247c 97%, white 3%);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  border-top-right-radius: 28px;
+  border-bottom-right-radius: 0;
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 14px 0 36px rgba(0, 36, 124, 0.3);
+  z-index: 60;
+  transform: translateX(-15px);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease;
+  overflow-y: auto;
+}
+
+.moral-flyout-submenu.open {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.moral-flyout-header {
+  padding: 0 4px;
+}
+
+.moral-flyout-title {
+  font-family: var(--font-latin-num);
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+  letter-spacing: -0.2px;
+}
+
+.moral-flyout-subtitle {
+  display: block;
+  font-family: var(--font-thai);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.75);
+  margin-top: 3px;
+}
+
+.moral-flyout-desc-badge {
+  font-family: var(--font-thai);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  padding: 6px 10px;
+  line-height: 1.4;
+  margin-bottom: 2px;
+}
+
+/* 3 Sector Cards (Accordion) */
+.moral-flyout-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.moral-flyout-card-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.moral-flyout-card {
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(4px);
+}
+
+.moral-flyout-card:hover {
+  background: rgba(255, 255, 255, 0.24);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.moral-flyout-card.active {
+  background: rgba(255, 255, 255, 0.28);
+  border-color: #ffffff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+}
+
+.moral-flyout-card-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.moral-flyout-chevron {
+  color: rgba(255, 255, 255, 0.7);
+  transition: transform 0.22s ease, color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.moral-flyout-chevron.expanded {
+  transform: rotate(180deg);
+  color: #ffffff;
+}
+
+.moral-flyout-card-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.moral-flyout-card-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.moral-flyout-card-title {
+  font-family: var(--font-thai);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.moral-flyout-card-sub {
+  font-family: var(--font-latin-num);
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.78);
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Accordion Nested Submenu List */
+.moral-sector-nested-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 6px;
+  border-left: 2px solid rgba(255, 255, 255, 0.28);
+  margin-top: 4px;
+  margin-left: 8px;
+  animation: moralFadeSlideDown 0.2s ease;
+}
+
+@keyframes moralFadeSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.moral-flyout-link-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.moral-flyout-link-item:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  transform: translateX(3px);
+}
+
+.moral-flyout-link-item.active {
+  background: rgba(255, 255, 255, 0.24);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.moral-flyout-link-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: rgba(255, 255, 255, 0.85);
+  transition: color 0.18s ease;
+}
+
+.moral-flyout-link-item:hover .moral-flyout-link-icon,
+.moral-flyout-link-item.active .moral-flyout-link-icon {
+  color: #ffffff;
+}
+
+.moral-flyout-link-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.moral-flyout-link-title {
+  font-family: var(--font-thai);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #ffffff;
+  word-break: break-word;
+}
+
+.moral-flyout-link-desc {
+  font-family: var(--font-latin-num);
+  font-size: 10px;
+  line-height: 1.25;
+  color: rgba(255, 255, 255, 0.72);
+  word-break: break-word;
+}
+
+.moral-slim-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.moral-slim-plus-btn {
+  width: 38px;
+  height: 38px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px dashed rgba(255, 255, 255, 0.4);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.moral-slim-plus-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.moral-slim-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  object-fit: cover;
+}
+
+/* =========================================
+   2. MAIN CONTAINER (DYNAMIC 12 VIEWS & LEGACY GRID)
+========================================= */
+.moral-main-scroll-container {
+  flex: 1;
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 100% !important;
+  height: 100% !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding: 0 !important;
+  background: #eef2f6;
+  min-width: 0;
+  box-sizing: border-box !important;
+  position: relative;
+}
+
+.moral-main-scroll-container > *:not(.moral-center-global-footer) {
+  flex: 1 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.moral-main-scroll-container.overview-mode {
+  padding: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+}
+
+.moral-main-scroll-container.calendar-mode {
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  display: flex !important;
+  background: #0b1528 !important;
+}
+
+.moral-main-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 290px 1fr 340px;
+  background: #eef2f6;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* =========================================
+   COLUMN A: ข้อมูลทั่วไป (GENERAL INFO)
+========================================= */
+.moral-col-general {
+  background: #ffffff;
+  border-right: 1px solid #edf2f7;
+  padding: 20px 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow-y: auto;
+  gap: 14px;
+}
+
+.moral-general-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.moral-general-header-icon {
+  color: #3b76dc;
+}
+
+.moral-general-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+/* 3 STATS CARDS */
+.moral-stat-card {
+  border-radius: 18px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: transform 0.2s;
+}
+
+.moral-stat-card:hover {
+  transform: translateY(-2px);
+}
+
+.moral-stat-card.blue {
+  background: linear-gradient(135deg, #4a81e8 0%, #3a75db 100%);
+  color: #ffffff;
+  box-shadow: 0 8px 20px rgba(58, 117, 219, 0.28);
+}
+
+.moral-stat-card.green {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+
+.moral-stat-card.purple {
+  background: #faf5ff;
+  border: 1px solid #e9d5ff;
+  color: #6b21a8;
+}
+
+.moral-stat-icon-wrap {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.moral-stat-card.blue .moral-stat-icon-wrap {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+.moral-stat-card.green .moral-stat-icon-wrap {
+  background: #22c55e;
+  color: #ffffff;
+}
+
+.moral-stat-card.purple .moral-stat-icon-wrap {
+  background: #9333ea;
+  color: #ffffff;
+}
+
+.moral-stat-number {
+  font-family: var(--font-latin-num);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-feature-settings: 'tnum' on, 'lnum' on;
+}
+
+.moral-stat-card.blue .moral-stat-number {
+  color: #ffffff;
+}
+
+.moral-stat-card.green .moral-stat-number {
+  color: #15803d;
+}
+
+.moral-stat-card.purple .moral-stat-number {
+  color: #7e22ce;
+}
+
+.moral-stat-label {
+  font-family: var(--font-thai);
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.moral-stat-card.blue .moral-stat-label {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.moral-stat-sublabel {
+  font-family: var(--font-latin-num);
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.85;
+  letter-spacing: 0.01em;
+}
+
+/* Growth Trend Chart Card */
+.moral-growth-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.02);
+}
+
+.moral-growth-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.moral-growth-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.moral-growth-year-badge {
+  font-size: 11px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 2px 8px;
+  color: #475569;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+/* Moral School Button Card */
+.moral-school-btn-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+}
+
+.moral-school-btn-card:hover {
+  border-color: #4a81e8;
+  background: #f8fafc;
+  transform: translateY(-1px);
+}
+
+.moral-school-btn-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/* =========================================
+   COLUMN B: CENTER COLUMN (MAP & KPIS)
+========================================= */
+.moral-col-center {
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* Search Bar */
+.moral-center-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 8px 16px;
+  width: 260px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border: 1px solid #e2e8f0;
+}
+
+.moral-center-search input {
+  border: none;
+  outline: none;
+  font-size: 12px;
+  color: #1e293b;
+  width: 100%;
+}
+
+/* 3 KPI CARDS */
+.moral-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.moral-kpi-card {
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 16px 18px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.moral-kpi-card-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.moral-kpi-icon-wrap {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.moral-kpi-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.2;
+}
+
+.moral-kpi-sub {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.moral-kpi-score-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.moral-kpi-big-num {
+  font-size: 20px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.moral-kpi-total-num {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.moral-kpi-bar-track {
+  height: 5px;
+  border-radius: 5px;
+  background: #f1f5f9;
+  overflow: hidden;
+}
+
+.moral-kpi-bar-fill {
+  height: 100%;
+  border-radius: 5px;
+}
+
+/* Map & Situation Report Section */
+.moral-map-section {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 22px;
+  padding: 20px 24px;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.02);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 800px;
+  overflow: visible;
+}
+
+.moral-map-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 8px;
+}
+
+.moral-map-flex-content {
+  flex: 1;
+  display: flex;
+  position: relative;
+  align-items: center;
+  justify-content: center;
+  min-height: 720px;
+  overflow: visible;
+}
+
+.moral-thailand-svg-wrap {
+  width: 100%;
+  height: 100%;
+  min-height: 680px;
+  max-height: 720px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: visible;
+}
+
+.moral-thailand-svg-wrap svg {
+  height: 100%;
+  max-height: 700px;
+  width: auto;
+  overflow: visible;
+  transform: scale(1.05);
+  transform-origin: 48% 48%;
+  transition: transform 0.25s ease;
+}
+
+.moral-map-shadow-path {
+  fill: #1e3a8a;
+  opacity: 0.35;
+  filter: blur(14px);
+  transform: translate(6px, 24px);
+}
+
+.moral-map-extrusion-path {
+  fill: #3b6ea5;
+  stroke: #2a527c;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  transform: translate(2px, 7px);
+}
+
+.moral-map-bevel-rim {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 3.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.8));
+}
+
+.moral-map-province-path {
+  stroke: #487cb7;
+  stroke-width: 0.8;
+  stroke-linejoin: round;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.moral-map-province-path:hover {
+  stroke: #ffffff !important;
+  stroke-width: 1.8px !important;
+  filter: drop-shadow(0 0 8px rgba(37, 99, 235, 0.7));
+}
+
+.moral-map-province-path.active,
+.moral-map-province-path.regionActive {
+  fill: #f59e0b !important;
+  stroke: #ffffff !important;
+  stroke-width: 2.2px !important;
+  filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.95)) !important;
+}
+
+/* Donut Chart Floating Area */
+.moral-donut-container {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 12px 16px;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  z-index: 10;
+}
+
+.moral-donut-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.moral-donut-inner-flex {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.moral-donut-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.moral-donut-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.moral-donut-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* =========================================
+   COLUMN C: RIGHT COLUMN (AWARDS & CHARTS)
+========================================= */
+.moral-col-right {
+  background: #ffffff;
+  border-left: 1px solid #edf2f7;
+  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  overflow-y: auto;
+  gap: 18px;
+}
+
+/* Awards Table Card */
+.moral-awards-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 16px 18px;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.02);
+}
+
+.moral-awards-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 10px;
+  line-height: 1.3;
+}
+
+.moral-awards-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.moral-awards-table th {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-align: left;
+  padding: 4px 6px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.moral-awards-table td {
+  font-size: 11px;
+  padding: 6px 6px;
+  color: #334155;
+  border-bottom: 1px solid #f8fafc;
+}
+
+.moral-awards-table tr:last-child td {
+  border-bottom: none;
+}
+
+.moral-rank-badge {
+  font-family: var(--font-latin-num);
+  font-size: 11px;
+  font-weight: 700;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-feature-settings: 'tnum' on, 'lnum' on;
+}
+
+.moral-rank-badge.gold {
+  background: #fef08a;
+  color: #854d0e;
+}
+
+.moral-rank-badge.silver {
+  background: #eef2f6;
+  color: #475569;
+}
+
+.moral-rank-badge.bronze {
+  background: #fed7aa;
+  color: #9a3412;
+}
+
+/* Province Score Bar Chart Card */
+.moral-province-chart-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 16px 18px;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.02);
+}
+
+.moral-province-chart-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.moral-province-chart-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+  font-family: var(--font-thai);
+}
+
+.moral-province-chart-sub {
+  font-family: var(--font-thai);
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.moral-province-horiz-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  max-height: 250px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.moral-province-horiz-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.moral-province-horiz-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.moral-province-horiz-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.moral-province-horiz-item:hover,
+.moral-province-horiz-item.active {
+  background: #f1f5f9;
+}
+
+.moral-province-horiz-track {
+  width: 100%;
+  height: 6px;
+  background: #eef2f6;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.moral-province-horiz-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+  transition: width 0.3s ease;
+}
+
+.moral-province-horiz-item:hover .moral-province-horiz-fill,
+.moral-province-horiz-item.active .moral-province-horiz-fill {
+  background: linear-gradient(90deg, #2563eb 0%, #1d4ed8 100%);
+  box-shadow: 0 0 6px rgba(37, 99, 235, 0.4);
+}
+
+.moral-province-horiz-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-thai);
+  font-size: 11.5px;
+}
+
+.moral-province-horiz-name {
+  font-weight: 600;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.moral-province-horiz-rank {
+  font-family: var(--font-latin-num);
+  font-size: 10.5px;
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+.moral-province-horiz-score {
+  font-family: var(--font-latin-num);
+  font-weight: 700;
+  color: #2563eb;
+  font-size: 12px;
+}
+
+.moral-province-horiz-max {
+  font-size: 9.5px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+/* =========================================
+   TOP HEADER NAVIGATION TABS
+========================================= */
+.header-top-navigation {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 20px;
+}
+
+.header-top-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.header-top-tab-btn:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+  border-color: #cbd5e1;
+}
+
+.header-top-tab-btn.active {
+  background: #3b76dc;
+  color: #ffffff;
+  border-color: #3b76dc;
+  box-shadow: 0 4px 14px rgba(58, 117, 219, 0.3);
+}
+
+.header-top-badge {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.25);
+  color: inherit;
+}
+
+/* Recharts Typography & Designated Thai Font */
+.recharts-wrapper,
+.recharts-surface,
+.recharts-surface text,
+.recharts-surface tspan,
+.recharts-text,
+.recharts-legend-item-text,
+.recharts-default-legend,
+.recharts-legend-wrapper,
+.recharts-tooltip-wrapper,
+.recharts-default-tooltip,
+.recharts-tooltip-item,
+.recharts-tooltip-item-name,
+.recharts-tooltip-item-value,
+.recharts-tooltip-label,
+.recharts-cartesian-axis-tick text,
+.recharts-cartesian-axis-tick tspan,
+.recharts-cartesian-axis-tick-value,
+.recharts-polar-angle-axis-tick text,
+.recharts-polar-angle-axis-tick tspan,
+.recharts-polar-radius-axis-tick text,
+.recharts-polar-radius-axis-tick tspan,
+.recharts-pie-label-text,
+.recharts-label-list text {
+  font-family: var(--font-thai) !important;
+}
+
+.recharts-cartesian-axis-tick-value {
+  font-feature-settings: 'tnum' on, 'lnum' on;
+}
+
+
+
+/* =========================================================
+   3D TACTILE BUTTON ENHANCEMENTS WITH DIALOG-STYLE 3D LIFT & NO OUTLINE
+========================================================= */
+.moral-sidebar-nav-btn,
+.moral-subview-tab-btn,
+.moral-export-btn,
+.header-top-tab-btn {
+  position: relative;
+  outline: none !important;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), filter 0.15s ease !important;
+  user-select: none;
+}
+
+.moral-subview-tab-btn:hover:not(:disabled),
+.header-top-tab-btn:hover:not(:disabled),
+.moral-export-btn:hover:not(:disabled) {
+  outline: none !important;
+  filter: brightness(1.03);
+  transform: translateY(-2px) !important;
+  box-shadow: 
+    0 3.5px 0 #cbd5e1,
+    0 10px 20px -2px rgba(30, 58, 138, 0.12),
+    0 3px 6px -1px rgba(15, 23, 42, 0.05),
+    inset 0 1.5px 0 #ffffff !important;
+}
+
+.moral-subview-tab-btn {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05), inset 0 1px 0 #ffffff, inset 0 -1.5px 0 rgba(0, 0, 0, 0.06);
+}
+
+.moral-subview-tab-btn.active {
+  box-shadow: 0 3px 6px rgba(0, 36, 124, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 -2px 0 rgba(0, 0, 0, 0.2) !important;
+  transform: translateY(-0.5px);
+}
+
+.moral-subview-tab-btn.active:hover:not(:disabled) {
+  transform: translateY(-2.5px) !important;
+  box-shadow: 
+    0 4px 0 #001a59,
+    0 12px 24px -2px rgba(0, 36, 124, 0.35),
+    0 4px 8px -1px rgba(15, 23, 42, 0.08),
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.35) !important;
+}
+
+.moral-subview-tab-btn:active:not(:disabled),
+.header-top-tab-btn:active:not(:disabled) {
+  transform: translateY(1.5px) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15), inset 0 1.5px 3px rgba(0, 0, 0, 0.12) !important;
+  outline: none !important;
+}
+
+.header-top-tab-btn {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06), inset 0 1px 0 #ffffff, inset 0 -1.5px 0 rgba(0, 0, 0, 0.06);
+}
+
+.header-top-tab-btn.active {
+  box-shadow: 0 3px 8px rgba(58, 117, 219, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 -2px 0 rgba(0, 0, 0, 0.22) !important;
+  transform: translateY(-0.5px);
+}
+
+.header-top-tab-btn.active:hover:not(:disabled) {
+  transform: translateY(-2.5px) !important;
+  box-shadow: 
+    0 4px 0 #2563eb,
+    0 12px 24px -2px rgba(58, 117, 219, 0.4),
+    0 4px 8px -1px rgba(15, 23, 42, 0.08),
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.35) !important;
+}
+
+/* =========================================
+   PRINT / EXPORT REPORT STYLES (Hide Menus, Full Content)
+========================================= */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 8mm 10mm;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* 1. HIDE ALL MENUS, SIDEBARS & NO-PRINT ELEMENTS */
+  .moral-sidebar-wrapper,
+  .moral-slim-sidebar,
+  .project-tracking-top-nav,
+  .no-print,
+  [data-export-ignore="true"],
+  .moral-slim-sidebar-wave,
+  .moral-global-bottom-wave,
+  .pms-toast,
+  .moral-sidebar-bottom-card,
+  .moral-slim-bottom {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* 2. EXPAND ROOT & MAIN CONTAINERS */
+  .moral-fullscreen-root,
+  .moral-fullscreen-frame,
+  .moral-main-scroll-container,
+  .moral-view-container {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+  }
+
+  /* 3. ENSURE COLOR & BACKGROUND ACCURACY */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* 4. PMS EXECUTIVE DASHBOARD PRINT STYLING */
+  .pms-executive-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    gap: 16px !important;
+  }
+
+  .pms-print-only-badge {
+    display: flex !important;
+  }
+
+  /* Avoid cutting critical charts & metric cards across page boundaries */
+  .pms-metric-card,
+  .pms-chart-card,
+  .pms-table-container,
+  .pms-ai-brief-card {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    box-shadow: none !important;
+  }
+}

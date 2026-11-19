@@ -177,15 +177,15 @@ export const CommunityRanking: React.FC = () => {
             <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#1e293b', margin: 0 }}>Moral Chart</h3>
             <MoreVertical size={16} color="#94a3b8" />
           </div>
-          <p style={{ margin: '0 0 16px 0', fontSize: '12px', color: '#64748b' }}>ผลการประเมินคุณธรรม 5 ด้านของประเทศไทย</p>
+          <p style={{ margin: '0 0 16px 0', fontSize: '12px', color: '#64748b' }}>ผลการประเมินคุณธรรม 5 ด้านของหน่วยงาน</p>
           
           <div style={{ height: '180px', width: '100%', position: 'relative' }}>
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart cx="50%" cy="50%" outerRadius="65%" data={miniRadarData}>
                 <PolarGrid stroke="#e2e8f0" />
-                <PolarAngleAxis dataKey="subject" tick={{ fill: '#0f172a', fontSize: 10, fontWeight: 600 }} />
+                <PolarAngleAxis dataKey="subject" tick={{ fill: '#0f172a', fontSize: 10, fontWeight: 600, fontFamily: 'var(--font-thai)' }} />
                 <PolarRadiusAxis angle={90} domain={[0, 10]} tick={false} axisLine={false} />
-                <Tooltip wrapperStyle={{ zIndex: 1000 }} />
+                <Tooltip wrapperStyle={{ zIndex: 1000, fontFamily: 'var(--font-thai)' }} contentStyle={{ fontFamily: 'var(--font-thai)' }} />
                 <Radar name="คุณธรรม" dataKey="A" stroke="#3b82f6" strokeWidth={2} fill="#3b82f6" fillOpacity={0.4} />
               </RadarChart>
             </ResponsiveContainer>

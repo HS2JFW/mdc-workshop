@@ -1,0 +1,392 @@
+/* ==========================================================================
+   PolicyMoralAnalysisDashboardView.css
+   หน้าวิเคราะห์: พลังแห่ง ‘บวร’ สร้างชุมชนยั่งยืน
+   - Background รูปภาพบริสุทธิ์: ลบรูปปุ่ม, คำพูดด้านบน, และกรอบสี่เหลี่ยมด้านล่างออกแล้ว
+   - Text และ CSS ทั้งหมดคงไว้สมบูรณ์
+   - เมื่อ mouse over ปุ่ม: เปลี่ยนสีเล็กน้อย และปุ่มไม่ขยับไปไหน (No movement/shift)
+   - โครงสร้างและตำแหน่งถอดแบบจากภาพตัวอย่างทุกประการ
+   ========================================================================== */
+
+.mdc-baworn-analysis-wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  background: #ffffff;
+  font-family: 'Kanit', sans-serif;
+  color: #1e293b;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* Main Visual Canvas Area */
+.mdc-baworn-canvas-container {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 30%, #e0f2fe 0%, #dbeafe 45%, #eff6ff 100%);
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+/* Responsive Graphic Stage (Aspect ratio 963 / 536 ~ 1.7966) */
+.mdc-baworn-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: 963 / 536;
+  margin: auto;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* Pure 3D Art Background Image (No buttons, no title text, no bottom box frame) */
+.mdc-baworn-bg-art {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  display: block;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* ==========================================================================
+   1. CSS Header Title: พลังแห่ง ‘บวร’ สร้างชุมชนยั่งยืน
+   ========================================================================== */
+.mdc-baworn-title-wrap {
+  position: absolute;
+  top: 3.8%;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  z-index: 10;
+  user-select: none;
+  pointer-events: none;
+  width: 90%;
+  max-width: 680px;
+}
+
+.mdc-baworn-main-title {
+  font-size: clamp(20px, 3.4vw, 36px);
+  font-weight: 900;
+  color: #334155;
+  margin: 0 0 2px 0;
+  line-height: 1.15;
+  letter-spacing: -0.5px;
+  text-shadow: 0 1px 0 #cbd5e1, 0 2px 0 #94a3b8, 0 4px 8px rgba(15, 23, 42, 0.22);
+}
+
+.mdc-baworn-title-highlight {
+  display: inline-block;
+  background: linear-gradient(180deg, #ff7a18 0%, #ea580c 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 4px rgba(234, 88, 12, 0.45));
+}
+
+.mdc-baworn-sub-title {
+  font-size: clamp(15px, 2.4vw, 26px);
+  font-weight: 800;
+  color: #334155;
+  margin: 0;
+  line-height: 1.2;
+  letter-spacing: -0.3px;
+  text-shadow: 0 1px 0 #cbd5e1, 0 2px 0 #94a3b8, 0 3px 6px rgba(15, 23, 42, 0.2);
+}
+
+/* ==========================================================================
+   2. CSS Labels on the 4 Podiums (วัด, บ้าน, โรงเรียน, ชุมชน)
+   ========================================================================== */
+.mdc-podium-label {
+  position: absolute;
+  transform: translateX(-50%);
+  text-align: center;
+  z-index: 10;
+  user-select: none;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.12;
+}
+
+.mdc-podium-label .label-main {
+  font-size: clamp(13px, 1.8vw, 19px);
+  font-weight: 900;
+  color: #1e293b;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.95);
+}
+
+.mdc-podium-label .label-sub {
+  font-size: clamp(10px, 1.25vw, 13.5px);
+  font-weight: 700;
+  color: #475569;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.95);
+}
+
+/* Individual Podium Label Positions Matching Mockup */
+.mdc-podium-label.wat {
+  top: 36.2%;
+  left: 50.0%;
+}
+
+.mdc-podium-label.ban {
+  top: 50.8%;
+  left: 31.3%;
+}
+
+.mdc-podium-label.sch {
+  top: 51.0%;
+  left: 70.0%;
+}
+
+.mdc-podium-label.com {
+  top: 69.0%;
+  left: 49.8%;
+}
+
+/* ==========================================================================
+   3. CSS 3D Pill Buttons (ดัชนีคุณธรรม, ทุนชีวิต, วิทยากรคุณธรรม, Moral Credit)
+   - ไม่ขยับไปไหนเมื่อ mouse over (No shift / No translation)
+   - เปลี่ยนสีเล็กน้อยเมื่อ hover (Slight color change on hover)
+   ========================================================================== */
+.mdc-css-pill-btn {
+  position: absolute;
+  transform: translateX(-50%) !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: none;
+  cursor: pointer;
+  z-index: 15;
+  font-family: 'Kanit', sans-serif;
+  font-size: clamp(15px, 1.75vw, 19.5px);
+  font-weight: 800;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  letter-spacing: -0.2px;
+  transition: background 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease;
+  box-sizing: border-box;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+/* ป้องกันการขยับเด็ดขาดเมื่อเมาส์โอเวอร์หรือคลิก */
+.mdc-css-pill-btn:hover,
+.mdc-css-pill-btn:active,
+.mdc-css-pill-btn:focus {
+  transform: translateX(-50%) !important;
+}
+
+/* Button 1: ดัชนีคุณธรรม (Yellow / Amber) - เคลื่อนลงล่าง 20px, ซ้าย 20px */
+.mdc-css-pill-btn.btn-wat {
+  top: calc(42.8% + 20px);
+  left: calc(50.0% - 20px);
+  width: 15.6%;
+  min-width: 143px;
+  max-width: 188px;
+  height: 7.5%;
+  min-height: 36px;
+  max-height: 47px;
+  background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+  box-shadow: 0 4px 0 #b45309, 0 8px 18px rgba(217, 119, 6, 0.45);
+}
+
+.mdc-css-pill-btn.btn-wat:hover {
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
+  filter: brightness(1.1);
+  box-shadow: 0 4px 0 #b45309, 0 8px 20px rgba(245, 158, 11, 0.55);
+}
+
+/* Button 2: ทุนชีวิต (Orange / Coral) - เคลื่อนลงล่าง 20px, ซ้าย 50px */
+.mdc-css-pill-btn.btn-ban {
+  top: calc(57.6% + 20px);
+  left: calc(31.3% - 50px);
+  width: 15.6%;
+  min-width: 143px;
+  max-width: 188px;
+  height: 7.5%;
+  min-height: 36px;
+  max-height: 47px;
+  background: linear-gradient(180deg, #f97316 0%, #ea580c 100%);
+  box-shadow: 0 4px 0 #c2410c, 0 8px 18px rgba(234, 88, 12, 0.45);
+}
+
+.mdc-css-pill-btn.btn-ban:hover {
+  background: linear-gradient(180deg, #fb923c 0%, #f97316 100%);
+  filter: brightness(1.1);
+  box-shadow: 0 4px 0 #c2410c, 0 8px 20px rgba(234, 88, 12, 0.55);
+}
+
+/* Button 3: วิทยากรคุณธรรม (Sky Blue) - เคลื่อนลงล่าง 20px */
+.mdc-css-pill-btn.btn-sch {
+  top: calc(58.1% + 20px);
+  left: 70.0%;
+  width: 17.5%;
+  min-width: 161px;
+  max-width: 210px;
+  height: 7.5%;
+  min-height: 36px;
+  max-height: 47px;
+  background: linear-gradient(180deg, #0284c7 0%, #0369a1 100%);
+  box-shadow: 0 4px 0 #075985, 0 8px 18px rgba(3, 105, 161, 0.45);
+}
+
+.mdc-css-pill-btn.btn-sch:hover {
+  background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+  filter: brightness(1.1);
+  box-shadow: 0 4px 0 #075985, 0 8px 20px rgba(2, 132, 199, 0.55);
+}
+
+/* Button 4: Moral Credit (Green / Emerald) - ปรับขึ้นมา 50px (จาก +90px เหลือ +40px), ไปทางซ้าย 20px */
+.mdc-css-pill-btn.btn-com {
+  top: calc(74.0% + 40px);
+  left: calc(49.8% - 20px);
+  width: 15.6%;
+  min-width: 143px;
+  max-width: 188px;
+  height: 7.5%;
+  min-height: 36px;
+  max-height: 47px;
+  background: linear-gradient(180deg, #16a34a 0%, #15803d 100%);
+  box-shadow: 0 4px 0 #166534, 0 8px 18px rgba(21, 128, 61, 0.45);
+}
+
+.mdc-css-pill-btn.btn-com:hover {
+  background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
+  filter: brightness(1.1);
+  box-shadow: 0 4px 0 #166534, 0 8px 20px rgba(22, 163, 74, 0.55);
+}
+
+/* Podium Click Zones for broader intuitive touch */
+.mdc-baworn-podium-zone {
+  position: absolute;
+  cursor: pointer;
+  z-index: 5;
+  border-radius: 50%;
+  background: transparent;
+}
+
+/* ==========================================================================
+   4. CSS Glassmorphic Card: ที่มาแนวคิด (ขอบและพื้นหลังเป็น CSS บริสุทธิ์)
+   ========================================================================== */
+.mdc-concept-card {
+  position: absolute;
+  bottom: 0.4%;
+  left: 50.0%;
+  transform: translateX(-50%);
+  width: 95.5%;
+  max-width: 1280px;
+  background: rgba(224, 242, 254, 0.70);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1.5px solid rgba(255, 255, 255, 0.90);
+  border-radius: 14px;
+  padding: 6px 20px 6px 20px;
+  box-shadow: 0 6px 22px rgba(37, 99, 235, 0.12), 0 2px 6px rgba(0, 0, 0, 0.04);
+  z-index: 10;
+  box-sizing: border-box;
+}
+
+.mdc-concept-header {
+  font-size: clamp(14px, 1.4vw, 16.5px);
+  font-weight: 900;
+  color: #0f172a;
+  margin-bottom: 2px;
+  line-height: 1.2;
+  letter-spacing: -0.2px;
+}
+
+.mdc-concept-body {
+  font-size: clamp(12.5px, 1.2vw, 14.5px);
+  color: #1e293b;
+  line-height: 1.35;
+  margin: 0;
+  text-align: justify;
+}
+
+/* Color highlights for the 4 pillars in the concept card */
+.mdc-concept-body strong.hl-ban {
+  color: #c2410c;
+  font-weight: 800;
+}
+
+.mdc-concept-body strong.hl-wat {
+  color: #b45309;
+  font-weight: 800;
+}
+
+.mdc-concept-body strong.hl-sch {
+  color: #0369a1;
+  font-weight: 800;
+}
+
+.mdc-concept-body strong.hl-com {
+  color: #15803d;
+  font-weight: 800;
+}
+
+/* ==========================================================================
+   5. Pop-up Speech Balloons on Hover (Comic Capsule Style Matching Reference)
+   ========================================================================== */
+.mdc-popup-balloon {
+  position: absolute;
+  bottom: calc(100% + 18px);
+  left: 50%;
+  transform: translateX(-50%) translateY(6px) scale(0.96);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 40;
+  white-space: nowrap;
+  font-family: 'Kanit', sans-serif;
+  font-size: clamp(15px, 1.6vw, 17px);
+  font-weight: 800;
+  color: #354284;
+  background: #ffffff;
+  padding: 11px 26px;
+  border-radius: 9999px;
+  border: none;
+  box-shadow: none;
+  filter: drop-shadow(0 12px 24px rgba(15, 23, 42, 0.16)) drop-shadow(0 3px 6px rgba(15, 23, 42, 0.08));
+  text-align: center;
+  letter-spacing: -0.2px;
+  line-height: 1.25;
+  transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              visibility 0.22s ease;
+}
+
+/* Downward Speech Tail (Angled left edge, steep right edge matching reference image) */
+.mdc-popup-balloon::after {
+  content: "";
+  position: absolute;
+  top: calc(100% - 1px);
+  left: 50%;
+  transform: translateX(-35%);
+  width: 24px;
+  height: 15px;
+  background: #ffffff;
+  clip-path: polygon(0 0, 100% 0, 78% 100%, 64% 100%);
+}
+
+/* Trigger balloon visibility on button hover or when active via state */
+.mdc-css-pill-btn:hover .mdc-popup-balloon,
+.mdc-popup-balloon.is-visible {
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: translateX(-50%) translateY(0) scale(1) !important;
+}

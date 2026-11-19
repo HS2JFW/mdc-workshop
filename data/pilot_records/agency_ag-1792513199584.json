@@ -1,0 +1,20 @@
+{
+  "id": "ag-1792513199584",
+  "province": "ระยอง",
+  "region": "ภาคตะวันออก (ภาคกลาง)",
+  "agency_name": "เทศบาลตำบลบ้านค่าย",
+  "agency_type": "องค์กรปกครองส่วนท้องถิ่น (อปท.)",
+  "coordinator_name": "น.ส.อารียา สุขสมบัติ",
+  "participant_role": "หัวหน้าสำนักปลัดเทศบาล",
+  "district": "บ้านค่าย",
+  "subdistrict": "บ้านค่าย",
+  "contact_info": "089-123-4567 | areeya@bankhai.go.th",
+  "activity_date": "2026-10-20",
+  "trial_project_name": "เครือข่ายเทศบาลคุณธรรมบ้านค่าย",
+  "trial_project_summary": "ลงทะเบียนผู้แทนเข้าร่วมกิจกรรมขับเคลื่อนคุณธรรมเชิงพื้นที่ อ.บ้านค่าย จ.ระยอง",
+  "synergy_topic": "อปท. สุจริต โปร่งใส",
+  "uploaded_files": [],
+  "extracted_data_preview": "ผู้แทน: น.ส.อารียา สุขสมบัติ | อ.บ้านค่าย จ.ระยอง",
+  "savedAt": "2026-10-20 16:19",
+  "sqliteDb": "data/pilot_activities_4regions.sqlite"
+}

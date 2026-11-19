@@ -1,5 +1,4 @@
-import React from 'react';
-import { Search, Bell, Settings } from 'lucide-react';
+import { Search, Bell, Settings, Building2 } from 'lucide-react';
 
 interface HeaderProps {
   searchQuery: string;
@@ -7,6 +6,8 @@ interface HeaderProps {
   language: 'TH' | 'EN';
   setLanguage: (lang: 'TH' | 'EN') => void;
   customTitle?: string;
+  activeTab?: string;
+  setActiveTab?: (tab: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -14,20 +15,60 @@ export const Header: React.FC<HeaderProps> = ({
   setSearchQuery,
   language,
   setLanguage,
-  customTitle
+  customTitle,
+  activeTab,
+  setActiveTab
 }) => {
+  const handleTabClick = (tab: string) => {
+    if (setActiveTab) {
+      setActiveTab(tab);
+    } else {
+      window.dispatchEvent(new CustomEvent('navigate', { detail: tab }));
+    }
+  };
+
   return (
     <header className="dashboard-header">
-      {/* Search Bar */}
-      <div className="search-container">
-        <Search size={16} className="search-icon" />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="ค้นหาโครงการ, หน่วยงาน, สถานที่..."
-          className="search-input"
-        />
+      {/* Search Bar & Top Menu */}
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <div className="search-container">
+          <Search size={16} className="search-icon" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="ค้นหาโครงการ, หน่วยงาน, สถานที่..."
+            className="search-input"
+          />
+        </div>
+
+        {/* Top Menu: ศูนย์คุณธรรม */}
+        <div className="header-top-navigation">
+          <button
+            type="button"
+            className={`header-top-tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
+            onClick={() => handleTabClick('dashboard')}
+            title="แผนที่ภาพรวม"
+          >
+            <Building2 size={16} />
+            <span>แผนที่ภาพรวม</span>
+          </button>
+
+          <button
+            type="button"
+            className={`header-top-tab-btn ${activeTab === 'moral-center' ? 'active' : ''}`}
+            onClick={() => handleTabClick('moral-center')}
+            title="ไปยังหน้า Dashboard ศูนย์คุณธรรม"
+          >
+            <img
+              src="/moral-center-logo.png"
+              alt="Moral Center"
+              style={{ width: 16, height: 16, objectFit: 'contain' }}
+            />
+            <span>ศูนย์คุณธรรม</span>
+            <span className="header-top-badge">Dashboard</span>
+          </button>
+        </div>
       </div>
 
       {customTitle && (

@@ -1,0 +1,19 @@
+{
+  "id": "reg-1794933500327",
+  "province": "พระนครศรีอยุธยา",
+  "region": "ภาคกลาง",
+  "agency_name": "หน่วยงานภาคีเครือข่ายคุณธรรม",
+  "agency_type": "ภาคประชาสังคม/วิชาการ",
+  "coordinator_name": "a545 a1",
+  "participant_role": "ผู้ร่วมกิจกรรม (ระดับผู้ปฏิบัติการ)",
+  "district": "",
+  "subdistrict": "",
+  "contact_info": "a1@a.com",
+  "activity_date": "2026-11-17",
+  "synergy_topic": "กิจกรรม Hackathon คุณธรรม 4 ภาค (กลุ่มกาแฟ: mocha)",
+  "trial_project_name": "การลงทะเบียนผู้ร่วมกิจกรรม a545 a1",
+  "trial_project_summary": "ลงทะเบียนเข้าร่วมกิจกรรมคุณธรรม 4 ภาค จังหวัดพระนครศรีอยุธยา โดย a545 a1 (ผู้ร่วมกิจกรรม - เครือข่ายคุณธรรม)",
+  "created_at": "2026-11-17 16:38",
+  "savedAt": "2026-11-17 16:38",
+  "sqliteDb": "data/pilot_activities_4regions.sqlite"
+}

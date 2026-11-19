@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, BarChart2, AlignLeft, Target, PieChart as PieChartIcon, CircleDashed, Table as TableIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, BarChart2, AlignLeft, Target, PieChart as PieChartIcon, CircleDashed, Table as TableIcon, Sparkles, X } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
@@ -90,6 +90,7 @@ export const DataTable: React.FC<DataTableProps> = ({ searchQuery, activeAgencie
   
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [isSummarized, setIsSummarized] = useState<boolean>(false);
+  const [analyzedTor, setAnalyzedTor] = useState<TorData | null>(null);
 
   // New Filter States
   const [locations, setLocations] = useState<LocationData[]>([]);
@@ -352,11 +353,11 @@ export const DataTable: React.FC<DataTableProps> = ({ searchQuery, activeAgencie
     const sumData = getSummarizedData()[0];
     if (!sumData) return [];
     return [
-      { subject: 'วินัย', displayName: `วินัย ${sumData.discipline.toFixed(1)}`, A: sumData.discipline, fullMark: 10 },
-      { subject: 'พอเพียง', displayName: `พอเพียง ${sumData.sufficiency.toFixed(1)}`, A: sumData.sufficiency, fullMark: 10 },
-      { subject: 'สุจริต', displayName: `สุจริต ${sumData.honesty.toFixed(1)}`, A: sumData.honesty, fullMark: 10 },
-      { subject: 'จิตอาสา', displayName: `จิตอาสา ${sumData.volunteer.toFixed(1)}`, A: sumData.volunteer, fullMark: 10 },
-      { subject: 'กตัญญู', displayName: `กตัญญู ${sumData.gratitude.toFixed(1)}`, A: sumData.gratitude, fullMark: 10 }
+      { subject: 'วินัย', displayName: `วินัย ${sumData.discipline.toFixed(1)}`, A: sumData.discipline, fullMark: 5 },
+      { subject: 'พอเพียง', displayName: `พอเพียง ${sumData.sufficiency.toFixed(1)}`, A: sumData.sufficiency, fullMark: 5 },
+      { subject: 'สุจริต', displayName: `สุจริต ${sumData.honesty.toFixed(1)}`, A: sumData.honesty, fullMark: 5 },
+      { subject: 'จิตอาสา', displayName: `จิตอาสา ${sumData.volunteer.toFixed(1)}`, A: sumData.volunteer, fullMark: 5 },
+      { subject: 'กตัญญู', displayName: `กตัญญู ${sumData.gratitude.toFixed(1)}`, A: sumData.gratitude, fullMark: 5 }
     ];
   };
 
@@ -471,6 +472,19 @@ export const DataTable: React.FC<DataTableProps> = ({ searchQuery, activeAgencie
                           <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Total</span>
                           {renderBadge(tor.virtue)}
                         </div>
+                        <div style={{ marginLeft: 'auto' }}>
+                          <button 
+                            onClick={() => setAnalyzedTor(tor)}
+                            style={{ 
+                              background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '6px', 
+                              padding: '8px 12px', fontSize: '12px', color: '#1d4ed8', fontWeight: 600,
+                              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
+                              boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                            }}
+                          >
+                            <Sparkles size={14} color="#3b82f6" /> บทวิเคราะห์
+                          </button>
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -493,7 +507,7 @@ export const DataTable: React.FC<DataTableProps> = ({ searchQuery, activeAgencie
               <BarChart data={getSummarizedData()} margin={{ top: 20, right: 30, left: 0, bottom: 50 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="project" tick={{fontSize: 12, fill: '#64748b'}} />
-                <YAxis domain={[0, 10]} tick={{fill: '#64748b'}} />
+                <YAxis domain={[-5, 5]} tick={{fill: '#64748b'}} />
                 <RechartsTooltip content={<CustomBarTooltip hideBudget />} cursor={{fill: '#f1f5f9'}} />
                 <Legend wrapperStyle={{paddingTop: '20px'}} />
                 {VIRTUE_KEYS.map((vk) => <Bar key={vk.key} dataKey={vk.key} name={vk.name} fill={vk.color} radius={[4, 4, 0, 0]} />)}
@@ -510,7 +524,7 @@ export const DataTable: React.FC<DataTableProps> = ({ searchQuery, activeAgencie
                   <BarChart data={[tor]} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                     <XAxis dataKey="project" tick={false} axisLine={false} />
-                    <YAxis domain={[0, 10]} tick={{fill: '#64748b'}} />
+                    <YAxis domain={[-5, 5]} tick={{fill: '#64748b'}} />
                     <RechartsTooltip content={<CustomBarTooltip hideBudget />} cursor={{fill: '#f1f5f9'}} />
                     <Legend />
                     {VIRTUE_KEYS.map((vk) => <Bar key={vk.key} dataKey={vk.key} name={vk.name} fill={vk.color} radius={[4, 4, 0, 0]} />)}
@@ -531,7 +545,7 @@ export const DataTable: React.FC<DataTableProps> = ({ searchQuery, activeAgencie
             <ResponsiveContainer>
               <BarChart layout="vertical" data={getSummarizedData()} margin={{ top: 20, right: 30, left: 150, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
-                <XAxis type="number" domain={[0, 10]} tick={{fill: '#64748b'}} />
+                <XAxis type="number" domain={[-5, 5]} tick={{fill: '#64748b'}} />
                 <YAxis dataKey="project" type="category" width={140} tick={{fontSize: 12, fill: '#64748b'}} />
                 <RechartsTooltip content={<CustomBarTooltip hideBudget />} cursor={{fill: '#f1f5f9'}} />
                 <Legend wrapperStyle={{paddingTop: '20px'}} />
@@ -548,7 +562,7 @@ export const DataTable: React.FC<DataTableProps> = ({ searchQuery, activeAgencie
                 <ResponsiveContainer>
                   <BarChart layout="vertical" data={[tor]} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
-                    <XAxis type="number" domain={[0, 10]} tick={{fill: '#64748b'}} />
+                    <XAxis type="number" domain={[-5, 5]} tick={{fill: '#64748b'}} />
                     <YAxis dataKey="project" type="category" tick={false} axisLine={false} width={10} />
                     <RechartsTooltip content={<CustomBarTooltip hideBudget />} cursor={{fill: '#f1f5f9'}} />
                     <Legend />
@@ -571,7 +585,7 @@ export const DataTable: React.FC<DataTableProps> = ({ searchQuery, activeAgencie
               <RadarChart cx="50%" cy="50%" outerRadius="70%" data={getRadarDataSummarized()}>
                 <PolarGrid stroke="#e2e8f0" />
                 <PolarAngleAxis dataKey="displayName" tick={{fill: '#334155', fontWeight: 600}} />
-                <PolarRadiusAxis angle={30} domain={[0, 10]} tick={{fill: '#94a3b8'}} />
+                <PolarRadiusAxis angle={30} domain={[-5, 5]} tick={{fill: '#94a3b8'}} />
                 <Radar name="Average Virtue Score" dataKey="A" stroke="#6366f1" fill="#6366f1" fillOpacity={0.5} />
                 <RechartsTooltip />
                 <Legend />
@@ -588,7 +602,7 @@ export const DataTable: React.FC<DataTableProps> = ({ searchQuery, activeAgencie
                   <RadarChart cx="50%" cy="50%" outerRadius="70%" data={getSingleProjectData(tor.id)}>
                     <PolarGrid stroke="#e2e8f0" />
                     <PolarAngleAxis dataKey="displayName" tick={{fill: '#334155', fontWeight: 600}} />
-                    <PolarRadiusAxis angle={30} domain={[0, 10]} tick={{fill: '#94a3b8'}} />
+                    <PolarRadiusAxis angle={30} domain={[-5, 5]} tick={{fill: '#94a3b8'}} />
                     <Radar name={tor.project} dataKey="A" stroke={COLORS[idx % COLORS.length]} fill={COLORS[idx % COLORS.length]} fillOpacity={0.5} />
                     <RechartsTooltip />
                   </RadarChart>
@@ -846,6 +860,86 @@ export const DataTable: React.FC<DataTableProps> = ({ searchQuery, activeAgencie
         {renderViewContent()}
         
       </div>
+
+      {analyzedTor && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#fff', borderRadius: '12px', width: '700px', maxWidth: '90%', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', borderRadius: '12px 12px 0 0' }}>
+              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f172a' }}>บทวิเคราะห์เหตุผลการให้คะแนน</h2>
+              <button onClick={() => setAnalyzedTor(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+                <X size={20} />
+              </button>
+            </div>
+            <div style={{ padding: '24px', flex: 1, overflowY: 'auto' }}>
+              <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 700, color: '#1e3a8a' }}>{analyzedTor.project}</h3>
+              <p style={{ margin: '0 0 24px 0', fontSize: '14px', color: '#475569', lineHeight: '1.6' }}>
+                งบประมาณ: {analyzedTor.budget} | ประเภท: {analyzedTor.type || '-'}
+              </p>
+              
+              <h4 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>บทวิเคราะห์การประเมินดัชนีคุณธรรม 5 ด้าน</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ background: '#f8fafc', borderLeft: '4px solid #8b5cf6', padding: '12px', borderRadius: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <strong style={{ color: '#0f172a' }}>1. วินัย (Discipline)</strong>
+                    <span style={{ fontWeight: 'bold', color: '#8b5cf6' }}>{analyzedTor.discipline} / 5</span>
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#475569' }}>
+                    {(analyzedTor.discipline || 0) >= 3 ? 'มีการวางแผนงบประมาณและระยะเวลาที่ชัดเจน ปฏิบัติตามระเบียบข้อบังคับอย่างเคร่งครัด' : 'ควรเพิ่มความเข้มงวดในการเบิกจ่ายและการควบคุมระยะเวลาโครงการ'}
+                  </div>
+                </div>
+
+                <div style={{ background: '#f8fafc', borderLeft: '4px solid #10b981', padding: '12px', borderRadius: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <strong style={{ color: '#0f172a' }}>2. พอเพียง (Sufficiency)</strong>
+                    <span style={{ fontWeight: 'bold', color: '#10b981' }}>{analyzedTor.sufficiency} / 5</span>
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#475569' }}>
+                    {(analyzedTor.sufficiency || 0) >= 3 ? 'ใช้งบประมาณได้อย่างคุ้มค่า เน้นการใช้ทรัพยากรที่มีในท้องถิ่นให้เกิดประโยชน์สูงสุด' : 'ควรพิจารณาปรับลดค่าใช้จ่ายที่ไม่จำเป็น และเน้นความคุ้มค่าในระยะยาว'}
+                  </div>
+                </div>
+
+                <div style={{ background: '#f8fafc', borderLeft: '4px solid #f59e0b', padding: '12px', borderRadius: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <strong style={{ color: '#0f172a' }}>3. สุจริต (Honesty)</strong>
+                    <span style={{ fontWeight: 'bold', color: '#f59e0b' }}>{analyzedTor.honesty} / 5</span>
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#475569' }}>
+                    {(analyzedTor.honesty || 0) >= 3 ? 'กระบวนการจัดซื้อจัดจ้างโปร่งใส สามารถตรวจสอบได้ทุกขั้นตอน มีการเปิดเผยข้อมูลแก่สาธารณะ' : 'ควรเพิ่มการเปิดเผยข้อมูลโครงการให้ประชาชนตรวจสอบได้ง่ายขึ้น'}
+                  </div>
+                </div>
+
+                <div style={{ background: '#f8fafc', borderLeft: '4px solid #ef4444', padding: '12px', borderRadius: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <strong style={{ color: '#0f172a' }}>4. จิตอาสา (Volunteer)</strong>
+                    <span style={{ fontWeight: 'bold', color: '#ef4444' }}>{analyzedTor.volunteer} / 5</span>
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#475569' }}>
+                    {(analyzedTor.volunteer || 0) >= 3 ? 'เปิดโอกาสให้ประชาชนและอาสาสมัครมีส่วนร่วมในการขับเคลื่อนโครงการอย่างเป็นรูปธรรม' : 'ยังขาดการมีส่วนร่วมจากภาคประชาชน ควรเพิ่มกิจกรรมที่ให้ชุมชนเข้ามามีบทบาท'}
+                  </div>
+                </div>
+
+                <div style={{ background: '#f8fafc', borderLeft: '4px solid #3b82f6', padding: '12px', borderRadius: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <strong style={{ color: '#0f172a' }}>5. กตัญญู (Gratitude)</strong>
+                    <span style={{ fontWeight: 'bold', color: '#3b82f6' }}>{analyzedTor.gratitude} / 5</span>
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#475569' }}>
+                    {(analyzedTor.gratitude || 0) >= 3 ? 'คำนึงถึงผลกระทบต่อสิ่งแวดล้อมและวัฒนธรรมท้องถิ่น มีการตอบแทนและดูแลรักษาสิ่งแวดล้อม' : 'ควรเพิ่มแนวทางการอนุรักษ์สิ่งแวดล้อมหรือการสืบสานวัฒนธรรมท้องถิ่นในโครงการ'}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style={{ padding: '16px 24px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end' }}>
+              <button 
+                onClick={() => setAnalyzedTor(null)}
+                style={{ padding: '10px 24px', borderRadius: '8px', border: 'none', background: '#3b82f6', color: '#fff', fontWeight: 600, cursor: 'pointer' }}
+              >
+                ปิดหน้าต่าง
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

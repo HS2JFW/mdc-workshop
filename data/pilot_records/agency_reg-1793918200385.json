@@ -1,0 +1,19 @@
+{
+  "id": "reg-1793918200385",
+  "province": "พระนครศรีอยุธยา",
+  "region": "ภาคกลาง",
+  "agency_name": "สภาวัฒนธรรมอยุธยา",
+  "agency_type": "ภาคประชาสังคม/วิชาการ",
+  "coordinator_name": "สมชาย ใจดี",
+  "participant_role": "ผู้นำชุมชนคุณธรรม (ระดับผู้ปฏิบัติการ)",
+  "district": "",
+  "subdistrict": "",
+  "contact_info": "",
+  "activity_date": "2026-11-05",
+  "synergy_topic": "กิจกรรม Hackathon คุณธรรม 4 ภาค (กลุ่มกาแฟ: mocha)",
+  "trial_project_name": "การลงทะเบียนผู้ร่วมกิจกรรม สมชาย ใจดี",
+  "trial_project_summary": "ลงทะเบียนเข้าร่วมกิจกรรมคุณธรรม 4 ภาค จังหวัดพระนครศรีอยุธยา โดย สมชาย ใจดี (ผู้นำชุมชนคุณธรรม - สภาวัฒนธรรมอยุธยา)",
+  "created_at": "2026-11-05 22:36",
+  "savedAt": "2026-11-05 22:36",
+  "sqliteDb": "data/pilot_activities_4regions.sqlite"
+}
