@@ -3683,6 +3683,148 @@ export async function testOpenRouterConnection(
   }
 }
 
+export interface FetchWithBackoffOptions {
+  maxRetries?: number; // ค่าเริ่มต้น 3 ครั้ง (retry 3 ครั้ง รวมเป็นสูงสุด 4 attempts)
+  timeoutMs?: number; // ค่าเริ่มต้น 45,000ms (ขยายจาก 25,000ms)
+  baseBackoffMs?: number; // ค่าเริ่มต้น 1,000ms
+  parentSignal?: AbortSignal;
+  logContext?: string;
+}
+
+/**
+ * ฟังก์ชันกลางสำหรับเรียก OpenRouter API พร้อมระบบ Exponential Backoff & Retry + Jitter
+ * - ดักจับสถานะ HTTP 429 (Rate Limited) และ Network Timeout / Server Overload (5xx)
+ * - คำนวณเวลาหน่วงแบบ Exponential Backoff (1s, 2s, 4s...) ผสมการสุ่ม Jitter 1–3 วินาที (1,000–3,000ms)
+ * - ทำการ Retry อัตโนมัติ 2–3 ครั้ง (สูงสุด 3 ครั้ง) ก่อนจะยอมแพ้
+ * - ขยาย Timeout ต่อรอบจากเดิม 25,000ms เป็น 45,000ms สำหรับช่วงที่มีผู้ใช้งานหนาแน่น
+ */
+export async function fetchOpenRouterWithBackoff(
+  url: string,
+  options: RequestInit,
+  config: FetchWithBackoffOptions = {}
+): Promise<Response> {
+  const {
+    maxRetries = 3,
+    timeoutMs = 45000,
+    baseBackoffMs = 1000,
+    parentSignal,
+    logContext = 'OpenRouter'
+  } = config;
+
+  let lastResponse: Response | null = null;
+  let lastError: any = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (parentSignal?.aborted) {
+      throw new DOMException('User aborted request', 'AbortError');
+    }
+
+    const controller = new AbortController();
+    let isTimeout = false;
+
+    let onParentAbort: (() => void) | null = null;
+    if (parentSignal) {
+      onParentAbort = () => controller.abort();
+      parentSignal.addEventListener('abort', onParentAbort);
+    }
+
+    const timeoutId = setTimeout(() => {
+      isTimeout = true;
+      controller.abort();
+    }, timeoutMs);
+
+    try {
+      if (attempt > 0) {
+        console.warn(
+          `[${logContext}] กำลัง Retry รอบที่ ${attempt}/${maxRetries} (Timeout: ${timeoutMs}ms)...`
+        );
+      }
+
+      const res = await fetch(url, {
+        ...options,
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+      if (onParentAbort && parentSignal) {
+        parentSignal.removeEventListener('abort', onParentAbort);
+      }
+
+      if (res.ok) {
+        return res;
+      }
+
+      lastResponse = res;
+
+      const isRateLimited = res.status === 429;
+      const isServerError = res.status >= 500 && res.status <= 504;
+
+      if ((isRateLimited || isServerError) && attempt < maxRetries) {
+        // Exponential Backoff (1s, 2s, 4s...) + Jitter สุ่ม 1-3 วินาที (1,000 - 3,000ms)
+        const exponentialDelay = Math.pow(2, attempt) * baseBackoffMs;
+        const jitterMs = Math.floor(Math.random() * 2000) + 1000;
+        let waitTimeMs = exponentialDelay + jitterMs;
+
+        // รองรับ header Retry-After จาก OpenRouter (ถ้ามี)
+        const retryAfter = res.headers.get('retry-after');
+        if (retryAfter) {
+          const parsedSec = parseFloat(retryAfter);
+          if (!isNaN(parsedSec) && parsedSec > 0) {
+            waitTimeMs = Math.max(waitTimeMs, Math.min(parsedSec * 1000, 15000));
+          }
+        }
+
+        console.warn(
+          `[${logContext}] พบ HTTP ${res.status} (${isRateLimited ? 'Rate Limited 429' : 'Server Busy'}) - หน่วงเวลา ${(waitTimeMs / 1000).toFixed(1)} วินาที (Exponential Backoff + Jitter ${jitterMs}ms) ก่อน Retry (รอบที่ ${attempt + 1}/${maxRetries})...`
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, waitTimeMs));
+        continue;
+      }
+
+      // สถานะอื่น เช่น 400, 401, 403, 404 ไม่ต้อง retry
+      return res;
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      if (onParentAbort && parentSignal) {
+        parentSignal.removeEventListener('abort', onParentAbort);
+      }
+
+      if (parentSignal?.aborted) {
+        throw err;
+      }
+
+      lastError = err;
+
+      const isNetworkTimeout = isTimeout || err?.name === 'AbortError' || /timeout/i.test(err?.message || '');
+      const isNetworkError = err?.name === 'TypeError' || /failed to fetch|network/i.test(err?.message || '');
+
+      if ((isNetworkTimeout || isNetworkError) && attempt < maxRetries) {
+        const exponentialDelay = Math.pow(2, attempt) * baseBackoffMs;
+        const jitterMs = Math.floor(Math.random() * 2000) + 1000; // Jitter 1-3 วินาที
+        const waitTimeMs = exponentialDelay + jitterMs;
+
+        console.warn(
+          `[${logContext}] เกิดข้อผิดพลาด ${isNetworkTimeout ? `Network Timeout (${timeoutMs}ms)` : 'Network Error'} (${err?.message || 'ขัดข้อง'}) - หน่วงเวลา ${(waitTimeMs / 1000).toFixed(1)} วินาที (Exponential Backoff + Jitter ${jitterMs}ms) ก่อน Retry (รอบที่ ${attempt + 1}/${maxRetries})...`
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, waitTimeMs));
+        continue;
+      }
+
+      if (isTimeout) {
+        throw new Error(`OpenRouter Network Timeout เกินกำหนด ${timeoutMs}ms หลังจากลองซ้ำ ${maxRetries} ครั้ง`);
+      }
+      throw err;
+    }
+  }
+
+  if (lastResponse) {
+    return lastResponse;
+  }
+  throw lastError || new Error(`ไม่สามารถเชื่อมต่อ OpenRouter ได้หลังจากลองซ้ำ ${maxRetries} ครั้ง`);
+}
+
 // ฟังก์ชันเรียก OpenRouter LLM API เมื่อมี API Key เพื่อคิดโครงการสดแบบฉลาดล้ำ
 export async function tryCallLlmForNewProject(
   prompt: string,
@@ -3699,12 +3841,9 @@ export async function tryCallLlmForNewProject(
   }
 
   const model = getStoredOpenRouterModel();
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 25000);
-
   const rubricText = formatRubricForPrompt(activeRubric);
 
-  console.log('[OpenRouter Ideation] Requesting project idea from OpenRouter...', {
+  console.log('[OpenRouter Ideation] Requesting project idea from OpenRouter (Timeout: 45s, Retry: 3x)...', {
     model,
     keyPrefix: `${apiKey.slice(0, 8)}...${apiKey.slice(-4)}`
   });
@@ -3765,22 +3904,28 @@ ${rubricText}
   ];
 
   try {
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173',
-        'X-Title': 'Moral Hackathon Project Generator',
-        'Content-Type': 'application/json'
+    const res = await fetchOpenRouterWithBackoff(
+      'https://openrouter.ai/api/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173',
+          'X-Title': 'Moral Hackathon Project Generator',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: messages
+        })
       },
-      body: JSON.stringify({
-        model: model,
-        messages: messages
-      })
-    });
+      {
+        maxRetries: 3,
+        timeoutMs: 45000,
+        logContext: 'OpenRouter Ideation'
+      }
+    );
 
-    clearTimeout(timeoutId);
     if (!res.ok) {
       const errText = await res.text().catch(() => '');
       let errMsg = `HTTP ${res.status}`;
@@ -3834,9 +3979,8 @@ ${rubricText}
     }
     return { project: null, rawOutput: content, model, errorReason: 'รูปแบบ JSON จาก AI ไม่สมบูรณ์' };
   } catch (err: any) {
-    clearTimeout(timeoutId);
     console.error('[OpenRouter Ideation Exception]', err);
-    return { project: null, rawOutput: '', model, errorReason: err?.message || 'Network Timeout' };
+    return { project: null, rawOutput: '', model, errorReason: err?.message || 'Network Timeout (45s)' };
   }
 }
 
@@ -9524,13 +9668,8 @@ export async function evaluatePreSubmissionWithOpenRouterLlm(
 
   const model = getStoredOpenRouterModel();
   const startTime = Date.now();
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 วินาที
-  if (abortSignal) {
-    abortSignal.addEventListener('abort', () => controller.abort());
-  }
 
-  console.log('[OpenRouter AI Evaluation] Requesting evaluation from OpenRouter...', {
+  console.log('[OpenRouter AI Evaluation] Requesting evaluation from OpenRouter (Timeout: 45s, Retry: 3x)...', {
     model,
     keyPrefix: `${apiKey.slice(0, 8)}...${apiKey.slice(-4)}`
   });
@@ -9581,25 +9720,32 @@ export async function evaluatePreSubmissionWithOpenRouterLlm(
 }`;
 
   try {
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173',
-        'X-Title': 'Moral Hackathon AI Judge',
-        'Content-Type': 'application/json'
+    const res = await fetchOpenRouterWithBackoff(
+      'https://openrouter.ai/api/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173',
+          'X-Title': 'Moral Hackathon AI Judge',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: localResult.markdownPromptSent }
+          ]
+        })
       },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: localResult.markdownPromptSent }
-        ]
-      })
-    });
+      {
+        maxRetries: 3,
+        timeoutMs: 45000,
+        parentSignal: abortSignal,
+        logContext: 'OpenRouter AI Evaluation'
+      }
+    );
 
-    clearTimeout(timeoutId);
     if (!res.ok) {
       const errText = await res.text().catch(() => '');
       let errMsg = `HTTP ${res.status}`;
@@ -9715,10 +9861,10 @@ export async function evaluatePreSubmissionWithOpenRouterLlm(
     localResult.comparativeContext.proximityBadgeText = `${localResult.comparativeContext.proximityBadgeText} ⚡ [AI: ${model}]`;
 
     return localResult;
-  } catch (err) {
-    clearTimeout(timeoutId);
+  } catch (err: any) {
     console.warn('OpenRouter evaluation exception, fallback to local scoring:', err);
     localResult.evaluationSource = 'deterministic_engine';
+    localResult.openRouterErrorReason = err?.message || 'Network Timeout (45s)';
     return localResult;
   }
 }
