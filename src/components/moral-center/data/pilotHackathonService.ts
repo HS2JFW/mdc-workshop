@@ -158,7 +158,13 @@ export const COFFEE_GROUPS: Record<string, CoffeeGroupMeta> = {
 
 const COFFEE_GROUPS_STORAGE_KEY = 'pilot_hackathon_coffee_groups_v4';
 
+let cachedCoffeeGroups: CoffeeGroupMeta[] | null = null;
+let isFetchingCoffeeGroups = false;
+
 export function getStoredCoffeeGroups(): CoffeeGroupMeta[] {
+  if (cachedCoffeeGroups && cachedCoffeeGroups.length > 0) {
+    return cachedCoffeeGroups;
+  }
   if (typeof window === 'undefined') {
     return Object.values(COFFEE_GROUPS);
   }
@@ -167,7 +173,7 @@ export function getStoredCoffeeGroups(): CoffeeGroupMeta[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map((g) => ({
+        cachedCoffeeGroups = parsed.map((g) => ({
           key: g.key,
           name: g.name || 'ชื่อกลุ่ม',
           bgImage: g.bgImage || getRandomCoffeeBgUrl(),
@@ -175,17 +181,20 @@ export function getStoredCoffeeGroups(): CoffeeGroupMeta[] {
           accentBg: g.accentBg || '#fef3c7',
           isCustom: g.isCustom
         }));
+        return cachedCoffeeGroups;
       }
     }
   } catch (e) {
     console.warn('Failed to parse stored coffee groups:', e);
   }
   const defaults = Object.values(COFFEE_GROUPS);
+  cachedCoffeeGroups = defaults;
   saveStoredCoffeeGroups(defaults);
   return defaults;
 }
 
 export function saveStoredCoffeeGroups(groups: CoffeeGroupMeta[]): void {
+  cachedCoffeeGroups = groups;
   if (typeof window === 'undefined') return;
   try {
     const sanitized = groups.map((g) => ({
@@ -197,11 +206,182 @@ export function saveStoredCoffeeGroups(groups: CoffeeGroupMeta[]): void {
       isCustom: g.isCustom
     }));
     localStorage.setItem(COFFEE_GROUPS_STORAGE_KEY, JSON.stringify(sanitized));
+    try {
+      window.dispatchEvent(new CustomEvent('coffee_groups_changed', {
+        detail: { groups: sanitized }
+      }));
+    } catch {}
   } catch (e) {
     console.warn('Failed to save coffee groups:', e);
   }
 }
 
+/**
+ * ดึงรายชื่อกลุ่มกาแฟจากฐานข้อมูล SQLite Server (/api/pilot-sqlite/coffee-groups)
+ */
+export async function fetchCoffeeGroupsFromDb(): Promise<CoffeeGroupMeta[]> {
+  try {
+    const res = await fetch('/api/pilot-sqlite/coffee-groups');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.ok && Array.isArray(data.groups) && data.groups.length > 0) {
+        const groups: CoffeeGroupMeta[] = data.groups.map((g: any) => ({
+          key: g.key,
+          name: g.name || 'ชื่อกลุ่ม',
+          bgImage: g.bgImage || g.bg_image || getRandomCoffeeBgUrl(),
+          themeColor: g.themeColor || g.theme_color || '#78350f',
+          accentBg: g.accentBg || g.accent_bg || '#fef3c7',
+          isCustom: Boolean(g.isCustom ?? g.is_custom)
+        }));
+        cachedCoffeeGroups = groups;
+        saveStoredCoffeeGroups(groups);
+        return groups;
+      }
+    }
+  } catch (err) {
+    console.warn('fetchCoffeeGroupsFromDb SQLite fallback:', err);
+  }
+  return getStoredCoffeeGroups();
+}
+
+/**
+ * เพิ่มกลุ่มกาแฟใหม่ลงฐานข้อมูล SQLite Server
+ */
+export async function addCoffeeGroupToDb(newGroup: Omit<CoffeeGroupMeta, 'key'> & { key?: string }): Promise<CoffeeGroupMeta[]> {
+  const current = getStoredCoffeeGroups();
+  const rawKey = (newGroup.key || `group_${Date.now()}`)
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '_');
+  const uniqueKey = current.some((g) => g.key === rawKey) ? `${rawKey}_${Date.now()}` : rawKey;
+
+  const groupToAdd: CoffeeGroupMeta = {
+    key: uniqueKey,
+    name: newGroup.name || 'กลุ่มกาแฟสร้างสรรค์คุณธรรม',
+    bgImage: newGroup.bgImage || getRandomCoffeeBgUrl(),
+    themeColor: newGroup.themeColor || '#78350f',
+    accentBg: newGroup.accentBg || '#fef3c7',
+    isCustom: true
+  };
+
+  try {
+    const res = await fetch('/api/pilot-sqlite/coffee-groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'add', group: groupToAdd })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.ok && Array.isArray(data.groups)) {
+        saveStoredCoffeeGroups(data.groups);
+        return data.groups;
+      }
+    }
+  } catch (err) {
+    console.warn('addCoffeeGroupToDb server fallback:', err);
+  }
+
+  const updated = [...current, groupToAdd];
+  saveStoredCoffeeGroups(updated);
+  return updated;
+}
+
+/**
+ * อัปเดตกลุ่มกาแฟลงฐานข้อมูล SQLite Server
+ */
+export async function updateCoffeeGroupInDb(key: string, updates: Partial<CoffeeGroupMeta>): Promise<CoffeeGroupMeta[]> {
+  const current = getStoredCoffeeGroups();
+  const target = current.find((g) => g.key === key);
+  const updatedGroup: CoffeeGroupMeta = {
+    key,
+    name: updates.name || target?.name || 'กลุ่มกาแฟ',
+    bgImage: updates.bgImage || target?.bgImage || getRandomCoffeeBgUrl(),
+    themeColor: updates.themeColor || target?.themeColor || '#78350f',
+    accentBg: updates.accentBg || target?.accentBg || '#fef3c7',
+    isCustom: updates.isCustom ?? target?.isCustom ?? true
+  };
+
+  try {
+    const res = await fetch('/api/pilot-sqlite/coffee-groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'update', isEdit: true, originalKey: key, group: updatedGroup })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.ok && Array.isArray(data.groups)) {
+        saveStoredCoffeeGroups(data.groups);
+        return data.groups;
+      }
+    }
+  } catch (err) {
+    console.warn('updateCoffeeGroupInDb server fallback:', err);
+  }
+
+  const updated = current.map((g) => (g.key === key ? { ...g, ...updates } : g));
+  saveStoredCoffeeGroups(updated);
+  return updated;
+}
+
+/**
+ * ลบกลุ่มกาแฟออกจากฐานข้อมูล SQLite Server
+ */
+export async function deleteCoffeeGroupFromDb(key: string): Promise<CoffeeGroupMeta[]> {
+  const current = getStoredCoffeeGroups();
+  if (current.length <= 1) {
+    throw new Error('ไม่สามารถลบกลุ่มทั้งหมดได้ ต้องมีอย่างน้อย 1 กลุ่ม');
+  }
+
+  try {
+    const res = await fetch(`/api/pilot-sqlite/coffee-groups?key=${encodeURIComponent(key)}`, {
+      method: 'DELETE'
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.ok && Array.isArray(data.groups)) {
+        saveStoredCoffeeGroups(data.groups);
+        return data.groups;
+      }
+    } else {
+      const data = await res.json().catch(() => ({}));
+      if (data.error) throw new Error(data.error);
+    }
+  } catch (err: any) {
+    if (err.message && err.message.includes('อย่างน้อย 1 กลุ่ม')) throw err;
+    console.warn('deleteCoffeeGroupFromDb server fallback:', err);
+  }
+
+  const updated = current.filter((g) => g.key !== key);
+  saveStoredCoffeeGroups(updated);
+  return updated;
+}
+
+/**
+ * รีเซ็ตกลุ่มกาแฟในฐานข้อมูล SQLite Server กลับสู่ 5 กลุ่มเริ่มต้น
+ */
+export async function resetCoffeeGroupsInDb(): Promise<CoffeeGroupMeta[]> {
+  try {
+    const res = await fetch('/api/pilot-sqlite/coffee-groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reset' })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.ok && Array.isArray(data.groups)) {
+        saveStoredCoffeeGroups(data.groups);
+        return data.groups;
+      }
+    }
+  } catch (err) {
+    console.warn('resetCoffeeGroupsInDb server fallback:', err);
+  }
+
+  const defaults = Object.values(COFFEE_GROUPS);
+  saveStoredCoffeeGroups(defaults);
+  return defaults;
+}
+
+// Synchronous wrapper functions for backward compatibility
 export function addCoffeeGroup(newGroup: Omit<CoffeeGroupMeta, 'key'> & { key?: string }): CoffeeGroupMeta[] {
   const current = getStoredCoffeeGroups();
   const rawKey = (newGroup.key || `group_${Date.now()}`)
@@ -220,6 +400,8 @@ export function addCoffeeGroup(newGroup: Omit<CoffeeGroupMeta, 'key'> & { key?: 
 
   const updated = [...current, groupToAdd];
   saveStoredCoffeeGroups(updated);
+  // Async sync to SQLite in background
+  addCoffeeGroupToDb(newGroup).catch(() => {});
   return updated;
 }
 
@@ -227,6 +409,8 @@ export function updateCoffeeGroup(key: string, updates: Partial<CoffeeGroupMeta>
   const current = getStoredCoffeeGroups();
   const updated = current.map((g) => (g.key === key ? { ...g, ...updates } : g));
   saveStoredCoffeeGroups(updated);
+  // Async sync to SQLite in background
+  updateCoffeeGroupInDb(key, updates).catch(() => {});
   return updated;
 }
 
@@ -237,13 +421,23 @@ export function deleteCoffeeGroup(key: string): CoffeeGroupMeta[] {
   }
   const updated = current.filter((g) => g.key !== key);
   saveStoredCoffeeGroups(updated);
+  // Async sync to SQLite in background
+  deleteCoffeeGroupFromDb(key).catch(() => {});
   return updated;
 }
 
 export function resetCoffeeGroupsToDefault(): CoffeeGroupMeta[] {
   const defaults = Object.values(COFFEE_GROUPS);
   saveStoredCoffeeGroups(defaults);
+  // Async sync to SQLite in background
+  resetCoffeeGroupsInDb().catch(() => {});
   return defaults;
+}
+
+// Auto-fetch coffee groups from SQLite on startup in browser
+if (typeof window !== 'undefined' && !isFetchingCoffeeGroups) {
+  isFetchingCoffeeGroups = true;
+  fetchCoffeeGroupsFromDb().catch(() => {}).finally(() => { isFetchingCoffeeGroups = false; });
 }
 
 export type ParticipantLevel = 'policy' | 'practitioner' | 'citizen';
@@ -1732,6 +1926,12 @@ const TABLE_META_DICTIONARY: Record<string, { displayName: string; category: DbT
     systemName: 'กิจกรรม & โหวตโครงการ Hackathon',
     description: 'สรุปบทเรียน ถอดบทเรียนพื้นที่ และข้อเสนอแนะเชิงนโยบายสู่การขยายผล'
   },
+  pilot_coffee_groups: {
+    displayName: 'กลุ่มกาแฟสร้างสรรค์คุณธรรม (Coffee Groups Pool)',
+    category: 'activity_vote',
+    systemName: 'กิจกรรม & โหวตโครงการ Hackathon',
+    description: 'รายชื่อและข้อมูลกลุ่มกาแฟสำหรับกิจกรรม Hackathon รองรับการเพิ่มกลุ่มใหม่โดยผู้ดูแลระบบและจัดเก็บลงฐานข้อมูล SQLite'
+  },
 
   // ดัชนีคุณธรรม
   mdc_moral_national_overview: {
@@ -1904,7 +2104,8 @@ export async function fetchSqliteDbTables(): Promise<{ success: boolean; tables:
       'pilot_hackathon_projects',
       'pilot_hackathon_criteria',
       'pilot_agency_registrations',
-      'pilot_lessons_and_policies'
+      'pilot_lessons_and_policies',
+      'pilot_coffee_groups'
     ];
     for (const name of defaultSqliteNames) {
       const dict = TABLE_META_DICTIONARY[name];

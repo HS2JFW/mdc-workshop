@@ -11,6 +11,7 @@ function createPilotSqlitePlugin(): Plugin {
   const recordsDir = path.resolve(dataDir, 'pilot_records');
   const taskRecordsDir = path.resolve(dataDir, 'task_records');
   const aiConfigFile = path.resolve(dataDir, 'ai_config.json');
+  const coffeeGroupsFile = path.resolve(dataDir, 'coffee_groups.json');
   const dbPath = path.resolve(dataDir, 'pilot_activities_4regions.sqlite');
 
   if (!fs.existsSync(dataDir)) {
@@ -256,6 +257,18 @@ function createPilotSqlitePlugin(): Plugin {
       generator_prompt TEXT,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS pilot_coffee_groups (
+      key TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      bg_image TEXT,
+      theme_color TEXT,
+      accent_bg TEXT,
+      is_custom INTEGER DEFAULT 0,
+      order_index INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
 
   // Bootstrap AI config from disk file data/ai_config.json if table is empty
@@ -282,6 +295,62 @@ function createPilotSqlitePlugin(): Plugin {
     }
   } catch (err) {
     console.warn('Bootstrap AI config check error:', err);
+  }
+
+  // Bootstrap Coffee Groups in SQLite if table is empty
+  try {
+    const existingGroupCount = (db.prepare('SELECT COUNT(*) as cnt FROM pilot_coffee_groups').get() as any)?.cnt || 0;
+    if (existingGroupCount === 0) {
+      let seedGroups = [
+        { key: 'mocha', name: 'กลุ่มมอคค่า', bg_image: '/theme/coffee_mocha_bg.jpg', theme_color: '#78350f', accent_bg: '#fef3c7', is_custom: 0, order_index: 1 },
+        { key: 'cappuccino', name: 'กลุ่มคาปูชิโน', bg_image: '/theme/coffee_cappuccino_bg.jpg', theme_color: '#92400e', accent_bg: '#ffedd5', is_custom: 0, order_index: 2 },
+        { key: 'americano', name: 'กลุ่มอเมริกาโน', bg_image: '/theme/coffee_americano_bg.jpg', theme_color: '#1c1917', accent_bg: '#f5f5f4', is_custom: 0, order_index: 3 },
+        { key: 'espresso', name: 'กลุ่มเอสเพรสโซ', bg_image: '/theme/coffee_preset_05_espresso.jpg', theme_color: '#451a03', accent_bg: '#fef2f2', is_custom: 0, order_index: 4 },
+        { key: 'latte', name: 'กลุ่มลาเต้', bg_image: '/theme/coffee_preset_06_latte.jpg', theme_color: '#b45309', accent_bg: '#fffbeb', is_custom: 0, order_index: 5 }
+      ];
+
+      if (fs.existsSync(coffeeGroupsFile)) {
+        try {
+          const fileContent = JSON.parse(fs.readFileSync(coffeeGroupsFile, 'utf8'));
+          if (Array.isArray(fileContent) && fileContent.length > 0) {
+            seedGroups = fileContent.map((g: any, idx: number) => ({
+              key: g.key,
+              name: g.name,
+              bg_image: g.bgImage || g.bg_image || '/theme/coffee_preset_01_beans.jpg',
+              theme_color: g.themeColor || g.theme_color || '#78350f',
+              accent_bg: g.accentBg || g.accent_bg || '#fef3c7',
+              is_custom: g.isCustom ? 1 : 0,
+              order_index: typeof g.orderIndex === 'number' ? g.orderIndex : idx + 1
+            }));
+          }
+        } catch (e) {
+          console.warn('Failed parsing coffeeGroupsFile:', e);
+        }
+      }
+
+      const now = new Date().toISOString();
+      const insertStmt = db.prepare(`
+        INSERT OR REPLACE INTO pilot_coffee_groups 
+        (key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const g of seedGroups) {
+        insertStmt.run(g.key, g.name, g.bg_image, g.theme_color, g.accent_bg, g.is_custom, g.order_index, now, now);
+      }
+    } else if (!fs.existsSync(coffeeGroupsFile)) {
+      const rows = db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all() as any[];
+      const groups = rows.map((r) => ({
+        key: r.key,
+        name: r.name,
+        bgImage: r.bg_image,
+        themeColor: r.theme_color,
+        accentBg: r.accent_bg,
+        isCustom: Boolean(r.is_custom)
+      }));
+      fs.writeFileSync(coffeeGroupsFile, JSON.stringify(groups, null, 2), 'utf8');
+    }
+  } catch (err) {
+    console.warn('Bootstrap coffee groups error:', err);
   }
 
   try { db.exec('ALTER TABLE pilot_agency_registrations ADD COLUMN first_name TEXT;'); } catch {}
@@ -1122,6 +1191,153 @@ function createPilotSqlitePlugin(): Plugin {
               res.statusCode = 500;
               res.setHeader('Content-Type', 'application/json; charset=utf-8');
               res.end(JSON.stringify({ ok: false, error: err?.message || 'Failed to save AI config' }));
+              return;
+            }
+          }
+
+          // 5.2.5 GET /api/pilot-sqlite/coffee-groups
+          if (req.method === 'GET' && pathname === '/api/pilot-sqlite/coffee-groups') {
+            try {
+              const rows = db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all() as any[];
+              const groups = rows.map((r) => ({
+                key: r.key,
+                name: r.name,
+                bgImage: r.bg_image,
+                themeColor: r.theme_color,
+                accentBg: r.accent_bg,
+                isCustom: Boolean(r.is_custom)
+              }));
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: true, groups }));
+              return;
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: false, error: err?.message || 'Failed to fetch coffee groups' }));
+              return;
+            }
+          }
+
+          // 5.2.6 POST /api/pilot-sqlite/coffee-groups
+          if (req.method === 'POST' && pathname === '/api/pilot-sqlite/coffee-groups') {
+            try {
+              const body = await readJsonBody(req);
+              const now = new Date().toISOString();
+
+              if (body.action === 'reset') {
+                db.prepare('DELETE FROM pilot_coffee_groups').run();
+                const defaultGroups = [
+                  { key: 'mocha', name: 'กลุ่มมอคค่า', bg_image: '/theme/coffee_mocha_bg.jpg', theme_color: '#78350f', accent_bg: '#fef3c7', is_custom: 0, order_index: 1 },
+                  { key: 'cappuccino', name: 'กลุ่มคาปูชิโน', bg_image: '/theme/coffee_cappuccino_bg.jpg', theme_color: '#92400e', accent_bg: '#ffedd5', is_custom: 0, order_index: 2 },
+                  { key: 'americano', name: 'กลุ่มอเมริกาโน', bg_image: '/theme/coffee_americano_bg.jpg', theme_color: '#1c1917', accent_bg: '#f5f5f4', is_custom: 0, order_index: 3 },
+                  { key: 'espresso', name: 'กลุ่มเอสเพรสโซ', bg_image: '/theme/coffee_preset_05_espresso.jpg', theme_color: '#451a03', accent_bg: '#fef2f2', is_custom: 0, order_index: 4 },
+                  { key: 'latte', name: 'กลุ่มลาเต้', bg_image: '/theme/coffee_preset_06_latte.jpg', theme_color: '#b45309', accent_bg: '#fffbeb', is_custom: 0, order_index: 5 }
+                ];
+                const insertStmt = db.prepare(`
+                  INSERT INTO pilot_coffee_groups (key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `);
+                for (const g of defaultGroups) {
+                  insertStmt.run(g.key, g.name, g.bg_image, g.theme_color, g.accent_bg, g.is_custom, g.order_index, now, now);
+                }
+              } else {
+                const grp = body.group || body;
+                const currentRows = db.prepare('SELECT * FROM pilot_coffee_groups').all() as any[];
+                const rawKey = (grp.key || `group_${Date.now()}`).toLowerCase().replace(/[^a-z0-9]/g, '_');
+                const key = currentRows.some((r) => r.key === rawKey && (!body.isEdit || body.originalKey !== r.key))
+                  ? (body.isEdit ? rawKey : `${rawKey}_${Date.now()}`)
+                  : rawKey;
+
+                const maxOrder = (db.prepare('SELECT MAX(order_index) as m FROM pilot_coffee_groups').get() as any)?.m || 0;
+                const orderIndex = typeof grp.orderIndex === 'number' ? grp.orderIndex : maxOrder + 1;
+
+                db.prepare(`
+                  INSERT OR REPLACE INTO pilot_coffee_groups 
+                  (key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM pilot_coffee_groups WHERE key = ?), ?), ?)
+                `).run(
+                  key,
+                  grp.name || 'กลุ่มกาแฟสร้างสรรค์คุณธรรม',
+                  grp.bgImage || grp.bg_image || '/theme/coffee_preset_01_beans.jpg',
+                  grp.themeColor || grp.theme_color || '#78350f',
+                  grp.accentBg || grp.accent_bg || '#fef3c7',
+                  grp.isCustom !== undefined ? (grp.isCustom ? 1 : 0) : 1,
+                  orderIndex,
+                  key,
+                  now,
+                  now
+                );
+              }
+
+              const rows = db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all() as any[];
+              const groups = rows.map((r) => ({
+                key: r.key,
+                name: r.name,
+                bgImage: r.bg_image,
+                themeColor: r.theme_color,
+                accentBg: r.accent_bg,
+                isCustom: Boolean(r.is_custom)
+              }));
+
+              try {
+                fs.writeFileSync(coffeeGroupsFile, JSON.stringify(groups, null, 2), 'utf8');
+              } catch {}
+
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: true, groups, message: 'บันทึกกลุ่มกาแฟลง SQLite เรียบร้อยแล้ว' }));
+              return;
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: false, error: err?.message || 'Failed to save coffee group' }));
+              return;
+            }
+          }
+
+          // 5.2.7 DELETE /api/pilot-sqlite/coffee-groups
+          if (req.method === 'DELETE' && pathname === '/api/pilot-sqlite/coffee-groups') {
+            try {
+              const key = urlObj.searchParams.get('key');
+              if (!key) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json; charset=utf-8');
+                res.end(JSON.stringify({ ok: false, error: 'Missing key parameter' }));
+                return;
+              }
+              const count = (db.prepare('SELECT COUNT(*) as cnt FROM pilot_coffee_groups').get() as any)?.cnt || 0;
+              if (count <= 1) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json; charset=utf-8');
+                res.end(JSON.stringify({ ok: false, error: 'ไม่สามารถลบกลุ่มทั้งหมดได้ ต้องมีอย่างน้อย 1 กลุ่ม' }));
+                return;
+              }
+
+              db.prepare('DELETE FROM pilot_coffee_groups WHERE key = ?').run(key);
+
+              const rows = db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all() as any[];
+              const groups = rows.map((r) => ({
+                key: r.key,
+                name: r.name,
+                bgImage: r.bg_image,
+                themeColor: r.theme_color,
+                accentBg: r.accent_bg,
+                isCustom: Boolean(r.is_custom)
+              }));
+
+              try {
+                fs.writeFileSync(coffeeGroupsFile, JSON.stringify(groups, null, 2), 'utf8');
+              } catch {}
+
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: true, groups, message: 'ลบกลุ่มกาแฟจาก SQLite เรียบร้อยแล้ว' }));
+              return;
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: false, error: err?.message || 'Failed to delete coffee group' }));
               return;
             }
           }

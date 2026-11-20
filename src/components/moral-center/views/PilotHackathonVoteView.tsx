@@ -54,6 +54,8 @@ import {
   isSeedHackathonProject,
   formatBangkokSubmissionTime,
   getStoredCoffeeGroups,
+  fetchCoffeeGroupsFromDb,
+  type CoffeeGroupMeta,
   getActiveVoterIdentity,
   setActiveVoterByName,
   getAllRegisteredVoterNames,
@@ -139,6 +141,29 @@ export const PilotHackathonVoteView: React.FC<PilotHackathonVoteViewProps> = ({
   const [registeredVoterNames, setRegisteredVoterNames] = useState<string[]>(() => getAllRegisteredVoterNames());
   const [isQuickRegisterOpen, setIsQuickRegisterOpen] = useState<boolean>(false);
   const [quickRegisterName, setQuickRegisterName] = useState<string>('');
+
+  // Coffee Groups State (Synced with SQLite Server)
+  const [coffeeGroups, setCoffeeGroups] = useState<CoffeeGroupMeta[]>(() => getStoredCoffeeGroups());
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchCoffeeGroupsFromDb().then((groups) => {
+      if (isMounted && groups && groups.length > 0) {
+        setCoffeeGroups(groups);
+      }
+    });
+
+    const handleGroupsChanged = (e: any) => {
+      if (e.detail?.groups && Array.isArray(e.detail.groups)) {
+        setCoffeeGroups(e.detail.groups);
+      }
+    };
+    window.addEventListener('coffee_groups_changed', handleGroupsChanged);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('coffee_groups_changed', handleGroupsChanged);
+    };
+  }, []);
 
   useEffect(() => {
     const updateVoter = () => {
@@ -265,10 +290,9 @@ export const PilotHackathonVoteView: React.FC<PilotHackathonVoteViewProps> = ({
     return calculateTop3FinalScores(top3ProvinceProjects);
   }, [top3ProvinceProjects]);
 
-  // 2. ประกาศคะแนนแบบกลุ่ม: เรียงลงมาทั้ง 5 กลุ่ม (มงกุฎที่ชนะสำหรับอันดับหนึ่งเท่านั้น)
+  // 2. ประกาศคะแนนแบบกลุ่ม: เรียงลงมาตามกลุ่มกาแฟทั้งหมด (มงกุฎที่ชนะสำหรับอันดับหนึ่งเท่านั้น)
   const rankedGroups = useMemo(() => {
-    const groups = getStoredCoffeeGroups();
-    const stats = groups.map((grp) => {
+    const stats = coffeeGroups.map((grp) => {
       const projs = allProvinceProjects.filter((p) => {
         if (p.groupKey && p.groupKey === grp.key) return true;
         if (p.groupName && p.groupName.includes(grp.name)) return true;
@@ -294,13 +318,13 @@ export const PilotHackathonVoteView: React.FC<PilotHackathonVoteViewProps> = ({
       };
     });
 
-    // เรียงลงมาทั้ง 5 กลุ่มตามคะแนนเฉลี่ย AI จากสูงสุดไปต่ำสุด
+    // เรียงลงมาตามคะแนนเฉลี่ย AI จากสูงสุดไปต่ำสุด
     return stats.sort((a, b) => {
       if (b.groupScore !== a.groupScore) return b.groupScore - a.groupScore;
       if (b.projectCount !== a.projectCount) return b.projectCount - a.projectCount;
       return b.name.localeCompare(a.name);
     });
-  }, [allProvinceProjects]);
+  }, [allProvinceProjects, coffeeGroups]);
 
   // 3. แสดงผลผู้ชนะรายโครงการ: เรียงยาวลงมาตามคะแนนประเมิน AI 100% จนครบทุกโครงการ (มงกุฎสีทองสำหรับอันดับ 1 เท่านั้น)
   const rankedAllProjects = useMemo(() => {

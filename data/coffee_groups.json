@@ -1,0 +1,42 @@
+[
+  {
+    "key": "mocha",
+    "name": "กลุ่มมอคค่า",
+    "bgImage": "/theme/coffee_mocha_bg.jpg",
+    "themeColor": "#78350f",
+    "accentBg": "#fef3c7",
+    "isCustom": false
+  },
+  {
+    "key": "cappuccino",
+    "name": "กลุ่มคาปูชิโน",
+    "bgImage": "/theme/coffee_cappuccino_bg.jpg",
+    "themeColor": "#92400e",
+    "accentBg": "#ffedd5",
+    "isCustom": false
+  },
+  {
+    "key": "americano",
+    "name": "กลุ่มอเมริกาโน",
+    "bgImage": "/theme/coffee_americano_bg.jpg",
+    "themeColor": "#1c1917",
+    "accentBg": "#f5f5f4",
+    "isCustom": false
+  },
+  {
+    "key": "espresso",
+    "name": "กลุ่มเอสเพรสโซ",
+    "bgImage": "/theme/coffee_preset_05_espresso.jpg",
+    "themeColor": "#451a03",
+    "accentBg": "#fef2f2",
+    "isCustom": false
+  },
+  {
+    "key": "latte",
+    "name": "กลุ่มลาเต้",
+    "bgImage": "/theme/coffee_preset_06_latte.jpg",
+    "themeColor": "#b45309",
+    "accentBg": "#fffbeb",
+    "isCustom": false
+  }
+]

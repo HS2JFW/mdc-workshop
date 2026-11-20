@@ -44,7 +44,14 @@ const COLUMN_LABEL_MAP: Record<string, string> = {
   updated_at: 'วันที่อัปเดตล่าสุด',
   contact_info: 'ข้อมูลติดต่อ',
   trial_project_name: 'ชื่อโครงการทดลอง',
-  synergy_topic: 'ประเด็นความร่วมมือ'
+  synergy_topic: 'ประเด็นความร่วมมือ',
+  key: 'รหัสกลุ่ม (Key)',
+  name: 'ชื่อกลุ่มกาแฟ',
+  bg_image: 'ภาพพื้นหลัง (URL)',
+  theme_color: 'สีประจำกลุ่ม',
+  accent_bg: 'สีพื้นหลัง Accent',
+  is_custom: 'กลุ่มที่สร้างเพิ่มเติม (Custom)',
+  order_index: 'ลำดับแสดงผล'
 };
 
 interface DatabaseTablesExplorerProps {

@@ -86,6 +86,11 @@ import {
   formatChallengeTopicFromProblemTitle,
   generateSingleCreativeProjectTitle,
   getStoredCoffeeGroups,
+  fetchCoffeeGroupsFromDb,
+  addCoffeeGroupToDb,
+  updateCoffeeGroupInDb,
+  deleteCoffeeGroupFromDb,
+  resetCoffeeGroupsInDb,
   addCoffeeGroup,
   updateCoffeeGroup,
   deleteCoffeeGroup,
@@ -446,12 +451,45 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     setTimeout(() => setStep1ClearToast(null), 3500);
   };
 
-  // Step 2: Dynamic Coffee Groups State & CRUD
+  // Step 2: Dynamic Coffee Groups State & CRUD (Synced with SQLite Server)
   const [coffeeGroups, setCoffeeGroups] = useState<CoffeeGroupMeta[]>(() => getStoredCoffeeGroups());
   const [selectedGroup, setSelectedGroup] = useState<CoffeeGroupKey>(() => {
     const stored = getStoredCoffeeGroups();
     return stored[0]?.key || 'mocha';
   });
+
+  // Fetch latest coffee groups from SQLite on mount and subscribe to changes
+  useEffect(() => {
+    let isMounted = true;
+    fetchCoffeeGroupsFromDb().then((groups) => {
+      if (isMounted && groups && groups.length > 0) {
+        setCoffeeGroups(groups);
+      }
+    });
+
+    const handleGroupsChanged = (e: any) => {
+      if (e.detail?.groups && Array.isArray(e.detail.groups)) {
+        setCoffeeGroups(e.detail.groups);
+      }
+    };
+
+    window.addEventListener('coffee_groups_changed', handleGroupsChanged);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('coffee_groups_changed', handleGroupsChanged);
+    };
+  }, []);
+
+  // Re-fetch latest groups whenever user enters Step 2 (Group selection)
+  useEffect(() => {
+    if (currentStep === 2) {
+      fetchCoffeeGroupsFromDb().then((groups) => {
+        if (groups && groups.length > 0) {
+          setCoffeeGroups(groups);
+        }
+      });
+    }
+  }, [currentStep]);
 
   // Modal State for Add / Edit Coffee Group
   const [isGroupModalOpen, setIsGroupModalOpen] = useState<boolean>(false);
@@ -480,7 +518,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     setIsGroupModalOpen(true);
   };
 
-  const handleDeleteGroup = (key: string, groupNameToDelete: string, e: React.MouseEvent) => {
+  const handleDeleteGroup = async (key: string, groupNameToDelete: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isAdmin) {
       alert('เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถลบกลุ่มกาแฟได้');
@@ -490,11 +528,11 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
       alert('ไม่สามารถลบกลุ่มได้ เนื่องจากระบบต้องมีกลุ่มกาแฟอย่างน้อย 1 กลุ่ม');
       return;
     }
-    const confirmed = window.confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบ "${groupNameToDelete}" ออกจากรายการกลุ่ม?`);
+    const confirmed = window.confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบ "${groupNameToDelete}" ออกจากฐานข้อมูล SQLite?`);
     if (!confirmed) return;
 
     try {
-      const updated = deleteCoffeeGroup(key);
+      const updated = await deleteCoffeeGroupFromDb(key);
       setCoffeeGroups(updated);
       if (selectedGroup === key) {
         setSelectedGroup(updated[0]?.key || 'mocha');
@@ -502,48 +540,57 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
       if (dashboardTabGroup === key) {
         setDashboardTabGroup(updated[0]?.key || 'mocha');
       }
-      setSubmitFeedback(`🗑️ ลบ "${groupNameToDelete}" เรียบร้อยแล้ว`);
+      setSubmitFeedback(`🗑️ ลบ "${groupNameToDelete}" จากฐานข้อมูล SQLite เรียบร้อยแล้ว`);
       setTimeout(() => setSubmitFeedback(null), 3000);
     } catch (err: any) {
       alert(err?.message || 'เกิดข้อผิดพลาดในการลบกลุ่ม');
     }
   };
 
-  const handleSaveGroup = (groupData: Partial<CoffeeGroupMeta>) => {
+  const handleSaveGroup = async (groupData: Partial<CoffeeGroupMeta>) => {
     if (!isAdmin) {
       alert('เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถบันทึกข้อมูลกลุ่มกาแฟได้');
       return;
     }
-    if (groupModalMode === 'add') {
-      const updated = addCoffeeGroup(groupData as any);
-      setCoffeeGroups(updated);
-      const newlyAdded = updated[updated.length - 1];
-      if (newlyAdded) {
-        setSelectedGroup(newlyAdded.key);
+    try {
+      if (groupModalMode === 'add') {
+        const updated = await addCoffeeGroupToDb(groupData as any);
+        setCoffeeGroups(updated);
+        const newlyAdded = updated.find((g) => g.name === groupData.name) || updated[updated.length - 1];
+        if (newlyAdded) {
+          setSelectedGroup(newlyAdded.key);
+        }
+        setSubmitFeedback(`✨ เพิ่มกลุ่ม "${groupData.name}" ลงฐานข้อมูล SQLite สำเร็จ (ผู้ใช้ทุกคนจะมองเห็นและเลือกกลุ่มนี้ได้ทันที)!`);
+        setTimeout(() => setSubmitFeedback(null), 4500);
+      } else if (groupModalMode === 'edit' && groupData.key) {
+        const updated = await updateCoffeeGroupInDb(groupData.key, groupData);
+        setCoffeeGroups(updated);
+        setSubmitFeedback(`💾 อัปเดตข้อมูลกลุ่ม "${groupData.name}" ลงฐานข้อมูล SQLite สำเร็จ!`);
+        setTimeout(() => setSubmitFeedback(null), 3500);
       }
-      setSubmitFeedback(`✨ เพิ่มกลุ่ม "${groupData.name}" สำเร็จ พร้อมสุ่มภาพพื้นหลังกาแฟเรียบร้อย!`);
-      setTimeout(() => setSubmitFeedback(null), 4000);
-    } else if (groupModalMode === 'edit' && groupData.key) {
-      const updated = updateCoffeeGroup(groupData.key, groupData);
-      setCoffeeGroups(updated);
-      setSubmitFeedback(`💾 อัปเดตข้อมูลกลุ่ม "${groupData.name}" สำเร็จ!`);
-      setTimeout(() => setSubmitFeedback(null), 3500);
+    } catch (err: any) {
+      alert(`เกิดข้อผิดพลาดในการบันทึกกลุ่ม: ${err?.message || err}`);
     }
   };
 
-  const handleResetGroups = () => {
+  const handleResetGroups = async () => {
     if (!isAdmin) {
       alert('เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถรีเซ็ตกลุ่มกาแฟได้');
       return;
     }
-    const confirmed = window.confirm('คุณต้องการรีเซ็ตกลุ่มกาแฟกลับเป็นค่าเริ่มต้น 5 กลุ่ม (มอคค่า, คาปูชิโน, อเมริกาโน, เอสเพรสโซ, ลาเต้) หรือไม่?');
+    const confirmed = window.confirm('คุณต้องการรีเซ็ตกลุ่มกาแฟในฐานข้อมูล SQLite กลับเป็นค่าเริ่มต้น 5 กลุ่ม (มอคค่า, คาปูชิโน, อเมริกาโน, เอสเพรสโซ, ลาเต้) หรือไม่?');
     if (!confirmed) return;
-    const defs = resetCoffeeGroupsToDefault();
-    setCoffeeGroups(defs);
-    setSelectedGroup(defs[0]?.key || 'mocha');
-    setDashboardTabGroup(defs[0]?.key || 'mocha');
-    setSubmitFeedback('↺ รีเซ็ตกลุ่มกาแฟกลับเป็นค่าเริ่มต้น 5 กลุ่มเรียบร้อยแล้ว');
-    setTimeout(() => setSubmitFeedback(null), 3500);
+
+    try {
+      const defs = await resetCoffeeGroupsInDb();
+      setCoffeeGroups(defs);
+      setSelectedGroup(defs[0]?.key || 'mocha');
+      setDashboardTabGroup(defs[0]?.key || 'mocha');
+      setSubmitFeedback('↺ รีเซ็ตกลุ่มกาแฟในฐานข้อมูล SQLite กลับเป็นค่าเริ่มต้น 5 กลุ่มเรียบร้อยแล้ว');
+      setTimeout(() => setSubmitFeedback(null), 3500);
+    } catch (err: any) {
+      alert(`เกิดข้อผิดพลาดในการรีเซ็ตกลุ่ม: ${err?.message || err}`);
+    }
   };
 
   // Step 3: Weakness virtues state (Default from research: Ayutthaya = พอเพียง & สุจริต, or lowest scores)
