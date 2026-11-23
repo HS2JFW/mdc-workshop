@@ -3032,28 +3032,6 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
                 (รวม {levelCounts.total} คนในฐานข้อมูล)
               </span>
             </div>
-
-            <button
-              type="button"
-              onClick={() => setIsDbExplorerModalOpen(true)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '5px 12px',
-                borderRadius: '6px',
-                border: '1.5px solid #3b82f6',
-                backgroundColor: '#eff6ff',
-                color: '#1d4ed8',
-                fontSize: '12px',
-                fontWeight: 700,
-                cursor: 'pointer'
-              }}
-              title="เปิดดูตารางฐานข้อมูล PostgreSQL (DB-MDC)"
-            >
-              <Database size={13} />
-              <span>เปิดดู Database (PostgreSQL: DB-MDC)</span>
-            </button>
           </div>
 
           {/* Coffee Buttons Grid with Real Background Images & Actions */}
