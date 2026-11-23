@@ -171,7 +171,7 @@ export const DatabaseTablesExplorer: React.FC<DatabaseTablesExplorerProps> = ({
             <span>ตารางฐานข้อมูลทั้งหมดในระบบ (Database Explorer)</span>
           </h3>
           <span className="db-explorer-subtitle">
-            ฐานข้อมูล: <code>data/pilot_activities_4regions.sqlite & duckdb_tables</code> (ทั้งหมด {dbTables.length} ตาราง)
+            ฐานข้อมูล: <code>PostgreSQL 16 (DB-MDC) & duckdb_tables</code> (ทั้งหมด {dbTables.length} ตาราง)
           </span>
         </div>
 

@@ -193,7 +193,7 @@ export async function fetchHackathonCriteriaFromSqlite(
   province: string = 'ส่วนกลาง'
 ): Promise<PilotHackathonCriteriaRecord | null> {
   try {
-    const res = await fetch(`/api/pilot-sqlite/hackathon-criteria?province=${encodeURIComponent(province)}&_t=${Date.now()}`, {
+    const res = await fetch(`/api/activity/hackathon-criteria?province=${encodeURIComponent(province)}&_t=${Date.now()}`, {
       cache: 'no-store'
     });
     if (res.ok) {
@@ -262,7 +262,7 @@ export async function saveHackathonCriteriaToSqlite(
   localStorage.setItem(LOCAL_MIRROR_KEY, JSON.stringify(fullRecord));
 
   try {
-    const res = await fetch('/api/pilot-sqlite/hackathon-criteria', {
+    const res = await fetch('/api/activity/hackathon-criteria', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -283,7 +283,7 @@ export async function saveHackathonCriteriaToSqlite(
       return {
         ok: true,
         id: fullRecord.id,
-        dbPath: data.dbPath || 'data/pilot_activities_4regions.sqlite',
+        dbPath: data.dbPath || 'PostgreSQL 16 (DB-MDC)',
         updatedAt: fullRecord.updatedAt
       };
     }
@@ -294,7 +294,7 @@ export async function saveHackathonCriteriaToSqlite(
   return {
     ok: true,
     id: fullRecord.id,
-    dbPath: 'data/pilot_activities_4regions.sqlite (Local Mirror)',
+    dbPath: 'PostgreSQL 16 (DB-MDC) (Local Mirror)',
     updatedAt: fullRecord.updatedAt
   };
 }
@@ -312,7 +312,7 @@ export async function fetchSelectedCriteriaVirtues(province: string, fallbackWea
     ? ['พอเพียง', 'สุจริต']
     : [fallbackWeakness];
   try {
-    const res = await fetch(`/api/pilot-sqlite/criteria-virtues?province=${encodeURIComponent(province)}`);
+    const res = await fetch(`/api/activity/criteria-virtues?province=${encodeURIComponent(province)}`);
     if (res.ok) {
       const data = await res.json();
       if (data && data.ok && Array.isArray(data.virtues) && data.virtues.length > 0) {
@@ -345,7 +345,7 @@ export async function saveSelectedCriteriaVirtues(province: string, virtues: str
   localStorage.setItem(`pilot_criteria_virtues_${province}`, JSON.stringify(safeVirtues));
 
   try {
-    const res = await fetch('/api/pilot-sqlite/criteria-virtues', {
+    const res = await fetch('/api/activity/criteria-virtues', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ province, virtues: safeVirtues })

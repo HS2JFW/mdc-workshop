@@ -217,11 +217,11 @@ export function saveStoredCoffeeGroups(groups: CoffeeGroupMeta[]): void {
 }
 
 /**
- * ดึงรายชื่อกลุ่มกาแฟจากฐานข้อมูล SQLite Server (/api/pilot-sqlite/coffee-groups)
+ * ดึงรายชื่อกลุ่มกาแฟจากฐานข้อมูล SQLite Server (/api/activity/coffee-groups)
  */
 export async function fetchCoffeeGroupsFromDb(): Promise<CoffeeGroupMeta[]> {
   try {
-    const res = await fetch('/api/pilot-sqlite/coffee-groups');
+    const res = await fetch('/api/activity/coffee-groups');
     if (res.ok) {
       const data = await res.json();
       if (data && data.ok && Array.isArray(data.groups) && data.groups.length > 0) {
@@ -264,7 +264,7 @@ export async function addCoffeeGroupToDb(newGroup: Omit<CoffeeGroupMeta, 'key'> 
   };
 
   try {
-    const res = await fetch('/api/pilot-sqlite/coffee-groups', {
+    const res = await fetch('/api/activity/coffee-groups', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'add', group: groupToAdd })
@@ -301,7 +301,7 @@ export async function updateCoffeeGroupInDb(key: string, updates: Partial<Coffee
   };
 
   try {
-    const res = await fetch('/api/pilot-sqlite/coffee-groups', {
+    const res = await fetch('/api/activity/coffee-groups', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'update', isEdit: true, originalKey: key, group: updatedGroup })
@@ -332,7 +332,7 @@ export async function deleteCoffeeGroupFromDb(key: string): Promise<CoffeeGroupM
   }
 
   try {
-    const res = await fetch(`/api/pilot-sqlite/coffee-groups?key=${encodeURIComponent(key)}`, {
+    const res = await fetch(`/api/activity/coffee-groups?key=${encodeURIComponent(key)}`, {
       method: 'DELETE'
     });
     if (res.ok) {
@@ -360,7 +360,7 @@ export async function deleteCoffeeGroupFromDb(key: string): Promise<CoffeeGroupM
  */
 export async function resetCoffeeGroupsInDb(): Promise<CoffeeGroupMeta[]> {
   try {
-    const res = await fetch('/api/pilot-sqlite/coffee-groups', {
+    const res = await fetch('/api/activity/coffee-groups', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'reset' })
@@ -1468,8 +1468,8 @@ export function getComparativeBenchmarkAnchors(province?: PilotProvinceName): Co
 export async function fetchHackathonProjectsFromDb(province?: PilotProvinceName): Promise<HackathonProject[]> {
   try {
     const url = province
-      ? `/api/pilot-sqlite/hackathon-projects?province=${encodeURIComponent(province)}`
-      : '/api/pilot-sqlite/hackathon-projects';
+      ? `/api/activity/hackathon-projects?province=${encodeURIComponent(province)}`
+      : '/api/activity/hackathon-projects';
     const res = await fetch(url);
     if (res.ok) {
       const data = await res.json();
@@ -1505,7 +1505,7 @@ export async function saveHackathonProjectToDb(
   isPrecheck: boolean = false
 ): Promise<{ success: boolean; id: string; dbPath?: string }> {
   try {
-    const res = await fetch('/api/pilot-sqlite/hackathon-projects', {
+    const res = await fetch('/api/activity/hackathon-projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...project, isPrecheck })
@@ -1525,7 +1525,7 @@ export async function resetHackathonDatabaseFromApi(
 ): Promise<{ success: boolean; message: string; deletedCount: number }> {
   resetSubmittedProjectsSession(province);
   try {
-    const res = await fetch('/api/pilot-sqlite/hackathon-reset', {
+    const res = await fetch('/api/activity/hackathon-reset', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ province })
@@ -1592,7 +1592,7 @@ export async function deleteHackathonProject(
 
   // 4. Delete from SQLite database via API
   try {
-    const res = await fetch('/api/pilot-sqlite/project-delete', {
+    const res = await fetch('/api/activity/project-delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: projectId })
@@ -1642,7 +1642,7 @@ export async function resetRegistrationsDatabaseFromApi(
   // 2. ส่งคำขอลบไปยัง SQLite API
   try {
     const provQuery = province && province !== 'ALL' ? `?province=${encodeURIComponent(province)}` : '';
-    const res = await fetch(`/api/pilot-sqlite/reset-registrations${provQuery}`, {
+    const res = await fetch(`/api/activity/reset-registrations${provQuery}`, {
       method: 'POST'
     });
     if (res.ok) {
@@ -1701,9 +1701,9 @@ export async function clearActivityVoteDatabase(): Promise<{
     }
   }
 
-  // 2. Call backend SQLite endpoint to wipe all 4 tables in data/pilot_activities_4regions.sqlite
+  // 2. Call backend SQLite endpoint to wipe all 4 tables in PostgreSQL 16 (DB-MDC)
   try {
-    const res = await fetch('/api/pilot-sqlite/clear-activity-vote-system', {
+    const res = await fetch('/api/activity/clear-activity-vote-system', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     });
@@ -2065,9 +2065,9 @@ function getTableDescription(name: string): string {
 export async function fetchSqliteDbTables(): Promise<{ success: boolean; tables: SqliteTableMeta[]; dbPath?: string }> {
   const allTables: SqliteTableMeta[] = [];
 
-  // 1. Fetch SQLite tables (/api/pilot-sqlite/tables)
+  // 1. Fetch SQLite tables (/api/activity/tables)
   try {
-    const res = await fetch('/api/pilot-sqlite/tables');
+    const res = await fetch('/api/activity/tables');
     if (res.ok) {
       const data = await res.json();
       if (data && Array.isArray(data.tables)) {
@@ -2261,7 +2261,7 @@ export async function fetchSqliteDbTables(): Promise<{ success: boolean; tables:
   return {
     success: true,
     tables: allTables,
-    dbPath: 'data/pilot_activities_4regions.sqlite & duckdb_tables'
+    dbPath: 'PostgreSQL 16 (DB-MDC) & duckdb_tables'
   };
 }
 
@@ -2451,7 +2451,7 @@ export async function fetchSqliteTableData(tableName: string): Promise<SqliteTab
 
   // D. SQLite Database Tables (pilot_*, pms_*, task_project)
   try {
-    const res = await fetch(`/api/pilot-sqlite/table-data?table=${encodeURIComponent(tableName)}`);
+    const res = await fetch(`/api/activity/table-data?table=${encodeURIComponent(tableName)}`);
     if (res.ok) {
       const data = await res.json();
       if (data && data.ok) {
@@ -3104,7 +3104,7 @@ export function castCommunityVote(
     localStorage.setItem(STORAGE_KEY_VOTES, JSON.stringify(votedMap));
 
     // Sync to SQLite backend if available
-    fetch('/api/pilot-sqlite/hackathon-vote', {
+    fetch('/api/activity/hackathon-vote', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId, newVoteCount: all[targetIdx].communityVotes, voterId: actualVoterId })
@@ -3688,7 +3688,7 @@ export async function fetchAiConfigFromDb(): Promise<{
   isConfigured: boolean;
 }> {
   try {
-    const res = await fetch('/api/pilot-sqlite/ai-config');
+    const res = await fetch('/api/activity/ai-config');
     if (res.ok) {
       const data = await res.json();
       if (data && data.ok) {
@@ -3778,7 +3778,7 @@ export async function saveAiConfigToDb(config: {
   }
 
   try {
-    const res = await fetch('/api/pilot-sqlite/ai-config', {
+    const res = await fetch('/api/activity/ai-config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -10191,3 +10191,6 @@ export async function evaluatePreSubmissionWithOpenRouterLlm(
   }
 }
 
+
+export const fetchPostgresDbTables = fetchSqliteDbTables;
+export const fetchPostgresTableData = fetchSqliteTableData;

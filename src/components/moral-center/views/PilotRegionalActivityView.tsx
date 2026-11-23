@@ -528,7 +528,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
       alert('ไม่สามารถลบกลุ่มได้ เนื่องจากระบบต้องมีกลุ่มกาแฟอย่างน้อย 1 กลุ่ม');
       return;
     }
-    const confirmed = window.confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบ "${groupNameToDelete}" ออกจากฐานข้อมูล SQLite?`);
+    const confirmed = window.confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบ "${groupNameToDelete}" ออกจากฐานข้อมูล PostgreSQL (DB-MDC)?`);
     if (!confirmed) return;
 
     try {
@@ -540,7 +540,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
       if (dashboardTabGroup === key) {
         setDashboardTabGroup(updated[0]?.key || 'mocha');
       }
-      setSubmitFeedback(`🗑️ ลบ "${groupNameToDelete}" จากฐานข้อมูล SQLite เรียบร้อยแล้ว`);
+      setSubmitFeedback(`🗑️ ลบ "${groupNameToDelete}" จากฐานข้อมูล PostgreSQL (DB-MDC) เรียบร้อยแล้ว`);
       setTimeout(() => setSubmitFeedback(null), 3000);
     } catch (err: any) {
       alert(err?.message || 'เกิดข้อผิดพลาดในการลบกลุ่ม');
@@ -560,12 +560,12 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
         if (newlyAdded) {
           setSelectedGroup(newlyAdded.key);
         }
-        setSubmitFeedback(`✨ เพิ่มกลุ่ม "${groupData.name}" ลงฐานข้อมูล SQLite สำเร็จ (ผู้ใช้ทุกคนจะมองเห็นและเลือกกลุ่มนี้ได้ทันที)!`);
+        setSubmitFeedback(`✨ เพิ่มกลุ่ม "${groupData.name}" ลงฐานข้อมูล PostgreSQL (DB-MDC) สำเร็จ (ผู้ใช้ทุกคนจะมองเห็นและเลือกกลุ่มนี้ได้ทันที)!`);
         setTimeout(() => setSubmitFeedback(null), 4500);
       } else if (groupModalMode === 'edit' && groupData.key) {
         const updated = await updateCoffeeGroupInDb(groupData.key, groupData);
         setCoffeeGroups(updated);
-        setSubmitFeedback(`💾 อัปเดตข้อมูลกลุ่ม "${groupData.name}" ลงฐานข้อมูล SQLite สำเร็จ!`);
+        setSubmitFeedback(`💾 อัปเดตข้อมูลกลุ่ม "${groupData.name}" ลงฐานข้อมูล PostgreSQL (DB-MDC) สำเร็จ!`);
         setTimeout(() => setSubmitFeedback(null), 3500);
       }
     } catch (err: any) {
@@ -578,7 +578,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
       alert('เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถรีเซ็ตกลุ่มกาแฟได้');
       return;
     }
-    const confirmed = window.confirm('คุณต้องการรีเซ็ตกลุ่มกาแฟในฐานข้อมูล SQLite กลับเป็นค่าเริ่มต้น 5 กลุ่ม (มอคค่า, คาปูชิโน, อเมริกาโน, เอสเพรสโซ, ลาเต้) หรือไม่?');
+    const confirmed = window.confirm('คุณต้องการรีเซ็ตกลุ่มกาแฟในฐานข้อมูล PostgreSQL (DB-MDC) กลับเป็นค่าเริ่มต้น 5 กลุ่ม (มอคค่า, คาปูชิโน, อเมริกาโน, เอสเพรสโซ, ลาเต้) หรือไม่?');
     if (!confirmed) return;
 
     try {
@@ -586,7 +586,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
       setCoffeeGroups(defs);
       setSelectedGroup(defs[0]?.key || 'mocha');
       setDashboardTabGroup(defs[0]?.key || 'mocha');
-      setSubmitFeedback('↺ รีเซ็ตกลุ่มกาแฟในฐานข้อมูล SQLite กลับเป็นค่าเริ่มต้น 5 กลุ่มเรียบร้อยแล้ว');
+      setSubmitFeedback('↺ รีเซ็ตกลุ่มกาแฟในฐานข้อมูล PostgreSQL (DB-MDC) กลับเป็นค่าเริ่มต้น 5 กลุ่มเรียบร้อยแล้ว');
       setTimeout(() => setSubmitFeedback(null), 3500);
     } catch (err: any) {
       alert(`เกิดข้อผิดพลาดในการรีเซ็ตกลุ่ม: ${err?.message || err}`);
@@ -1109,7 +1109,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     }, 250);
   };
 
-  // Step 4: Database Tables Explorer State (SQLite data/pilot_activities_4regions.sqlite & Connected Databases)
+  // Step 4: Database Tables Explorer State (SQLite PostgreSQL 16 (DB-MDC) & Connected Databases)
   const [isDbExplorerOpen, setIsDbExplorerOpen] = useState<boolean>(false);
   const [activeDbCategory, setActiveDbCategory] = useState<DbTableCategoryKey>('all');
   const [dbTables, setDbTables] = useState<SqliteTableMeta[]>([]);
@@ -1591,7 +1591,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     }
   };
 
-  // Handle Pre-Submission Score Check (ตรวจสอบคะแนนก่อนส่งโครงการ พร้อมดึง Benchmark จากฐานข้อมูล SQLite และส่งตรวจผ่าน OpenRouter LLM)
+  // Handle Pre-Submission Score Check (ตรวจสอบคะแนนก่อนส่งโครงการ พร้อมดึง Benchmark จากฐานข้อมูล PostgreSQL (DB-MDC) และส่งตรวจผ่าน OpenRouter LLM)
   const handleTriggerPreSubmissionCheck = async () => {
     if (!propProjectName.trim()) {
       alert('กรุณาระบุ "ชื่อโครงการ (Project Title)" ในส่วนที่ 2 ก่อนทำการตรวจสอบคะแนน');
@@ -1615,7 +1615,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
       console.warn('Fallback to universal rubric for pre-check evaluation:', e);
     }
 
-    // ดึง Benchmark จากฐานข้อมูล SQLite จริงก่อนการประเมิน
+    // ดึง Benchmark จากฐานข้อมูล PostgreSQL (DB-MDC) จริงก่อนการประเมิน
     let currentCompCtx = benchmarkContext;
     try {
       currentCompCtx = await getComparativeBenchmarkAnchorsFromDb(province);
@@ -1791,7 +1791,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     setDashboardViewMode('submitted_only');
     setCurrentStep(5);
     handleClearSection2Form();
-    setSubmitFeedback(`🚀 โครงการ "${created.projectName}" บันทึกลงฐานข้อมูล SQLite และส่งเข้าสู่ Hackathon เรียบร้อยแล้ว! (คะแนนประเมิน AI: ${created.aiScore}/100)`);
+    setSubmitFeedback(`🚀 โครงการ "${created.projectName}" บันทึกลงฐานข้อมูล PostgreSQL (DB-MDC) และส่งเข้าสู่ Hackathon เรียบร้อยแล้ว! (คะแนนประเมิน AI: ${created.aiScore}/100)`);
     setTimeout(() => setSubmitFeedback(null), 5000);
   };
 
@@ -1843,7 +1843,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     }
   };
 
-  // Handle Admin Reset Database (ล้างข้อมูลใน SQLite เฉพาะ Account Admin)
+  // Handle Admin Reset Database (ล้างข้อมูลใน PostgreSQL (DB-MDC) เฉพาะ Account Admin)
   const handleAdminResetDatabase = async () => {
     if (!isAdmin) {
       alert('ฟังก์ชันนี้อนุญาตเฉพาะ Account Admin เท่านั้น');
@@ -1851,7 +1851,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     }
 
     const confirmed = window.confirm(
-      `⚠️ คำเตือนสำหรับผู้ดูแลระบบ (Admin):\n\nคุณต้องการ Reset ฐานข้อมูลโครงการ Hackathon ของ จ.${province} ทั้งหมดใน SQLite หรือไม่?\n\n(ข้อมูลโครงการที่บันทึกไว้ในฐานข้อมูลจริงจะถูกลบ เพื่อให้ระบบเริ่มนับลำดับใหม่ที่โครงการที่ 1 เริ่มต้นที่ 80.00 คะแนน)`
+      `⚠️ คำเตือนสำหรับผู้ดูแลระบบ (Admin):\n\nคุณต้องการ Reset ฐานข้อมูลโครงการ Hackathon ของ จ.${province} ทั้งหมดใน PostgreSQL (DB-MDC) หรือไม่?\n\n(ข้อมูลโครงการที่บันทึกไว้ในฐานข้อมูลจริงจะถูกลบ เพื่อให้ระบบเริ่มนับลำดับใหม่ที่โครงการที่ 1 เริ่มต้นที่ 80.00 คะแนน)`
     );
 
     if (!confirmed) return;
@@ -1877,7 +1877,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     }
 
     const confirmed = window.confirm(
-      `⚠️ คำเตือนสำหรับผู้ดูแลระบบ (Admin):\n\nคุณต้องการลบโครงการ "${p.projectName}" ออกจากฐานข้อมูลและหน้าโหวตใช่หรือไม่?\n\n(ข้อมูลโครงการจะถูกลบออกจากฐานข้อมูล SQLite และรายการโหวตอย่างถาวร)`
+      `⚠️ คำเตือนสำหรับผู้ดูแลระบบ (Admin):\n\nคุณต้องการลบโครงการ "${p.projectName}" ออกจากฐานข้อมูลและหน้าโหวตใช่หรือไม่?\n\n(ข้อมูลโครงการจะถูกลบออกจากฐานข้อมูล PostgreSQL (DB-MDC) และรายการโหวตอย่างถาวร)`
     );
     if (!confirmed) return;
 
@@ -2692,10 +2692,10 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
                 fontWeight: 700,
                 cursor: 'pointer'
               }}
-              title="เปิดดูตารางฐานข้อมูล SQLite"
+              title="เปิดดูตารางฐานข้อมูล PostgreSQL (DB-MDC)"
             >
               <Database size={13} />
-              <span>เปิดดู Database (SQLite)</span>
+              <span>เปิดดู Database (PostgreSQL: DB-MDC)</span>
             </button>
           </div>
 
@@ -3622,7 +3622,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
                 type="button"
                 className="btn-view-criteria"
                 onClick={() => setIsCriteriaViewerOpen(true)}
-                title="แสดงตารางเกณฑ์การตัดสิน (Rubric 1-100 คะแนน) ล่าสุดจากระบบ SQLite"
+                title="แสดงตารางเกณฑ์การตัดสิน (Rubric 1-100 คะแนน) ล่าสุดจากระบบ PostgreSQL (DB-MDC)"
               >
                 <TableProperties size={18} color="#7c3aed" />
                 <span>แสดงเกณฑ์การตัดสิน</span>
@@ -3648,10 +3648,10 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
                 <div className="db-explorer-heading-box">
                   <h3 className="db-explorer-title">
                     <Database size={20} color="#2563eb" />
-                    <span>ตารางฐานข้อมูลทั้งหมดในระบบ (SQLite Database Explorer)</span>
+                    <span>ตารางฐานข้อมูลทั้งหมดในระบบ (PostgreSQL (DB-MDC) Explorer)</span>
                   </h3>
                   <span className="db-explorer-subtitle">
-                    ไฟล์ฐานข้อมูล: <code>data/pilot_activities_4regions.sqlite</code> (ทั้งหมด {dbTables.length} ตาราง)
+                    ฐานข้อมูล: <code>PostgreSQL 16 (DB-MDC)</code> (ทั้งหมด {dbTables.length} ตาราง)
                   </span>
                 </div>
 
@@ -3660,7 +3660,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
                   className="btn-db-refresh"
                   onClick={() => handleOpenDbExplorer()}
                   disabled={isLoadingDbTables || isLoadingTableData}
-                  title="โหลดข้อมูลตารางใหม่จากฐานข้อมูล SQLite"
+                  title="โหลดข้อมูลตารางใหม่จากฐานข้อมูล PostgreSQL (DB-MDC)"
                 >
                   <RefreshCw size={16} className={isLoadingDbTables || isLoadingTableData ? 'spin-animation' : ''} />
                   <span>รีเฟรชข้อมูล</span>
@@ -3804,7 +3804,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
                   <div className="db-table-empty-state">
                     <Database size={40} color="#94a3b8" />
                     <h4>ไม่พบข้อมูลในตาราง {selectedDbTable}</h4>
-                    <p>ตารางนี้ยังไม่มีแถวข้อมูลที่บันทึกไว้ในฐานข้อมูล SQLite</p>
+                    <p>ตารางนี้ยังไม่มีแถวข้อมูลที่บันทึกไว้ในฐานข้อมูล PostgreSQL (DB-MDC)</p>
                   </div>
                 ) : (
                   (() => {
@@ -4826,7 +4826,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
         onSavedSuccess={(rec) => setLatestCriteriaRecord(rec)}
       />
 
-      {/* Criteria Viewer Modal (แสดงตารางเกณฑ์การตัดสินล่าสุดจาก SQLite) */}
+      {/* Criteria Viewer Modal (แสดงตารางเกณฑ์การตัดสินล่าสุดจาก PostgreSQL (DB-MDC)) */}
       <CriteriaViewerModal
         isOpen={isCriteriaViewerOpen}
         onClose={() => setIsCriteriaViewerOpen(false)}

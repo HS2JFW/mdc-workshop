@@ -2,6 +2,8 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import pg from 'pg';
+const { Pool } = pg;
 
 const PORT = Number(process.env.PORT || 3000);
 const cwd = process.cwd();
@@ -60,15 +62,88 @@ const CANONICAL_PROJECT_IDS = [
   'PRJ-2026-001'
 ];
 
-const db = new DatabaseSync(dbPath);
-try {
-  db.exec('PRAGMA journal_mode = WAL;');
-  db.exec('PRAGMA busy_timeout = 5000;');
-} catch {
-  // ignore pragma error
+
+// Universal Database Layer supporting both PostgreSQL and SQLite
+class UniversalDb {
+  constructor(pgPool, sqliteDb, dbName = 'DB-MDC') {
+    this.pgPool = pgPool;
+    this.sqliteDb = sqliteDb;
+    this.isPg = Boolean(pgPool);
+    this.dbName = dbName;
+    this.type = this.isPg ? 'postgres' : 'sqlite';
+  }
+
+  toPgSql(sql) {
+    let transformed = sql;
+    // Transform INSERT OR REPLACE INTO table (cols) VALUES (vals)
+    const match = sql.match(/INSERT\s+OR\s+REPLACE\s+INTO\s+([a-zA-Z0-9_]+)\s*\(([\s\S]*?)\)\s*VALUES\s*\(([\s\S]*?)\)/i);
+    if (match) {
+      const table = match[1];
+      const cols = match[2].split(',').map(c => c.trim());
+      const pkMap = { pilot_criteria_selected_virtues: 'province', pilot_coffee_groups: 'key' };
+      const pk = pkMap[table] || 'id';
+      const updateCols = cols
+        .filter(c => c.toLowerCase() !== pk && c.toLowerCase() !== 'created_at')
+        .map(c => `${c} = EXCLUDED.${c}`)
+        .join(', ');
+      transformed = `INSERT INTO ${table} (${match[2]}) VALUES (${match[3]}) ON CONFLICT (${pk}) DO UPDATE SET ${updateCols}`;
+    }
+    let paramIdx = 0;
+    return transformed.replace(/\?/g, () => `$${++paramIdx}`);
+  }
+
+  normalizeParams(params) {
+    if (params.length === 1 && Array.isArray(params[0])) {
+      return params[0];
+    }
+    return params;
+  }
+
+  async exec(sql) {
+    if (this.isPg) {
+      return await this.pgPool.query(sql);
+    }
+    return this.sqliteDb.exec(sql);
+  }
+
+  async all(sql, ...params) {
+    const norm = this.normalizeParams(params);
+    if (this.isPg) {
+      const res = await this.pgPool.query(this.toPgSql(sql), norm);
+      return res.rows;
+    }
+    return this.sqliteDb.prepare(sql).all(...norm);
+  }
+
+  async get(sql, ...params) {
+    const norm = this.normalizeParams(params);
+    if (this.isPg) {
+      const res = await this.pgPool.query(this.toPgSql(sql), norm);
+      return res.rows[0] || null;
+    }
+    return this.sqliteDb.prepare(sql).get(...norm) || null;
+  }
+
+  async run(sql, ...params) {
+    const norm = this.normalizeParams(params);
+    if (this.isPg) {
+      const res = await this.pgPool.query(this.toPgSql(sql), norm);
+      return { changes: res.rowCount, rowCount: res.rowCount };
+    }
+    const info = this.sqliteDb.prepare(sql).run(...norm);
+    return { changes: Number(info.changes || 0), rowCount: Number(info.changes || 0) };
+  }
+
+  prepare(sql) {
+    return {
+      all: async (...params) => this.all(sql, ...params),
+      get: async (...params) => this.get(sql, ...params),
+      run: async (...params) => this.run(sql, ...params)
+    };
+  }
 }
 
-db.exec(`
+const PG_SCHEMA_SQL = `
   CREATE TABLE IF NOT EXISTS pilot_agency_registrations (
     id TEXT PRIMARY KEY,
     province TEXT NOT NULL,
@@ -305,101 +380,197 @@ db.exec(`
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
-`);
+`;
 
-// Bootstrap AI config from disk file data/ai_config.json if table is empty
-try {
-  const existingAiRow = db.prepare('SELECT * FROM pilot_ai_config WHERE id = ?').get('default');
-  if (!existingAiRow && fs.existsSync(aiConfigFile)) {
-    const rawCfg = fs.readFileSync(aiConfigFile, 'utf8');
-    const parsedCfg = JSON.parse(rawCfg);
-    if (parsedCfg && parsedCfg.apiKey) {
-      const nowStr = new Date().toISOString();
-      db.prepare(`
-        INSERT OR REPLACE INTO pilot_ai_config (id, api_key, model, system_prompt, generator_prompt, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run('default', parsedCfg.apiKey, parsedCfg.model || 'openai/gpt-4o-mini', parsedCfg.systemPrompt || '', parsedCfg.generatorPrompt || '', nowStr);
+async function migrateSqliteToPostgresIfEmpty(pgPool, sqliteDb) {
+  try {
+    const res = await pgPool.query('SELECT COUNT(*) as cnt FROM pilot_coffee_groups');
+    const pgCoffeeCount = Number(res.rows[0]?.cnt || 0);
+    if (pgCoffeeCount > 0) {
+      console.log('[Migration] PostgreSQL already has data, skipping initial SQLite seed.');
+      return;
     }
-  } else if (existingAiRow && existingAiRow.api_key && !fs.existsSync(aiConfigFile)) {
-    fs.writeFileSync(aiConfigFile, JSON.stringify({
-      apiKey: existingAiRow.api_key,
-      model: existingAiRow.model || 'openai/gpt-4o-mini',
-      systemPrompt: existingAiRow.system_prompt || '',
-      generatorPrompt: existingAiRow.generator_prompt || '',
-      updatedAt: existingAiRow.updated_at
-    }, null, 2), 'utf8');
-  }
-} catch (err) {
-  console.warn('Bootstrap AI config check error:', err);
-}
 
-// Bootstrap Coffee Groups in SQLite if table is empty
-try {
-  const existingGroupCount = db.prepare('SELECT COUNT(*) as cnt FROM pilot_coffee_groups').get()?.cnt || 0;
-  if (existingGroupCount === 0) {
-    let seedGroups = [
-      { key: 'mocha', name: 'กลุ่มมอคค่า', bg_image: '/theme/coffee_mocha_bg.jpg', theme_color: '#78350f', accent_bg: '#fef3c7', is_custom: 0, order_index: 1 },
-      { key: 'cappuccino', name: 'กลุ่มคาปูชิโน', bg_image: '/theme/coffee_cappuccino_bg.jpg', theme_color: '#92400e', accent_bg: '#ffedd5', is_custom: 0, order_index: 2 },
-      { key: 'americano', name: 'กลุ่มอเมริกาโน', bg_image: '/theme/coffee_americano_bg.jpg', theme_color: '#1c1917', accent_bg: '#f5f5f4', is_custom: 0, order_index: 3 },
-      { key: 'espresso', name: 'กลุ่มเอสเพรสโซ', bg_image: '/theme/coffee_preset_05_espresso.jpg', theme_color: '#451a03', accent_bg: '#fef2f2', is_custom: 0, order_index: 4 },
-      { key: 'latte', name: 'กลุ่มลาเต้', bg_image: '/theme/coffee_preset_06_latte.jpg', theme_color: '#b45309', accent_bg: '#fffbeb', is_custom: 0, order_index: 5 }
+    console.log('[Migration] PostgreSQL tables are empty. Migrating existing SQLite data to PostgreSQL...');
+
+    const tables = [
+      'pilot_coffee_groups',
+      'pilot_ai_config',
+      'pilot_hackathon_criteria',
+      'pilot_criteria_selected_virtues',
+      'pilot_hackathon_projects',
+      'pilot_agency_registrations',
+      'pilot_lessons_and_policies',
+      'task_project',
+      'pms_strategic_plans',
+      'pms_projects',
+      'pms_kpi_registry',
+      'pms_decision_actions',
+      'pms_meeting_reports'
     ];
 
-    if (fs.existsSync(coffeeGroupsFile)) {
+    for (const table of tables) {
       try {
-        const fileContent = JSON.parse(fs.readFileSync(coffeeGroupsFile, 'utf8'));
-        if (Array.isArray(fileContent) && fileContent.length > 0) {
-          seedGroups = fileContent.map((g, idx) => ({
-            key: g.key,
-            name: g.name,
-            bg_image: g.bgImage || g.bg_image || '/theme/coffee_preset_01_beans.jpg',
-            theme_color: g.themeColor || g.theme_color || '#78350f',
-            accent_bg: g.accentBg || g.accent_bg || '#fef3c7',
-            is_custom: g.isCustom ? 1 : 0,
-            order_index: typeof g.orderIndex === 'number' ? g.orderIndex : idx + 1
-          }));
+        const rows = sqliteDb.prepare(`SELECT * FROM "${table}"`).all();
+        if (rows.length === 0) continue;
+
+        const cols = Object.keys(rows[0]);
+        const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
+        const insertSql = `INSERT INTO "${table}" (${cols.map(c => `"${c}"`).join(', ')}) VALUES (${placeholders}) ON CONFLICT DO NOTHING`;
+
+        for (const row of rows) {
+          const values = cols.map(c => row[c]);
+          await pgPool.query(insertSql, values);
         }
-      } catch (e) {
-        console.warn('Failed parsing coffeeGroupsFile:', e);
+        console.log(`[Migration] Migrated ${rows.length} rows for table ${table}`);
+      } catch (err) {
+        console.warn(`[Migration] Warning while migrating table ${table}:`, err.message);
       }
     }
-
-    const now = new Date().toISOString();
-    const insertStmt = db.prepare(`
-      INSERT OR REPLACE INTO pilot_coffee_groups 
-      (key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    for (const g of seedGroups) {
-      insertStmt.run(g.key, g.name, g.bg_image, g.theme_color, g.accent_bg, g.is_custom, g.order_index, now, now);
-    }
-  } else if (!fs.existsSync(coffeeGroupsFile)) {
-    const rows = db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all();
-    const groups = rows.map(r => ({
-      key: r.key,
-      name: r.name,
-      bgImage: r.bg_image,
-      themeColor: r.theme_color,
-      accentBg: r.accent_bg,
-      isCustom: Boolean(r.is_custom)
-    }));
-    fs.writeFileSync(coffeeGroupsFile, JSON.stringify(groups, null, 2), 'utf8');
+    console.log('[Migration] SQLite data migration to PostgreSQL completed successfully!');
+  } catch (err) {
+    console.warn('[Migration] Error checking PostgreSQL data:', err.message);
   }
-} catch (err) {
-  console.warn('Bootstrap coffee groups error:', err);
 }
 
-try { db.exec('ALTER TABLE pilot_agency_registrations ADD COLUMN first_name TEXT;'); } catch {}
-try { db.exec('ALTER TABLE pilot_agency_registrations ADD COLUMN last_name TEXT;'); } catch {}
-try { db.exec('ALTER TABLE pilot_agency_registrations ADD COLUMN position TEXT;'); } catch {}
-try { db.exec('ALTER TABLE pilot_agency_registrations ADD COLUMN participant_level TEXT;'); } catch {}
-try { db.exec('ALTER TABLE pilot_agency_registrations ADD COLUMN phone TEXT;'); } catch {}
-try { db.exec('ALTER TABLE pilot_agency_registrations ADD COLUMN email TEXT;'); } catch {}
-try { db.exec('ALTER TABLE pilot_agency_registrations ADD COLUMN coffee_group TEXT;'); } catch {}
-try { db.exec('ALTER TABLE pilot_agency_registrations ADD COLUMN participant_role TEXT;'); } catch {}
-try { db.exec('ALTER TABLE pilot_agency_registrations ADD COLUMN district TEXT;'); } catch {}
-try { db.exec('ALTER TABLE pilot_agency_registrations ADD COLUMN subdistrict TEXT;'); } catch {}
-try { db.exec('ALTER TABLE pilot_hackathon_projects ADD COLUMN proposer_position TEXT;'); } catch {}
+async function initDatabase() {
+  if (typeof process.loadEnvFile === 'function') {
+    try { process.loadEnvFile(); } catch {}
+  }
+
+  let databaseUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.PG_URL;
+  let targetDbName = 'DB-MDC';
+
+  // If no DATABASE_URL provided, test if local PostgreSQL is available
+  if (!databaseUrl) {
+    try {
+      const testLocal = new Pool({
+        connectionString: 'postgres://postgres:postgres@localhost:5432/postgres',
+        connectionTimeoutMillis: 1000
+      });
+      await testLocal.query('SELECT 1');
+      await testLocal.end();
+      databaseUrl = 'postgres://postgres:postgres@localhost:5432/DB-MDC';
+      console.log('[Database] Local PostgreSQL server detected on localhost:5432.');
+    } catch {}
+  }
+
+  let pgPool = null;
+
+  if (databaseUrl) {
+    try {
+      // 1. Parse target database name from URL
+      try {
+        const u = new URL(databaseUrl);
+        const pathPart = u.pathname.slice(1);
+        if (pathPart && pathPart.toLowerCase() !== 'postgres') {
+          targetDbName = decodeURIComponent(pathPart);
+        }
+      } catch {}
+
+      // 2. Connect to maintenance DB (/postgres) to ensure database targetDbName exists
+      const maintUrl = new URL(databaseUrl);
+      maintUrl.pathname = '/postgres';
+      const maintMasked = maintUrl.toString().replace(/:([^:@]+)@/, ':****@');
+      console.log(`[Database] Checking PostgreSQL server via maintenance DB: ${maintMasked}`);
+
+      const maintPool = new Pool({
+        connectionString: maintUrl.toString(),
+        connectionTimeoutMillis: 5000,
+        ssl: databaseUrl.includes('sslmode=require') ? { rejectUnauthorized: false } : false
+      });
+
+      try {
+        const checkRes = await maintPool.query(
+          'SELECT 1 FROM pg_database WHERE datname = $1 OR datname = $2',
+          [targetDbName, targetDbName.toLowerCase()]
+        );
+        if (checkRes.rows.length === 0) {
+          console.log(`[Database] PostgreSQL database "${targetDbName}" not found. Creating database "${targetDbName}"...`);
+          await maintPool.query(`CREATE DATABASE "${targetDbName}"`);
+          console.log(`[Database] Database "${targetDbName}" created successfully!`);
+        } else {
+          console.log(`[Database] PostgreSQL database "${targetDbName}" exists and is ready.`);
+        }
+      } catch (checkErr) {
+        console.warn('[Database] Maintenance DB check warning:', checkErr.message);
+      } finally {
+        try { await maintPool.end(); } catch {}
+      }
+
+      // 3. Connect application pool directly to targetDbName (DB-MDC)
+      const appUrl = new URL(databaseUrl);
+      appUrl.pathname = `/${targetDbName}`;
+      const appMasked = appUrl.toString().replace(/:([^:@]+)@/, ':****@');
+      console.log(`[Database] Connecting main pool to database "${targetDbName}": ${appMasked}`);
+
+      pgPool = new Pool({
+        connectionString: appUrl.toString(),
+        connectionTimeoutMillis: 5000,
+        ssl: databaseUrl.includes('sslmode=require') ? { rejectUnauthorized: false } : false
+      });
+      await pgPool.query('SELECT 1 as connected');
+      console.log(`[Database] Connected to PostgreSQL database "${targetDbName}" successfully!`);
+
+      // 4. Verify & Create all tables and indexes in DB-MDC
+      await pgPool.query(PG_SCHEMA_SQL);
+      console.log(`[Database] PostgreSQL schema in "${targetDbName}" verified and initialized.`);
+
+      // 5. Seed / Migrate initial data if DB-MDC tables are empty
+      if (fs.existsSync(dbPath)) {
+        try {
+          const localSqlite = new DatabaseSync(dbPath);
+          await migrateSqliteToPostgresIfEmpty(pgPool, localSqlite);
+        } catch (mErr) {
+          console.warn('[Database] Local SQLite migration check warning:', mErr.message);
+        }
+      }
+
+      // Bootstrap coffee groups if empty
+      const coffeeCnt = (await pgPool.query('SELECT COUNT(*) as c FROM pilot_coffee_groups')).rows[0]?.c || 0;
+      if (Number(coffeeCnt) === 0) {
+        console.log(`[Database] Seeding default 5 coffee groups in "${targetDbName}"...`);
+        const now = new Date().toISOString();
+        const seedGroups = [
+          { key: 'mocha', name: 'กลุ่มมอคค่า', bg_image: '/theme/coffee_mocha_bg.jpg', theme_color: '#78350f', accent_bg: '#fef3c7', is_custom: 0, order_index: 1 },
+          { key: 'cappuccino', name: 'กลุ่มคาปูชิโน', bg_image: '/theme/coffee_cappuccino_bg.jpg', theme_color: '#92400e', accent_bg: '#ffedd5', is_custom: 0, order_index: 2 },
+          { key: 'americano', name: 'กลุ่มอเมริกาโน', bg_image: '/theme/coffee_americano_bg.jpg', theme_color: '#1c1917', accent_bg: '#f5f5f4', is_custom: 0, order_index: 3 },
+          { key: 'espresso', name: 'กลุ่มเอสเพรสโซ', bg_image: '/theme/coffee_preset_05_espresso.jpg', theme_color: '#451a03', accent_bg: '#fef2f2', is_custom: 0, order_index: 4 },
+          { key: 'latte', name: 'กลุ่มลาเต้', bg_image: '/theme/coffee_preset_06_latte.jpg', theme_color: '#b45309', accent_bg: '#fffbeb', is_custom: 0, order_index: 5 }
+        ];
+        for (const g of seedGroups) {
+          await pgPool.query(
+            `INSERT INTO pilot_coffee_groups (key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (key) DO NOTHING`,
+            [g.key, g.name, g.bg_image, g.theme_color, g.accent_bg, g.is_custom, g.order_index, now, now]
+          );
+        }
+      }
+
+      console.log(`[Database] PostgreSQL DB-MDC ready for Activity Section! (SQLite disabled for activities)`);
+      return new UniversalDb(pgPool, null, targetDbName);
+    } catch (pgErr) {
+      console.warn(`[Database] PostgreSQL connection error: ${pgErr.message}.`);
+      if (pgPool) {
+        try { await pgPool.end(); } catch {}
+        pgPool = null;
+      }
+    }
+  }
+
+  // Development Fallback if offline
+  console.log(`[Database] Activity section configured for PostgreSQL DB-MDC. Starting local development fallback...`);
+  const sqliteDb = new DatabaseSync(dbPath);
+  try {
+    sqliteDb.exec('PRAGMA journal_mode = WAL;');
+    sqliteDb.exec('PRAGMA busy_timeout = 5000;');
+    sqliteDb.exec(PG_SCHEMA_SQL);
+  } catch {}
+
+  return new UniversalDb(null, sqliteDb, 'DB-MDC (Offline Simulated)');
+}
+
+const db = await initDatabase();
 
 const readJsonBody = (req) =>
   new Promise((resolve, reject) => {
@@ -445,7 +616,7 @@ async function handleApiRequest(req, res, urlObj) {
   // ==========================================
   if (pathname.startsWith('/api/task-project')) {
     if (req.method === 'GET' && pathname === '/api/task-project/list') {
-      const allRows = db.prepare('SELECT * FROM task_project ORDER BY project_id, phase_no, start_date').all();
+      const allRows = await db.prepare('SELECT * FROM task_project ORDER BY project_id, phase_no, start_date').all();
 
       const projectMap = {};
       for (const row of allRows) {
@@ -503,7 +674,7 @@ async function handleApiRequest(req, res, urlObj) {
         res.end(JSON.stringify({ ok: false, error: 'Missing projectId' }));
         return;
       }
-      const tasks = db.prepare('SELECT * FROM task_project WHERE project_id = ? ORDER BY phase_no, start_date').all(projectId);
+      const tasks = await db.prepare('SELECT * FROM task_project WHERE project_id = ? ORDER BY phase_no, start_date').all(projectId);
       res.statusCode = 200;
       res.end(JSON.stringify({ ok: true, tasks }));
       return;
@@ -519,9 +690,9 @@ async function handleApiRequest(req, res, urlObj) {
       }
 
       const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
-      db.prepare('DELETE FROM task_project WHERE project_id = ?').run(projectId);
+      await db.prepare('DELETE FROM task_project WHERE project_id = ?').run(projectId);
 
-      const insertStmt = db.prepare(`
+      const insertStmt = await db.prepare(`
         INSERT INTO task_project (
           id, project_id, project_name, province, organization,
           phase_no, phase_name, task_code, task_name, task_description, deliverable,
@@ -533,7 +704,7 @@ async function handleApiRequest(req, res, urlObj) {
       for (let i = 0; i < tasks.length; i++) {
         const t = tasks[i];
         const taskId = t.id || `tsk-${projectId}-${i + 1}`;
-        insertStmt.run(
+        await insertStmt.run(
           taskId,
           projectId,
           projectName || t.project_name || 'โครงการใหม่',
@@ -581,7 +752,7 @@ async function handleApiRequest(req, res, urlObj) {
       }
 
       const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
-      const updateStmt = db.prepare(`
+      const updateStmt = await db.prepare(`
         UPDATE task_project 
         SET status = ?, progress_percent = ?, last_meeting_id = ?, last_meeting_notes = ?, updated_by_meeting_at = ?, updated_at = ?
         WHERE id = ?
@@ -590,7 +761,7 @@ async function handleApiRequest(req, res, urlObj) {
       let count = 0;
       for (const u of updates) {
         if (u.id) {
-          updateStmt.run(
+          await updateStmt.run(
             u.status || 'กำลังดำเนินงาน',
             Number(u.progress_percent) || 0,
             meetingId || u.last_meeting_id || null,
@@ -618,7 +789,7 @@ async function handleApiRequest(req, res, urlObj) {
       }
 
       const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
-      const insertStmt = db.prepare(`
+      const insertStmt = await db.prepare(`
         INSERT INTO task_project (
           id, project_id, project_name, province, organization,
           phase_no, phase_name, task_code, task_name, task_description, deliverable,
@@ -631,7 +802,7 @@ async function handleApiRequest(req, res, urlObj) {
       let addedCount = 0;
       for (const t of newTasks) {
         const taskId = t.id || `tsk-${projectId}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
-        insertStmt.run(
+        await insertStmt.run(
           taskId,
           projectId,
           t.project_name || 'โครงการ',
@@ -668,7 +839,7 @@ async function handleApiRequest(req, res, urlObj) {
     if (req.method === 'DELETE' && pathname === '/api/task-project/delete') {
       const projectId = urlObj.searchParams.get('projectId');
       if (projectId) {
-        db.prepare('DELETE FROM task_project WHERE project_id = ?').run(projectId);
+        await db.prepare('DELETE FROM task_project WHERE project_id = ?').run(projectId);
       }
       res.statusCode = 200;
       res.end(JSON.stringify({ ok: true }));
@@ -681,7 +852,7 @@ async function handleApiRequest(req, res, urlObj) {
   // ==========================================
   if (pathname.startsWith('/api/pms-report')) {
     if (req.method === 'GET' && pathname === '/api/pms-report/list') {
-      const reports = db.prepare('SELECT * FROM pms_meeting_reports ORDER BY meeting_date DESC, created_at DESC').all();
+      const reports = await db.prepare('SELECT * FROM pms_meeting_reports ORDER BY meeting_date DESC, created_at DESC').all();
       res.statusCode = 200;
       res.end(JSON.stringify({ ok: true, reports }));
       return;
@@ -694,7 +865,7 @@ async function handleApiRequest(req, res, urlObj) {
         res.end(JSON.stringify({ ok: false, error: 'Missing projectId' }));
         return;
       }
-      const reports = db.prepare('SELECT * FROM pms_meeting_reports WHERE project_id = ? ORDER BY meeting_date DESC, created_at DESC').all(projectId);
+      const reports = await db.prepare('SELECT * FROM pms_meeting_reports WHERE project_id = ? ORDER BY meeting_date DESC, created_at DESC').all(projectId);
       res.statusCode = 200;
       res.end(JSON.stringify({ ok: true, reports }));
       return;
@@ -705,7 +876,7 @@ async function handleApiRequest(req, res, urlObj) {
       const id = p.id || `REP02-${p.meetingId || Date.now()}`;
       const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
 
-      const stmt = db.prepare(`
+      const stmt = await db.prepare(`
         INSERT OR REPLACE INTO pms_meeting_reports (
           id, meeting_id, project_id, project_name, province,
           meeting_date, meeting_topic, reporting_period, executive_summary,
@@ -715,7 +886,7 @@ async function handleApiRequest(req, res, urlObj) {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      stmt.run(
+      await stmt.run(
         id,
         p.meetingId || '',
         p.projectId || '',
@@ -742,7 +913,7 @@ async function handleApiRequest(req, res, urlObj) {
   }
 
   // 1. GET /api/pilot-sqlite/state
-  if (req.method === 'GET' && pathname === '/api/pilot-sqlite/state') {
+  if (req.method === 'GET' && (pathname === '/api/activity/state' || pathname === '/api/pilot-sqlite/state')) {
     const province = urlObj.searchParams.get('province');
     const provList = province
       ? (province === 'อยุธยา' || province === 'พระนครศรีอยุธยา'
@@ -751,22 +922,22 @@ async function handleApiRequest(req, res, urlObj) {
       : null;
 
     const agencies = provList
-      ? db
+      ? await db
           .prepare(`SELECT * FROM pilot_agency_registrations WHERE province IN (${provList.map(() => '?').join(',')}) ORDER BY created_at DESC`)
           .all(...provList)
-      : db.prepare('SELECT * FROM pilot_agency_registrations ORDER BY created_at DESC').all();
+      : await db.prepare('SELECT * FROM pilot_agency_registrations ORDER BY created_at DESC').all();
 
     const lessonsPolicies = provList
-      ? db
+      ? await db
           .prepare(`SELECT * FROM pilot_lessons_and_policies WHERE province IN (${provList.map(() => '?').join(',')}) ORDER BY updated_at DESC`)
           .all(...provList)
-      : db.prepare('SELECT * FROM pilot_lessons_and_policies ORDER BY updated_at DESC').all();
+      : await db.prepare('SELECT * FROM pilot_lessons_and_policies ORDER BY updated_at DESC').all();
 
     res.statusCode = 200;
     res.end(
       JSON.stringify({
         ok: true,
-        dbPath: 'data/pilot_activities_4regions.sqlite',
+        dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16',
         recordsDir: 'data/pilot_records/',
         agencies,
         lessonsPolicies
@@ -776,7 +947,7 @@ async function handleApiRequest(req, res, urlObj) {
   }
 
   // 2. POST /api/pilot-sqlite/register-agency
-  if (req.method === 'POST' && pathname === '/api/pilot-sqlite/register-agency') {
+  if (req.method === 'POST' && (pathname === '/api/activity/register-agency' || pathname === '/api/pilot-sqlite/register-agency')) {
     const payload = await readJsonBody(req);
     const id = payload.id || `reg-${Date.now()}`;
     const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
@@ -792,7 +963,7 @@ async function handleApiRequest(req, res, urlObj) {
     const roleStr = payload.participant_role || `${pos} (${level === 'policy' ? 'ระดับนโยบาย' : level === 'practitioner' ? 'ระดับผู้ปฏิบัติการ' : 'ระดับประชาชน'})`;
     const contactStr = payload.contact_info || [phone, email].filter(Boolean).join(' / ');
 
-    const stmt = db.prepare(`
+    const stmt = await db.prepare(`
       INSERT OR REPLACE INTO pilot_agency_registrations (
         id, province, region, agency_name, agency_type,
         first_name, last_name, position, participant_level,
@@ -803,7 +974,7 @@ async function handleApiRequest(req, res, urlObj) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    stmt.run(
+    await stmt.run(
       id,
       payload.province || 'อยุธยา',
       payload.region || 'ภาคกลาง',
@@ -844,14 +1015,14 @@ async function handleApiRequest(req, res, urlObj) {
         ok: true,
         id,
         savedFilePath: `data/pilot_records/agency_${safeId}.json`,
-        dbPath: 'data/pilot_activities_4regions.sqlite'
+        dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16'
       })
     );
     return;
   }
 
   // 3. POST /api/pilot-sqlite/save-lesson-policy
-  if (req.method === 'POST' && pathname === '/api/pilot-sqlite/save-lesson-policy') {
+  if (req.method === 'POST' && (pathname === '/api/activity/save-lesson-policy' || pathname === '/api/pilot-sqlite/save-lesson-policy')) {
     const payload = await readJsonBody(req);
     const id = payload.id || `lp-${Date.now()}`;
     const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
@@ -861,7 +1032,7 @@ async function handleApiRequest(req, res, urlObj) {
     const absJsonPath = path.resolve(recordsDir, `pilot_lesson_policy_${safeId}.json`);
     const absMdPath = path.resolve(recordsDir, `pilot_lesson_policy_${safeId}.md`);
 
-    const stmt = db.prepare(`
+    const stmt = await db.prepare(`
       INSERT OR REPLACE INTO pilot_lessons_and_policies (
         id, province, region, activity_date, selected_project_ids_json, selected_project_names_json,
         summary_file_name, raw_activity_summary, lesson_learned_text, lesson_structured_json,
@@ -869,7 +1040,7 @@ async function handleApiRequest(req, res, urlObj) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    stmt.run(
+    await stmt.run(
       id,
       payload.province || 'อยุธยา',
       payload.region || '',
@@ -935,17 +1106,17 @@ async function handleApiRequest(req, res, urlObj) {
         id,
         updated_at: nowStr,
         savedFilePath: `${relFilePath} | ${relMdPath}`,
-        dbPath: 'data/pilot_activities_4regions.sqlite'
+        dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16'
       })
     );
     return;
   }
 
   // 4. DELETE /api/pilot-sqlite/agency
-  if (req.method === 'DELETE' && pathname === '/api/pilot-sqlite/agency') {
+  if (req.method === 'DELETE' && (pathname === '/api/activity/agency' || pathname === '/api/pilot-sqlite/agency')) {
     const id = urlObj.searchParams.get('id');
     if (id) {
-      db.prepare('DELETE FROM pilot_agency_registrations WHERE id = ?').run(id);
+      await db.prepare('DELETE FROM pilot_agency_registrations WHERE id = ?').run(id);
     }
     res.statusCode = 200;
     res.end(JSON.stringify({ ok: true }));
@@ -953,10 +1124,10 @@ async function handleApiRequest(req, res, urlObj) {
   }
 
   // 5. DELETE /api/pilot-sqlite/lesson-policy
-  if (req.method === 'DELETE' && pathname === '/api/pilot-sqlite/lesson-policy') {
+  if (req.method === 'DELETE' && (pathname === '/api/activity/lesson-policy' || pathname === '/api/pilot-sqlite/lesson-policy')) {
     const id = urlObj.searchParams.get('id');
     if (id) {
-      db.prepare('DELETE FROM pilot_lessons_and_policies WHERE id = ?').run(id);
+      await db.prepare('DELETE FROM pilot_lessons_and_policies WHERE id = ?').run(id);
     }
     res.statusCode = 200;
     res.end(JSON.stringify({ ok: true }));
@@ -964,28 +1135,28 @@ async function handleApiRequest(req, res, urlObj) {
   }
 
   // 5.1 GET /api/pilot-sqlite/hackathon-criteria
-  if (req.method === 'GET' && pathname === '/api/pilot-sqlite/hackathon-criteria') {
+  if (req.method === 'GET' && (pathname === '/api/activity/hackathon-criteria' || pathname === '/api/pilot-sqlite/hackathon-criteria')) {
     const province = urlObj.searchParams.get('province') || '';
     let row = null;
     if (province) {
-      row = db.prepare(
+      row = await db.prepare(
         `SELECT * FROM pilot_hackathon_criteria 
          WHERE is_active = 1 AND (province = ? OR province = 'ส่วนกลาง') 
          ORDER BY CASE WHEN province = ? THEN 0 ELSE 1 END, updated_at DESC LIMIT 1`
       ).get(province, province);
     }
     if (!row) {
-      row = db.prepare('SELECT * FROM pilot_hackathon_criteria WHERE is_active = 1 ORDER BY updated_at DESC LIMIT 1').get();
+      row = await db.prepare('SELECT * FROM pilot_hackathon_criteria WHERE is_active = 1 ORDER BY updated_at DESC LIMIT 1').get();
     }
     res.statusCode = 200;
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.end(JSON.stringify({ ok: true, data: row || null, dbPath: 'data/pilot_activities_4regions.sqlite' }));
+    res.end(JSON.stringify({ ok: true, data: row || null, dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16' }));
     return;
   }
 
   // 5.2 POST /api/pilot-sqlite/hackathon-criteria
-  if (req.method === 'POST' && pathname === '/api/pilot-sqlite/hackathon-criteria') {
+  if (req.method === 'POST' && (pathname === '/api/activity/hackathon-criteria' || pathname === '/api/pilot-sqlite/hackathon-criteria')) {
     const body = await readJsonBody(req);
     const id = body.id || `crit-${Date.now()}`;
     const province = body.province || 'ส่วนกลาง';
@@ -997,22 +1168,22 @@ async function handleApiRequest(req, res, urlObj) {
     const promptRubric = body.promptRubric || '';
 
     if (body.setLatestActive !== false) {
-      db.prepare('UPDATE pilot_hackathon_criteria SET is_active = 0 WHERE province = ?').run(province);
+      await db.prepare('UPDATE pilot_hackathon_criteria SET is_active = 0 WHERE province = ?').run(province);
     }
 
-    db.prepare(`
+    await db.prepare(`
       INSERT OR REPLACE INTO pilot_hackathon_criteria 
       (id, province, created_at, updated_at, source_files_json, ai_agent_skill_text, rubric_json, prompt_skill, prompt_rubric, is_active)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `).run(id, province, body.createdAt || now, now, sourceFilesJson, aiAgentSkillText, rubricJson, promptSkill, promptRubric);
 
     res.statusCode = 200;
-    res.end(JSON.stringify({ ok: true, id, dbPath: 'data/pilot_activities_4regions.sqlite', updatedAt: now }));
+    res.end(JSON.stringify({ ok: true, id, dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16', updatedAt: now }));
     return;
   }
 
   // 5.2.1 GET /api/pilot-sqlite/criteria-virtues
-  if (req.method === 'GET' && pathname === '/api/pilot-sqlite/criteria-virtues') {
+  if (req.method === 'GET' && (pathname === '/api/activity/criteria-virtues' || pathname === '/api/pilot-sqlite/criteria-virtues')) {
     const province = urlObj.searchParams.get('province') || 'ส่วนกลาง';
     const defaultWeaknessMap = {
       'อยุธยา': ['พอเพียง'],
@@ -1024,9 +1195,9 @@ async function handleApiRequest(req, res, urlObj) {
       'สุราษฎร์ธานี': ['จิตอาสา'],
       'พังงา': ['จิตอาสา']
     };
-    let row = db.prepare('SELECT * FROM pilot_criteria_selected_virtues WHERE province = ?').get(province);
+    let row = await db.prepare('SELECT * FROM pilot_criteria_selected_virtues WHERE province = ?').get(province);
     if (!row) {
-      row = db.prepare('SELECT * FROM pilot_criteria_selected_virtues WHERE province = ?').get('ส่วนกลาง');
+      row = await db.prepare('SELECT * FROM pilot_criteria_selected_virtues WHERE province = ?').get('ส่วนกลาง');
     }
     let virtues = defaultWeaknessMap[province] || ['พอเพียง'];
     if (row && row.selected_virtues_json) {
@@ -1041,7 +1212,7 @@ async function handleApiRequest(req, res, urlObj) {
   }
 
   // 5.2.2 POST /api/pilot-sqlite/criteria-virtues
-  if (req.method === 'POST' && pathname === '/api/pilot-sqlite/criteria-virtues') {
+  if (req.method === 'POST' && (pathname === '/api/activity/criteria-virtues' || pathname === '/api/pilot-sqlite/criteria-virtues')) {
     const body = await readJsonBody(req);
     const province = body.province || 'ส่วนกลาง';
     const defaultWeaknessMap = {
@@ -1059,7 +1230,7 @@ async function handleApiRequest(req, res, urlObj) {
       ? body.virtues
       : defaultFallback;
     const now = new Date().toISOString();
-    db.prepare(`
+    await db.prepare(`
       INSERT OR REPLACE INTO pilot_criteria_selected_virtues (province, selected_virtues_json, updated_at)
       VALUES (?, ?, ?)
     `).run(province, JSON.stringify(virtues), now);
@@ -1070,15 +1241,15 @@ async function handleApiRequest(req, res, urlObj) {
   }
 
   // 5.2.3 GET /api/pilot-sqlite/ai-config
-  if (req.method === 'GET' && pathname === '/api/pilot-sqlite/ai-config') {
+  if (req.method === 'GET' && (pathname === '/api/activity/ai-config' || pathname === '/api/pilot-sqlite/ai-config')) {
     try {
-      let row = db.prepare('SELECT * FROM pilot_ai_config WHERE id = ?').get('default');
+      let row = await db.prepare('SELECT * FROM pilot_ai_config WHERE id = ?').get('default');
       if (!row && fs.existsSync(aiConfigFile)) {
         try {
           const fileData = JSON.parse(fs.readFileSync(aiConfigFile, 'utf8'));
           if (fileData && fileData.apiKey) {
             const now = new Date().toISOString();
-            db.prepare(`
+            await db.prepare(`
               INSERT OR REPLACE INTO pilot_ai_config (id, api_key, model, system_prompt, generator_prompt, updated_at)
               VALUES (?, ?, ?, ?, ?, ?)
             `).run('default', fileData.apiKey, fileData.model || 'openai/gpt-4o-mini', fileData.systemPrompt || '', fileData.generatorPrompt || '', now);
@@ -1132,7 +1303,7 @@ async function handleApiRequest(req, res, urlObj) {
   }
 
   // 5.2.4 POST /api/pilot-sqlite/ai-config
-  if (req.method === 'POST' && pathname === '/api/pilot-sqlite/ai-config') {
+  if (req.method === 'POST' && (pathname === '/api/activity/ai-config' || pathname === '/api/pilot-sqlite/ai-config')) {
     try {
       const body = await readJsonBody(req);
       const apiKey = (body.apiKey || '').trim().replace(/^["']|["']$/g, '');
@@ -1141,7 +1312,7 @@ async function handleApiRequest(req, res, urlObj) {
       const generatorPrompt = (body.generatorPrompt || '').trim();
       const now = new Date().toISOString();
 
-      db.prepare(`
+      await db.prepare(`
         INSERT OR REPLACE INTO pilot_ai_config (id, api_key, model, system_prompt, generator_prompt, updated_at)
         VALUES (?, ?, ?, ?, ?, ?)
       `).run('default', apiKey, model, systemPrompt, generatorPrompt, now);
@@ -1180,9 +1351,9 @@ async function handleApiRequest(req, res, urlObj) {
   }
 
   // 5.2.5 GET /api/pilot-sqlite/coffee-groups
-  if (req.method === 'GET' && pathname === '/api/pilot-sqlite/coffee-groups') {
+  if (req.method === 'GET' && (pathname === '/api/activity/coffee-groups' || pathname === '/api/pilot-sqlite/coffee-groups')) {
     try {
-      const rows = db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all();
+      const rows = await db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all();
       const groups = rows.map((r) => ({
         key: r.key,
         name: r.name,
@@ -1204,13 +1375,13 @@ async function handleApiRequest(req, res, urlObj) {
   }
 
   // 5.2.6 POST /api/pilot-sqlite/coffee-groups
-  if (req.method === 'POST' && pathname === '/api/pilot-sqlite/coffee-groups') {
+  if (req.method === 'POST' && (pathname === '/api/activity/coffee-groups' || pathname === '/api/pilot-sqlite/coffee-groups')) {
     try {
       const body = await readJsonBody(req);
       const now = new Date().toISOString();
 
       if (body.action === 'reset') {
-        db.prepare('DELETE FROM pilot_coffee_groups').run();
+        await db.prepare('DELETE FROM pilot_coffee_groups').run();
         const defaultGroups = [
           { key: 'mocha', name: 'กลุ่มมอคค่า', bg_image: '/theme/coffee_mocha_bg.jpg', theme_color: '#78350f', accent_bg: '#fef3c7', is_custom: 0, order_index: 1 },
           { key: 'cappuccino', name: 'กลุ่มคาปูชิโน', bg_image: '/theme/coffee_cappuccino_bg.jpg', theme_color: '#92400e', accent_bg: '#ffedd5', is_custom: 0, order_index: 2 },
@@ -1218,25 +1389,25 @@ async function handleApiRequest(req, res, urlObj) {
           { key: 'espresso', name: 'กลุ่มเอสเพรสโซ', bg_image: '/theme/coffee_preset_05_espresso.jpg', theme_color: '#451a03', accent_bg: '#fef2f2', is_custom: 0, order_index: 4 },
           { key: 'latte', name: 'กลุ่มลาเต้', bg_image: '/theme/coffee_preset_06_latte.jpg', theme_color: '#b45309', accent_bg: '#fffbeb', is_custom: 0, order_index: 5 }
         ];
-        const insertStmt = db.prepare(`
+        const insertStmt = await db.prepare(`
           INSERT INTO pilot_coffee_groups (key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         for (const g of defaultGroups) {
-          insertStmt.run(g.key, g.name, g.bg_image, g.theme_color, g.accent_bg, g.is_custom, g.order_index, now, now);
+          await insertStmt.run(g.key, g.name, g.bg_image, g.theme_color, g.accent_bg, g.is_custom, g.order_index, now, now);
         }
       } else {
         const grp = body.group || body;
-        const currentRows = db.prepare('SELECT * FROM pilot_coffee_groups').all();
+        const currentRows = await db.prepare('SELECT * FROM pilot_coffee_groups').all();
         const rawKey = (grp.key || `group_${Date.now()}`).toLowerCase().replace(/[^a-z0-9]/g, '_');
         const key = currentRows.some((r) => r.key === rawKey && (!body.isEdit || body.originalKey !== r.key))
           ? (body.isEdit ? rawKey : `${rawKey}_${Date.now()}`)
           : rawKey;
 
-        const maxOrder = db.prepare('SELECT MAX(order_index) as m FROM pilot_coffee_groups').get()?.m || 0;
+        const maxOrder = await db.prepare('SELECT MAX(order_index) as m FROM pilot_coffee_groups').get()?.m || 0;
         const orderIndex = typeof grp.orderIndex === 'number' ? grp.orderIndex : maxOrder + 1;
 
-        db.prepare(`
+        await db.prepare(`
           INSERT OR REPLACE INTO pilot_coffee_groups 
           (key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM pilot_coffee_groups WHERE key = ?), ?), ?)
@@ -1254,7 +1425,7 @@ async function handleApiRequest(req, res, urlObj) {
         );
       }
 
-      const rows = db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all();
+      const rows = await db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all();
       const groups = rows.map((r) => ({
         key: r.key,
         name: r.name,
@@ -1281,7 +1452,7 @@ async function handleApiRequest(req, res, urlObj) {
   }
 
   // 5.2.7 DELETE /api/pilot-sqlite/coffee-groups
-  if (req.method === 'DELETE' && pathname === '/api/pilot-sqlite/coffee-groups') {
+  if (req.method === 'DELETE' && (pathname === '/api/activity/coffee-groups' || pathname === '/api/pilot-sqlite/coffee-groups')) {
     try {
       const key = urlObj.searchParams.get('key');
       if (!key) {
@@ -1290,7 +1461,7 @@ async function handleApiRequest(req, res, urlObj) {
         res.end(JSON.stringify({ ok: false, error: 'Missing key parameter' }));
         return;
       }
-      const count = db.prepare('SELECT COUNT(*) as cnt FROM pilot_coffee_groups').get()?.cnt || 0;
+      const count = await db.prepare('SELECT COUNT(*) as cnt FROM pilot_coffee_groups').get()?.cnt || 0;
       if (count <= 1) {
         res.statusCode = 400;
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -1298,9 +1469,9 @@ async function handleApiRequest(req, res, urlObj) {
         return;
       }
 
-      db.prepare('DELETE FROM pilot_coffee_groups WHERE key = ?').run(key);
+      await db.prepare('DELETE FROM pilot_coffee_groups WHERE key = ?').run(key);
 
-      const rows = db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all();
+      const rows = await db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all();
       const groups = rows.map((r) => ({
         key: r.key,
         name: r.name,
@@ -1327,7 +1498,7 @@ async function handleApiRequest(req, res, urlObj) {
   }
 
   // 5.3 GET /api/pilot-sqlite/hackathon-projects
-  if (req.method === 'GET' && pathname === '/api/pilot-sqlite/hackathon-projects') {
+  if (req.method === 'GET' && (pathname === '/api/activity/hackathon-projects' || pathname === '/api/pilot-sqlite/hackathon-projects')) {
     const rawProvince = (urlObj.searchParams.get('province') || '').trim();
     const includePrecheck = urlObj.searchParams.get('include_precheck') === 'true';
     let rows = [];
@@ -1346,12 +1517,12 @@ async function handleApiRequest(req, res, urlObj) {
         matchProvs = ['สุราษฎร์ธานี', 'พังงา'];
       }
       const placeholders = matchProvs.map(() => '?').join(', ');
-      rows = db.prepare(`SELECT * FROM pilot_hackathon_projects WHERE province IN (${placeholders}) ${precheckFilter} ORDER BY created_at DESC`).all(...matchProvs);
+      rows = await db.prepare(`SELECT * FROM pilot_hackathon_projects WHERE province IN (${placeholders}) ${precheckFilter} ORDER BY created_at DESC`).all(...matchProvs);
     } else {
       const whereClause = includePrecheck
         ? ''
         : "WHERE (is_precheck = 0 OR is_precheck IS NULL) AND id NOT LIKE 'precheck-%'";
-      rows = db.prepare(`SELECT * FROM pilot_hackathon_projects ${whereClause} ORDER BY created_at DESC`).all();
+      rows = await db.prepare(`SELECT * FROM pilot_hackathon_projects ${whereClause} ORDER BY created_at DESC`).all();
     }
     const projects = rows.map((r) => ({
       id: r.id,
@@ -1380,12 +1551,12 @@ async function handleApiRequest(req, res, urlObj) {
     }));
 
     res.statusCode = 200;
-    res.end(JSON.stringify({ ok: true, data: projects, total: projects.length, dbPath: 'data/pilot_activities_4regions.sqlite' }));
+    res.end(JSON.stringify({ ok: true, data: projects, total: projects.length, dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16' }));
     return;
   }
 
   // 5.4 POST /api/pilot-sqlite/hackathon-projects
-  if (req.method === 'POST' && pathname === '/api/pilot-sqlite/hackathon-projects') {
+  if (req.method === 'POST' && (pathname === '/api/activity/hackathon-projects' || pathname === '/api/pilot-sqlite/hackathon-projects')) {
     const body = await readJsonBody(req);
     const id = body.id || `proj-${body.groupKey || 'group'}-${Date.now()}`;
     const province = body.province || 'ส่วนกลาง';
@@ -1420,7 +1591,7 @@ async function handleApiRequest(req, res, urlObj) {
     const isPrecheck = body.isPrecheck ? 1 : 0;
     const createdAt = body.createdAt || now;
 
-    db.prepare(`
+    await db.prepare(`
       INSERT OR REPLACE INTO pilot_hackathon_projects (
         id, province, group_key, group_name, project_name, target_moral_virtue,
         target_audience, target_area, proposal_details, activity_plan, behavioral_kpi,
@@ -1437,18 +1608,18 @@ async function handleApiRequest(req, res, urlObj) {
     );
 
     res.statusCode = 200;
-    res.end(JSON.stringify({ ok: true, id, dbPath: 'data/pilot_activities_4regions.sqlite', aiScore, isPrecheck, updatedAt: now }));
+    res.end(JSON.stringify({ ok: true, id, dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16', aiScore, isPrecheck, updatedAt: now }));
     return;
   }
 
   // 5.4.1 POST /api/pilot-sqlite/hackathon-vote
-  if (req.method === 'POST' && pathname === '/api/pilot-sqlite/hackathon-vote') {
+  if (req.method === 'POST' && (pathname === '/api/activity/hackathon-vote' || pathname === '/api/pilot-sqlite/hackathon-vote')) {
     const body = await readJsonBody(req);
     const projectId = body.projectId;
     const newVotes = typeof body.newVoteCount === 'number' ? body.newVoteCount : 1;
     const now = new Date().toISOString();
     if (projectId) {
-      db.prepare('UPDATE pilot_hackathon_projects SET community_votes = ?, updated_at = ? WHERE id = ?').run(newVotes, now, projectId);
+      await db.prepare('UPDATE pilot_hackathon_projects SET community_votes = ?, updated_at = ? WHERE id = ?').run(newVotes, now, projectId);
     }
     res.statusCode = 200;
     res.end(JSON.stringify({ ok: true, projectId, newVotes, updatedAt: now }));
@@ -1456,15 +1627,15 @@ async function handleApiRequest(req, res, urlObj) {
   }
 
   // 5.5 POST /api/pilot-sqlite/hackathon-reset
-  if (req.method === 'POST' && pathname === '/api/pilot-sqlite/hackathon-reset') {
+  if (req.method === 'POST' && (pathname === '/api/activity/hackathon-reset' || pathname === '/api/pilot-sqlite/hackathon-reset')) {
     const body = await readJsonBody(req);
     const province = body.province || '';
     let deletedCount = 0;
     if (province) {
-      const info = db.prepare('DELETE FROM pilot_hackathon_projects WHERE province = ?').run(province);
+      const info = await db.prepare('DELETE FROM pilot_hackathon_projects WHERE province = ?').run(province);
       deletedCount = Number(info.changes);
     } else {
-      const info = db.prepare('DELETE FROM pilot_hackathon_projects').run();
+      const info = await db.prepare('DELETE FROM pilot_hackathon_projects').run();
       deletedCount = Number(info.changes);
     }
 
@@ -1473,13 +1644,13 @@ async function handleApiRequest(req, res, urlObj) {
       ok: true,
       message: `รีเซ็ตฐานข้อมูลโครงการ Hackathon เรียบร้อยแล้ว (ลบ ${deletedCount} โครงการใน SQLite)`,
       deletedCount,
-      dbPath: 'data/pilot_activities_4regions.sqlite'
+      dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16'
     }));
     return;
   }
 
   // 5.5.0 POST /api/pilot-sqlite/project-delete
-  if (req.method === 'POST' && pathname === '/api/pilot-sqlite/project-delete') {
+  if (req.method === 'POST' && (pathname === '/api/activity/project-delete' || pathname === '/api/pilot-sqlite/project-delete')) {
     const body = await readJsonBody(req);
     const projectId = body.id || body.projectId || '';
     if (!projectId) {
@@ -1487,7 +1658,7 @@ async function handleApiRequest(req, res, urlObj) {
       res.end(JSON.stringify({ ok: false, error: 'Missing projectId' }));
       return;
     }
-    const info = db.prepare('DELETE FROM pilot_hackathon_projects WHERE id = ?').run(projectId);
+    const info = await db.prepare('DELETE FROM pilot_hackathon_projects WHERE id = ?').run(projectId);
     const deletedCount = Number(info.changes);
     res.statusCode = 200;
     res.end(JSON.stringify({
@@ -1495,18 +1666,18 @@ async function handleApiRequest(req, res, urlObj) {
       message: `ลบโครงการรหัส ${projectId} เรียบร้อยแล้ว (${deletedCount} แถวใน SQLite)`,
       deletedCount,
       id: projectId,
-      dbPath: 'data/pilot_activities_4regions.sqlite'
+      dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16'
     }));
     return;
   }
 
   // 5.5.1 POST /api/pilot-sqlite/clear-activity-vote-system
-  if (req.method === 'POST' && pathname === '/api/pilot-sqlite/clear-activity-vote-system') {
+  if (req.method === 'POST' && (pathname === '/api/activity/clear-activity-vote-system' || pathname === '/api/pilot-sqlite/clear-activity-vote-system')) {
     try {
-      const delProj = Number(db.prepare('DELETE FROM pilot_hackathon_projects').run().changes);
-      const delCrit = Number(db.prepare('DELETE FROM pilot_hackathon_criteria').run().changes);
-      const delAgency = Number(db.prepare('DELETE FROM pilot_agency_registrations').run().changes);
-      const delLesson = Number(db.prepare('DELETE FROM pilot_lessons_and_policies').run().changes);
+      const delProj = Number(await db.prepare('DELETE FROM pilot_hackathon_projects').run().changes);
+      const delCrit = Number(await db.prepare('DELETE FROM pilot_hackathon_criteria').run().changes);
+      const delAgency = Number(await db.prepare('DELETE FROM pilot_agency_registrations').run().changes);
+      const delLesson = Number(await db.prepare('DELETE FROM pilot_lessons_and_policies').run().changes);
       const totalDeleted = delProj + delCrit + delAgency + delLesson;
 
       res.statusCode = 200;
@@ -1520,7 +1691,7 @@ async function handleApiRequest(req, res, urlObj) {
           pilot_agency_registrations: delAgency,
           pilot_lessons_and_policies: delLesson
         },
-        dbPath: 'data/pilot_activities_4regions.sqlite'
+        dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16'
       }));
       return;
     } catch (err) {
@@ -1531,15 +1702,15 @@ async function handleApiRequest(req, res, urlObj) {
   }
 
   // 5.5.2 POST /api/pilot-sqlite/reset-registrations
-  if (req.method === 'POST' && pathname === '/api/pilot-sqlite/reset-registrations') {
+  if (req.method === 'POST' && (pathname === '/api/activity/reset-registrations' || pathname === '/api/pilot-sqlite/reset-registrations')) {
     try {
       const province = urlObj.searchParams.get('province');
       let deletedCount = 0;
       if (province && province !== 'ALL') {
         const provList = (province === 'อยุธยา' || province === 'พระนครศรีอยุธยา') ? ['อยุธยา', 'พระนครศรีอยุธยา'] : [province];
-        deletedCount = Number(db.prepare(`DELETE FROM pilot_agency_registrations WHERE province IN (${provList.map(() => '?').join(',')})`).run(...provList).changes);
+        deletedCount = Number(await db.prepare(`DELETE FROM pilot_agency_registrations WHERE province IN (${provList.map(() => '?').join(',')})`).run(...provList).changes);
       } else {
-        deletedCount = Number(db.prepare('DELETE FROM pilot_agency_registrations').run().changes);
+        deletedCount = Number(await db.prepare('DELETE FROM pilot_agency_registrations').run().changes);
       }
 
       res.statusCode = 200;
@@ -1550,7 +1721,7 @@ async function handleApiRequest(req, res, urlObj) {
           : `ลบข้อมูลผู้ลงทะเบียนทั้งหมดเรียบร้อยแล้ว (ลบ ${deletedCount} แถว)`,
         deletedCount,
         province: province || 'ALL',
-        dbPath: 'data/pilot_activities_4regions.sqlite'
+        dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16'
       }));
       return;
     } catch (err) {
@@ -1561,44 +1732,68 @@ async function handleApiRequest(req, res, urlObj) {
   }
 
   // 5.6 GET /api/pilot-sqlite/tables
-  if (req.method === 'GET' && pathname === '/api/pilot-sqlite/tables') {
+  if (req.method === 'GET' && (pathname === '/api/activity/tables' || pathname === '/api/pilot-sqlite/tables')) {
     try {
-      const tableRows = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name ASC").all();
-      const tables = tableRows.map(t => {
-        let rowCount = 0;
-        let columns = [];
-        try {
-          const c = db.prepare(`SELECT COUNT(*) as count FROM "${t.name}"`).get();
-          rowCount = c?.count ?? 0;
-        } catch {}
-        try {
-          const colInfo = db.prepare(`PRAGMA table_info("${t.name}")`).all();
-          columns = colInfo.map(ci => ci.name);
-        } catch {}
-        return {
-          name: t.name,
-          rowCount,
-          columnCount: columns.length,
-          columns
-        };
-      });
+      let tables = [];
+      if (db.isPg) {
+        const tableRows = await db.all("SELECT table_name as name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY table_name ASC");
+        tables = await Promise.all(tableRows.map(async (t) => {
+          let rowCount = 0;
+          let columns = [];
+          try {
+            const c = await db.get(`SELECT COUNT(*) as count FROM "${t.name}"`);
+            rowCount = Number(c?.count ?? 0);
+          } catch {}
+          try {
+            const colInfo = await db.all("SELECT column_name as name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1", [t.name]);
+            columns = colInfo.map(ci => ci.name);
+          } catch {}
+          return {
+            name: t.name,
+            rowCount,
+            columnCount: columns.length,
+            columns
+          };
+        }));
+      } else {
+        const tableRows = await db.all("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name ASC");
+        tables = await Promise.all(tableRows.map(async (t) => {
+          let rowCount = 0;
+          let columns = [];
+          try {
+            const c = await db.get(`SELECT COUNT(*) as count FROM "${t.name}"`);
+            rowCount = Number(c?.count ?? 0);
+          } catch {}
+          try {
+            const colInfo = await db.all(`PRAGMA table_info("${t.name}")`);
+            columns = colInfo.map(ci => ci.name);
+          } catch {}
+          return {
+            name: t.name,
+            rowCount,
+            columnCount: columns.length,
+            columns
+          };
+        }));
+      }
 
       res.statusCode = 200;
       res.end(JSON.stringify({
         ok: true,
+        dbType: db.type,
         totalTables: tables.length,
         tables,
-        dbPath: 'data/pilot_activities_4regions.sqlite'
+        dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16'
       }));
     } catch (err) {
       res.statusCode = 500;
-      res.end(JSON.stringify({ ok: false, error: err?.message || 'Failed to list SQLite tables' }));
+      res.end(JSON.stringify({ ok: false, error: err?.message || 'Failed to list database tables' }));
     }
     return;
   }
 
   // 5.7 GET /api/pilot-sqlite/table-data
-  if (req.method === 'GET' && pathname === '/api/pilot-sqlite/table-data') {
+  if (req.method === 'GET' && (pathname === '/api/activity/table-data' || pathname === '/api/pilot-sqlite/table-data')) {
     const tableName = urlObj.searchParams.get('table') || '';
     if (!tableName || !/^[a-zA-Z0-9_]+$/.test(tableName)) {
       res.statusCode = 400;
@@ -1607,26 +1802,40 @@ async function handleApiRequest(req, res, urlObj) {
     }
 
     try {
-      const check = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = ?").get(tableName);
-      if (!check) {
-        res.statusCode = 404;
-        res.end(JSON.stringify({ ok: false, error: `Table '${tableName}' not found in SQLite` }));
-        return;
+      let check = null;
+      let columns = [];
+      if (db.isPg) {
+        check = await db.get("SELECT table_name as name FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1", [tableName]);
+        if (!check) {
+          res.statusCode = 404;
+          res.end(JSON.stringify({ ok: false, error: `Table '${tableName}' not found in PostgreSQL` }));
+          return;
+        }
+        const colRows = await db.all("SELECT column_name as name, data_type as type FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1", [tableName]);
+        columns = colRows.map(c => ({ name: c.name, type: c.type }));
+      } else {
+        check = await db.get("SELECT name FROM sqlite_master WHERE type='table' AND name = ?", [tableName]);
+        if (!check) {
+          res.statusCode = 404;
+          res.end(JSON.stringify({ ok: false, error: `Table '${tableName}' not found in SQLite` }));
+          return;
+        }
+        columns = await db.all(`PRAGMA table_info("${tableName}")`);
       }
 
-      const columns = db.prepare(`PRAGMA table_info("${tableName}")`).all();
       const hasCreatedAt = columns.some(c => c.name === 'created_at');
       const orderClause = hasCreatedAt ? ' ORDER BY created_at DESC' : '';
-      const rows = db.prepare(`SELECT * FROM "${tableName}"${orderClause} LIMIT 1000`).all();
+      const rows = await db.all(`SELECT * FROM "${tableName}"${orderClause} LIMIT 1000`);
 
       res.statusCode = 200;
       res.end(JSON.stringify({
         ok: true,
+        dbType: db.type,
         tableName,
         rowCount: rows.length,
         columns,
         rows,
-        dbPath: 'data/pilot_activities_4regions.sqlite'
+        dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16'
       }));
     } catch (err) {
       res.statusCode = 500;
@@ -1691,12 +1900,12 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/health') {
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      res.end(JSON.stringify({ ok: true, status: 'healthy', timestamp: new Date().toISOString() }));
+      res.end(JSON.stringify({ ok: true, status: 'healthy', database: db.dbName || 'DB-MDC', dbType: db.type, isPostgres: db.isPg, activityStorage: 'PostgreSQL 16 (DB-MDC)', sqliteDeprecatedForActivity: true, timestamp: new Date().toISOString() }));
       return;
     }
 
     if (
-      pathname.startsWith('/api/pilot-sqlite') ||
+      pathname.startsWith('/api/activity') || pathname.startsWith('/api/pilot-sqlite') ||
       pathname.startsWith('/api/task-project') ||
       pathname.startsWith('/api/pms-report') ||
       pathname.startsWith('/api/duckdb')

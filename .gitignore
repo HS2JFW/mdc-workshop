@@ -26,7 +26,8 @@ dist-ssr
 *.sw?
 
 # Local scratch, temporary scripts, and debug images
-.agents/
+.agents/*
+!.agents/skills/
 __pycache__/
 scratch/
 scripts/

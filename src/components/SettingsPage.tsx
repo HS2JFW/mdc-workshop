@@ -125,7 +125,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigateHome }) =>
 
     const provinceLabel = provinceToReset === 'ALL' ? 'ทุกจังหวัด (4 จังหวัด)' : `จังหวัด ${provinceToReset}`;
     const confirmed = window.confirm(
-      `⚠️ คำเตือนระบบผู้ดูแล (Admin):\n\nคุณต้องการ Reset ฐานข้อมูลโครงการ Hackathon สำหรับ ${provinceLabel} ในระบบ SQLite หรือไม่?\n\n(ข้อมูลที่ส่งเข้ามาจะถูกลบและกู้คืนชุดโครงการมาตรฐาน 15 โครงการเริ่มต้น)`
+      `⚠️ คำเตือนระบบผู้ดูแล (Admin):\n\nคุณต้องการ Reset ฐานข้อมูลโครงการ Hackathon สำหรับ ${provinceLabel} ในระบบ PostgreSQL (DB-MDC) หรือไม่?\n\n(ข้อมูลที่ส่งเข้ามาจะถูกลบและกู้คืนชุดโครงการมาตรฐาน 15 โครงการเริ่มต้น)`
     );
     if (!confirmed) return;
 
@@ -156,7 +156,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigateHome }) =>
 
     const provinceLabel = provinceToReset === 'ALL' ? 'ทุกจังหวัด (ทั้งหมดในตาราง)' : `จังหวัด ${provinceToReset}`;
     const confirmed = window.confirm(
-      `⚠️ คำเตือนระบบผู้ดูแล (Admin):\n\nคุณต้องการลบข้อมูลผู้เข้าร่วมและหน่วยงานที่มาลงทะเบียนทั้งหมด (${provinceLabel}) จากตาราง pilot_agency_registrations ในระบบ SQLite หรือไม่?\n\n(ข้อมูลการลงทะเบียนจะถูกลบออกจากระบบอย่างถาวร)`
+      `⚠️ คำเตือนระบบผู้ดูแล (Admin):\n\nคุณต้องการลบข้อมูลผู้เข้าร่วมและหน่วยงานที่มาลงทะเบียนทั้งหมด (${provinceLabel}) จากตาราง pilot_agency_registrations ในระบบ PostgreSQL (DB-MDC) หรือไม่?\n\n(ข้อมูลการลงทะเบียนจะถูกลบออกจากระบบอย่างถาวร)`
     );
     if (!confirmed) return;
 
@@ -287,7 +287,7 @@ You MUST respond with a valid JSON object ONLY, strictly matching this structure
       ? `\n\n🚀 เปิดใช้งานโหมด Multi-Key Pool จำนวน ${parsed.length} คีย์ สำเร็จ (ขยายโควตา ${parsed.length}x เท่า + Auto-Failover อัตโนมัติ)`
       : (parsed.length === 1 ? '\n\n🔑 ใช้งานโหมด Single API Key สำเร็จ' : '');
 
-    alert((res.message || 'บันทึกการตั้งค่า AI ลง SQLite และ Server File เรียบร้อยแล้ว (ทุกเครื่องสามารถเชื่อมต่อ AI ได้ทันทีโดยไม่ต้องใส่ Key ใหม่)') + poolSuffix);
+    alert((res.message || 'บันทึกการตั้งค่า AI ลง PostgreSQL (DB-MDC) และ Server File เรียบร้อยแล้ว (ทุกเครื่องสามารถเชื่อมต่อ AI ได้ทันทีโดยไม่ต้องใส่ Key ใหม่)') + poolSuffix);
   };
 
   const handleResetPrompt = () => {
@@ -1496,12 +1496,12 @@ You MUST respond with a valid JSON object ONLY, strictly matching this structure
                   </div>
                   <div>
                     <strong style={{ fontSize: '15px', color: '#0f172a' }}>Reset โครงการ Hackathon</strong>
-                    <div style={{ fontSize: '12px', color: '#9a3412' }}>รีเซ็ตข้อมูลโครงการในระบบ SQLite กลับสู่ชุดมาตรฐาน</div>
+                    <div style={{ fontSize: '12px', color: '#9a3412' }}>รีเซ็ตข้อมูลโครงการในระบบ PostgreSQL (DB-MDC) กลับสู่ชุดมาตรฐาน</div>
                   </div>
                 </div>
 
                 <p style={{ margin: 0, fontSize: '13px', color: '#475569', lineHeight: 1.5 }}>
-                  ล้างข้อเสนอโครงการและคะแนนที่ผู้ใช้ส่งทดสอบในตาราง <code>pilot_hackathon_projects</code> ของ SQLite และคืนค่ากลับสู่ 15 โครงการมาตรฐาน
+                  ล้างข้อเสนอโครงการและคะแนนที่ผู้ใช้ส่งทดสอบในตาราง <code>pilot_hackathon_projects</code> ของ PostgreSQL (DB-MDC) และคืนค่ากลับสู่ 15 โครงการมาตรฐาน
                 </p>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: 'auto', flexWrap: 'wrap' }}>

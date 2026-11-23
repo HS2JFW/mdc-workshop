@@ -198,7 +198,7 @@ export async function fetchPilotSqliteState(province?: PilotProvinceName): Promi
 }> {
   try {
     const query = province ? `?province=${encodeURIComponent(province)}` : '';
-    const res = await fetch(`/api/pilot-sqlite/state${query}`);
+    const res = await fetch(`/api/activity/state${query}`);
     if (res.ok) {
       const data = await res.json();
       const agencies: PilotAgencyRegistration[] = (data.agencies || []).map((row: any) => ({
@@ -240,12 +240,12 @@ export async function fetchPilotSqliteState(province?: PilotProvinceName): Promi
         lesson_learned_text: row.lesson_learned_text || '',
         policy_prompt: row.policy_prompt || '',
         generated_policy_text: row.generated_policy_text || '',
-        saved_file_path: row.saved_file_path || 'data/pilot_activities_4regions.sqlite',
+        saved_file_path: row.saved_file_path || 'PostgreSQL 16 (DB-MDC)',
         updated_at: row.updated_at || ''
       }));
 
       return {
-        dbPath: data.dbPath || 'data/pilot_activities_4regions.sqlite',
+        dbPath: data.dbPath || 'PostgreSQL 16 (DB-MDC)',
         recordsDir: data.recordsDir || 'data/pilot_records/',
         agencies,
         lessonsPolicies
@@ -262,7 +262,7 @@ export async function fetchPilotSqliteState(province?: PilotProvinceName): Promi
   const allLp = parseSafeJsonArray<PilotLessonAndPolicyRecord>(rawLp);
 
   return {
-    dbPath: 'data/pilot_activities_4regions.sqlite',
+    dbPath: 'PostgreSQL 16 (DB-MDC)',
     recordsDir: 'data/pilot_records/',
     agencies: province
       ? allAg.filter((a) =>
@@ -287,7 +287,7 @@ export async function registerPilotAgencyInSqlite(
   };
 
   try {
-    const res = await fetch('/api/pilot-sqlite/register-agency', {
+    const res = await fetch('/api/activity/register-agency', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(fullRecord)
@@ -298,7 +298,7 @@ export async function registerPilotAgencyInSqlite(
         ok: true,
         id: data.id || id,
         savedFilePath: data.savedFilePath || `data/pilot_records/agency_${id}.json`,
-        dbPath: data.dbPath || 'data/pilot_activities_4regions.sqlite'
+        dbPath: data.dbPath || 'PostgreSQL 16 (DB-MDC)'
       };
     }
   } catch (err) {
@@ -311,13 +311,13 @@ export async function registerPilotAgencyInSqlite(
     ok: true,
     id,
     savedFilePath: `data/pilot_records/agency_${id}.json`,
-    dbPath: 'data/pilot_activities_4regions.sqlite'
+    dbPath: 'PostgreSQL 16 (DB-MDC)'
   };
 }
 
 export async function deletePilotAgencyFromSqlite(id: string): Promise<void> {
   try {
-    await fetch(`/api/pilot-sqlite/agency?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    await fetch(`/api/activity/agency?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
   } catch {
     // ignore
   }
@@ -333,7 +333,7 @@ export async function savePilotLessonAndPolicyToSqlite(
   const id = payload.id || `lp-${Date.now()}`;
 
   try {
-    const res = await fetch('/api/pilot-sqlite/save-lesson-policy', {
+    const res = await fetch('/api/activity/save-lesson-policy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...payload, id })
@@ -344,7 +344,7 @@ export async function savePilotLessonAndPolicyToSqlite(
         ok: true,
         id: data.id || id,
         savedFilePath: data.savedFilePath || `data/pilot_records/pilot_lesson_policy_${id}.json`,
-        dbPath: data.dbPath || 'data/pilot_activities_4regions.sqlite',
+        dbPath: data.dbPath || 'PostgreSQL 16 (DB-MDC)',
         updatedAt: data.updated_at || nowStr
       };
     }
@@ -366,14 +366,14 @@ export async function savePilotLessonAndPolicyToSqlite(
     ok: true,
     id,
     savedFilePath: fullRecord.saved_file_path,
-    dbPath: 'data/pilot_activities_4regions.sqlite',
+    dbPath: 'PostgreSQL 16 (DB-MDC)',
     updatedAt: nowStr
   };
 }
 
 export async function deletePilotLessonAndPolicyFromSqlite(id: string): Promise<void> {
   try {
-    await fetch(`/api/pilot-sqlite/lesson-policy?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    await fetch(`/api/activity/lesson-policy?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
   } catch {
     // ignore
   }
@@ -612,3 +612,8 @@ ${policyPrompt || meta.defaultPolicyPrompt}
     `- โครงการนำร่องในพื้นที่สามารถยกระดับตัวชี้วัดพฤติกรรมพึงประสงค์ในประเด็น (${meta.focusAreas.join(', ')}) เพิ่มขึ้นไม่น้อยกว่าร้อยละ 15 ภายใน 1 ปีงบประมาณ`
   ].join('\n');
 }
+
+export const registerPilotAgencyInPostgres = registerPilotAgencyInSqlite;
+export const fetchPilotPostgresState = fetchPilotSqliteState;
+export const savePilotLessonAndPolicyToPostgres = savePilotLessonAndPolicyToSqlite;
+export const deletePilotAgencyFromPostgres = deletePilotAgencyFromSqlite;
