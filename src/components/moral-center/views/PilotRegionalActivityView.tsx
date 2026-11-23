@@ -499,10 +499,6 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
 
   // Group Handlers
   const handleOpenAddGroup = () => {
-    if (!isAdmin) {
-      alert('เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถเพิ่มกลุ่มกาแฟใหม่ได้');
-      return;
-    }
     setGroupModalMode('add');
     setGroupToEdit(null);
     setIsGroupModalOpen(true);
@@ -549,10 +545,6 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
   };
 
   const handleSaveGroup = async (groupData: Partial<CoffeeGroupMeta>) => {
-    if (!isAdmin) {
-      alert('เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถบันทึกข้อมูลกลุ่มกาแฟได้');
-      return;
-    }
     try {
       if (groupModalMode === 'add') {
         const updated = await addCoffeeGroupToDb(groupData as any);
@@ -564,6 +556,10 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
         setSubmitFeedback(`✨ เพิ่มกลุ่ม "${groupData.name}" ลงฐานข้อมูล PostgreSQL (DB-MDC) สำเร็จ (ผู้ใช้ทุกคนจะมองเห็นและเลือกกลุ่มนี้ได้ทันที)!`);
         setTimeout(() => setSubmitFeedback(null), 4500);
       } else if (groupModalMode === 'edit' && groupData.key) {
+        if (!isAdmin) {
+          alert('เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถแก้ไขข้อมูลกลุ่มกาแฟได้');
+          return;
+        }
         const updated = await updateCoffeeGroupInDb(groupData.key, groupData);
         setCoffeeGroups(updated);
         setSubmitFeedback(`💾 อัปเดตข้อมูลกลุ่ม "${groupData.name}" ลงฐานข้อมูล PostgreSQL (DB-MDC) สำเร็จ!`);
@@ -1577,18 +1573,21 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
 
   // Smart Polling (Auto-Refresh) State for Step 2 & Step 5
   const [lastSyncRevision, setLastSyncRevision] = useState<string>('');
+  const lastSyncRevisionRef = useRef<string>('');
+  const isSyncingRef = useRef<boolean>(false);
   const [lastSyncTime, setLastSyncTime] = useState<string>('');
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [newlyAddedProjectIds, setNewlyAddedProjectIds] = useState<Set<string>>(new Set());
   const [liveSyncToast, setLiveSyncToast] = useState<string | null>(null);
 
   const triggerLiveSync = useCallback(async (isManual: boolean = false) => {
-    if (isSyncing) return;
+    if (isSyncingRef.current) return;
+    isSyncingRef.current = true;
     setIsSyncing(true);
     try {
       const res = await pollActivityState({
         province,
-        lastRevision: isManual ? undefined : lastSyncRevision
+        lastRevision: isManual ? undefined : lastSyncRevisionRef.current
       });
 
       if (res && res.ok) {
@@ -1601,7 +1600,10 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
         }
 
         if (res.changed) {
-          if (res.revision) setLastSyncRevision(res.revision);
+          if (res.revision) {
+            lastSyncRevisionRef.current = res.revision;
+            setLastSyncRevision(res.revision);
+          }
 
           // Update Coffee Groups while preserving current selectedGroup if still valid
           if (res.coffeeGroups && Array.isArray(res.coffeeGroups) && res.coffeeGroups.length > 0) {
@@ -1637,9 +1639,10 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     } catch (err) {
       console.warn('Smart Polling error:', err);
     } finally {
+      isSyncingRef.current = false;
       setIsSyncing(false);
     }
-  }, [province, lastSyncRevision, isSyncing]);
+  }, [province]);
 
   // Smart Polling Interval (5 seconds) active ONLY on Step 2 and Step 5, paused on hidden tab
   useEffect(() => {
@@ -2886,40 +2889,40 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
                 </button>
               </div>
 
-              {isAdmin && (
-                <>
-                  <button
-                    type="button"
-                    className="coffee-add-group-btn"
-                    onClick={handleOpenAddGroup}
-                  >
-                    <Plus size={18} />
-                    <span>เพิ่มกลุ่มกาแฟใหม่ (Add Group)</span>
-                  </button>
+              {/* Add Coffee Group Button - Always accessible to all participants & admins */}
+              <button
+                type="button"
+                className="coffee-add-group-btn"
+                onClick={handleOpenAddGroup}
+                title="คลิกเพื่อเพิ่มกลุ่มกาแฟใหม่สำหรับทีมหรือกิจกรรม"
+              >
+                <Plus size={18} />
+                <span>เพิ่มกลุ่มกาแฟใหม่ (Add Group)</span>
+              </button>
 
-                  <button
-                    type="button"
-                    onClick={handleResetGroups}
-                    title="รีเซ็ตกลุ่มกาแฟกลับเป็นค่าเริ่มต้น 5 กลุ่ม"
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '8px 14px',
-                      background: '#f8fafc',
-                      border: '1.5px solid #cbd5e1',
-                      borderRadius: '999px',
-                      color: '#64748b',
-                      fontFamily: 'Kanit, sans-serif',
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <RotateCcw size={14} />
-                    <span>รีเซ็ต 5 กลุ่มเริ่มต้น</span>
-                  </button>
-                </>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={handleResetGroups}
+                  title="รีเซ็ตกลุ่มกาแฟกลับเป็นค่าเริ่มต้น 5 กลุ่ม"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 14px',
+                    background: '#f8fafc',
+                    border: '1.5px solid #cbd5e1',
+                    borderRadius: '999px',
+                    color: '#64748b',
+                    fontFamily: 'Kanit, sans-serif',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  <RotateCcw size={14} />
+                  <span>รีเซ็ต 5 กลุ่มเริ่มต้น</span>
+                </button>
               )}
             </div>
           </div>

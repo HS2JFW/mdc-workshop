@@ -8,6 +8,22 @@
     "isCustom": false
   },
   {
+    "key": "group_1795428486282",
+    "name": "น้ำปั่น",
+    "bgImage": "/theme/coffee_preset_01_cafe.jpg",
+    "themeColor": "#b45309",
+    "accentBg": "#fffbeb",
+    "isCustom": true
+  },
+  {
+    "key": "matcha_latte",
+    "name": "กลุ่มมัทฉะลาเต้คุณธรรม",
+    "bgImage": "/theme/coffee_preset_01_beans.jpg",
+    "themeColor": "#15803d",
+    "accentBg": "#dcfce7",
+    "isCustom": true
+  },
+  {
     "key": "cappuccino",
     "name": "กลุ่มคาปูชิโน",
     "bgImage": "/theme/coffee_cappuccino_bg.jpg",
