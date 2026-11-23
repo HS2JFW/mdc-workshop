@@ -132,7 +132,8 @@ import {
   DB_CATEGORIES,
   type DbTableCategoryKey,
   type SqliteTableMeta,
-  type SqliteTableDataResponse
+  type SqliteTableDataResponse,
+  pollActivityState
 } from '../data/pilotHackathonService';
 import {
   isAdminAuthenticated,
@@ -1363,6 +1364,97 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     });
   }, [province]);
 
+  // Smart Polling (Auto-Refresh) State for Step 2 & Step 5
+  const [lastSyncRevision, setLastSyncRevision] = useState<string>('');
+  const [lastSyncTime, setLastSyncTime] = useState<string>('');
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [newlyAddedProjectIds, setNewlyAddedProjectIds] = useState<Set<string>>(new Set());
+  const [liveSyncToast, setLiveSyncToast] = useState<string | null>(null);
+
+  const triggerLiveSync = useCallback(async (isManual: boolean = false) => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    try {
+      const res = await pollActivityState({
+        province,
+        lastRevision: isManual ? undefined : lastSyncRevision
+      });
+
+      if (res && res.ok) {
+        if (res.syncTimestamp) {
+          const d = new Date(res.syncTimestamp);
+          const timeStr = !isNaN(d.getTime())
+            ? d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+            : new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          setLastSyncTime(timeStr);
+        }
+
+        if (res.changed) {
+          if (res.revision) setLastSyncRevision(res.revision);
+
+          // Update Coffee Groups while preserving current selectedGroup if still valid
+          if (res.coffeeGroups && Array.isArray(res.coffeeGroups) && res.coffeeGroups.length > 0) {
+            setCoffeeGroups(res.coffeeGroups);
+            setSelectedGroup((curr) => {
+              const stillExists = res.coffeeGroups!.some((g) => g.key === curr);
+              return stillExists ? curr : (res.coffeeGroups![0]?.key || 'mocha');
+            });
+          }
+
+          // Update Projects & Highlight new entries
+          if (res.submittedProjects && Array.isArray(res.submittedProjects)) {
+            setAllProjects((prevProjects) => {
+              const prevIds = new Set(prevProjects.map((p) => p.id));
+              const brandNew = res.submittedProjects!.filter((p) => !prevIds.has(p.id));
+
+              if (brandNew.length > 0 && prevProjects.length > 0) {
+                const newIdsSet = new Set(brandNew.map((p) => p.id));
+                setNewlyAddedProjectIds(newIdsSet);
+                setLiveSyncToast(`พบโครงการใหม่ ${brandNew.length} โครงการ ถูกเพิ่มเข้ามาในระบบ`);
+                setTimeout(() => {
+                  setNewlyAddedProjectIds(new Set());
+                }, 4000);
+                setTimeout(() => {
+                  setLiveSyncToast(null);
+                }, 5000);
+              }
+              return res.submittedProjects!;
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Smart Polling error:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [province, lastSyncRevision, isSyncing]);
+
+  // Smart Polling Interval (5 seconds) active ONLY on Step 2 and Step 5, paused on hidden tab
+  useEffect(() => {
+    if (currentStep !== 2 && currentStep !== 5) return;
+
+    // Initial check when entering step 2 or 5
+    triggerLiveSync(false);
+
+    const intervalId = setInterval(() => {
+      if (document.hidden) return; // Pause when tab is inactive
+      triggerLiveSync(false);
+    }, 5000);
+
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        triggerLiveSync(false);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [currentStep, triggerLiveSync]);
+
   // Load latest criteria from SQLite
   useEffect(() => {
     fetchHackathonCriteriaFromSqlite(province).then((res) => {
@@ -2551,41 +2643,59 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
               </p>
             </div>
 
-            {isAdmin && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginLeft: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginLeft: 'auto' }}>
+              {/* Live Sync Status Badge for Step 2 */}
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '5px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '999px', fontSize: '12px', color: '#166534', fontWeight: 600 }}>
+                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#22c55e', display: 'inline-block', boxShadow: '0 0 6px #22c55e' }} />
+                <span>ซิงค์กลุ่มสด (5s)</span>
+                {lastSyncTime && <span style={{ color: '#15803d', fontSize: '11px', opacity: 0.85 }}>• {lastSyncTime}</span>}
                 <button
                   type="button"
-                  className="coffee-add-group-btn"
-                  onClick={handleOpenAddGroup}
+                  onClick={() => triggerLiveSync(true)}
+                  disabled={isSyncing}
+                  title="คลิกเพื่อดึงข้อมูลกลุ่มล่าสุดทันที"
+                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px', display: 'inline-flex', alignItems: 'center', color: '#166534' }}
                 >
-                  <Plus size={18} />
-                  <span>เพิ่มกลุ่มกาแฟใหม่ (Add Group)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleResetGroups}
-                  title="รีเซ็ตกลุ่มกาแฟกลับเป็นค่าเริ่มต้น 5 กลุ่ม"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '8px 14px',
-                    background: '#f8fafc',
-                    border: '1.5px solid #cbd5e1',
-                    borderRadius: '999px',
-                    color: '#64748b',
-                    fontFamily: 'Kanit, sans-serif',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    cursor: 'pointer'
-                  }}
-                >
-                  <RotateCcw size={14} />
-                  <span>รีเซ็ต 5 กลุ่มเริ่มต้น</span>
+                  <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} />
                 </button>
               </div>
-            )}
+
+              {isAdmin && (
+                <>
+                  <button
+                    type="button"
+                    className="coffee-add-group-btn"
+                    onClick={handleOpenAddGroup}
+                  >
+                    <Plus size={18} />
+                    <span>เพิ่มกลุ่มกาแฟใหม่ (Add Group)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleResetGroups}
+                    title="รีเซ็ตกลุ่มกาแฟกลับเป็นค่าเริ่มต้น 5 กลุ่ม"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px 14px',
+                      background: '#f8fafc',
+                      border: '1.5px solid #cbd5e1',
+                      borderRadius: '999px',
+                      color: '#64748b',
+                      fontFamily: 'Kanit, sans-serif',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <RotateCcw size={14} />
+                    <span>รีเซ็ต 5 กลุ่มเริ่มต้น</span>
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Registered Participant Info Banner in Step 2 */}
@@ -4582,7 +4692,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
           ================================================================= */}
       {currentStep === 5 && (
         <div className="hackathon-content-card">
-          <div className="hackathon-section-header">
+          <div className="hackathon-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
             <div className="hackathon-section-title-wrap">
               <h2 className="hackathon-section-title">
                 ผลคะแนนโครงการ
@@ -4590,6 +4700,22 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
               <p className="hackathon-section-desc">
                 ตารางผลคะแนนการประเมินโครงการโดยระบบ AI ผู้เชี่ยวชาญ (คลิกที่ปุ่มไอคอนมุมมองเพื่อดูรายละเอียดโครงการฉบับเต็ม)
               </p>
+            </div>
+
+            {/* Live Sync Status Badge for Step 5 */}
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '999px', fontSize: '12.5px', color: '#166534', fontWeight: 600, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', marginLeft: 'auto' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e', display: 'inline-block', boxShadow: '0 0 6px #22c55e' }} />
+              <span>ซิงค์ผลสดอัตโนมัติ (5s)</span>
+              {lastSyncTime && <span style={{ color: '#15803d', fontSize: '11px', opacity: 0.85 }}>• {lastSyncTime}</span>}
+              <button
+                type="button"
+                onClick={() => triggerLiveSync(true)}
+                disabled={isSyncing}
+                title="คลิกเพื่อดึงข้อมูลโครงการและคะแนนล่าสุดทันที"
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px', display: 'inline-flex', alignItems: 'center', color: '#166534' }}
+              >
+                <RefreshCw size={13} className={isSyncing ? 'animate-spin' : ''} />
+              </button>
             </div>
           </div>
 
@@ -4668,11 +4794,16 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
                     const groupMeta = coffeeGroups.find((g) => g.key === p.groupKey) || (COFFEE_GROUPS as any)[p.groupKey];
                     const projectGroupName = p.groupName || groupMeta?.name || p.groupKey || 'กลุ่มกาแฟสร้างสรรค์คุณธรรม';
 
+                    const isNewlyAdded = newlyAddedProjectIds.has(p.id);
+
                     return (
                       <tr
                         key={p.id}
                         onClick={() => setSelectedDetailProject(p)}
-                        className={`${idx === 0 ? 'top-rank-row' : ''} ${isMyProject ? 'my-project-highlight-row' : ''}`}
+                        className={`${idx === 0 ? 'top-rank-row' : ''} ${isMyProject ? 'my-project-highlight-row' : ''} ${isNewlyAdded ? 'animate-pulse' : ''}`}
+                        style={{
+                          ...(isNewlyAdded ? { backgroundColor: '#fef3c7', transition: 'background-color 0.8s ease' } : {})
+                        }}
                       >
                         <td style={{ textAlign: 'center' }}>
                           <div className={`rank-badge rank-${rank <= 3 ? rank : 'other'}`}>
@@ -4684,6 +4815,12 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
                             <div className="clean-project-title-cell" style={{ fontWeight: 800, fontSize: '15.5px', color: '#0f172a' }}>
                               {p.projectName}
                             </div>
+                            {isNewlyAdded && (
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '2px 8px', background: '#f59e0b', color: '#ffffff', borderRadius: '4px', fontSize: '11.5px', fontWeight: 700 }}>
+                                <Sparkles size={11} />
+                                <span>มาใหม่!</span>
+                              </span>
+                            )}
                             {isMyProject && (
                               <span className="my-project-pill-badge" title="โครงการที่คุณได้นำเสนอและส่งเข้าสู่ระบบ">
                                 <Sparkles size={13} />
@@ -4842,6 +4979,38 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
         initialGroup={groupToEdit}
         onSave={handleSaveGroup}
       />
+
+      {/* Floating Live Sync Toast Notification */}
+      {liveSyncToast && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '24px',
+            right: '24px',
+            zIndex: 9999,
+            background: '#0f172a',
+            color: '#ffffff',
+            padding: '12px 20px',
+            borderRadius: '12px',
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            borderLeft: '4px solid #f59e0b',
+            fontSize: '14px',
+            fontFamily: 'Kanit, sans-serif'
+          }}
+        >
+          <span>{liveSyncToast}</span>
+          <button
+            type="button"
+            onClick={() => setLiveSyncToast(null)}
+            style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px', display: 'flex' }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {/* Pre-Submission AI Evaluation Modal (ตรวจสอบคะแนนก่อนส่งโครงการ) */}
       <PreSubmissionEvaluationModal

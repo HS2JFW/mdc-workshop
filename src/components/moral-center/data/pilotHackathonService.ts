@@ -244,6 +244,74 @@ export async function fetchCoffeeGroupsFromDb(): Promise<CoffeeGroupMeta[]> {
   return getStoredCoffeeGroups();
 }
 
+export interface ActivityStatePollResult {
+  ok: boolean;
+  changed: boolean;
+  revision: string;
+  syncTimestamp: string;
+  coffeeGroups?: CoffeeGroupMeta[];
+  submittedProjects?: HackathonProject[];
+}
+
+/**
+ * รวมศูนย์การ Polling ตรวจสอบความเปลี่ยนแปลงของ Coffee Groups และ Submitted Projects
+ * ผ่าน /api/activity/state เส้นเดียว (Lightweight ~5-15KB)
+ */
+export async function pollActivityState(params: {
+  province?: PilotProvinceName | string;
+  lastRevision?: string;
+}): Promise<ActivityStatePollResult> {
+  const { province, lastRevision } = params;
+  try {
+    const query = province ? `?province=${encodeURIComponent(province)}` : '';
+    const res = await fetch(`/api/activity/state${query}`);
+    if (res.ok) {
+      const data = await res.json();
+      const currentRev = data.revision || '';
+      const changed = !lastRevision || currentRev !== lastRevision;
+
+      let coffeeGroups: CoffeeGroupMeta[] | undefined = undefined;
+      if (Array.isArray(data.coffeeGroups) && data.coffeeGroups.length > 0) {
+        const mappedGroups: CoffeeGroupMeta[] = data.coffeeGroups.map((g: any) => ({
+          key: g.key,
+          name: g.name || 'ชื่อกลุ่ม',
+          bgImage: g.bgImage || g.bg_image || getRandomCoffeeBgUrl(),
+          themeColor: g.themeColor || g.theme_color || '#78350f',
+          accentBg: g.accentBg || g.accent_bg || '#fef3c7',
+          isCustom: Boolean(g.isCustom ?? g.is_custom)
+        }));
+        coffeeGroups = mappedGroups;
+        cachedCoffeeGroups = mappedGroups;
+        saveStoredCoffeeGroups(mappedGroups);
+      }
+
+      let submittedProjects: HackathonProject[] | undefined = undefined;
+      if (Array.isArray(data.submittedProjects)) {
+        submittedProjects = data.submittedProjects.filter(
+          (p: any) => p && p.id && !p.id.startsWith('precheck-') && !isSeedHackathonProject(p.id)
+        );
+      }
+
+      return {
+        ok: true,
+        changed,
+        revision: currentRev,
+        syncTimestamp: data.syncTimestamp || new Date().toISOString(),
+        coffeeGroups,
+        submittedProjects
+      };
+    }
+  } catch (err) {
+    console.warn('pollActivityState error:', err);
+  }
+  return {
+    ok: false,
+    changed: false,
+    revision: lastRevision || '',
+    syncTimestamp: new Date().toISOString()
+  };
+}
+
 /**
  * เพิ่มกลุ่มกาแฟใหม่ลงฐานข้อมูล SQLite Server
  */

@@ -775,6 +775,62 @@ function createPilotSqlitePlugin(): Plugin {
                   .all(...provList)
               : db.prepare('SELECT * FROM pilot_lessons_and_policies ORDER BY updated_at DESC').all();
 
+            // Query coffee groups
+            const groupRows = db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all() as any[];
+            const coffeeGroups = groupRows.map((r) => ({
+              key: r.key,
+              name: r.name,
+              bgImage: r.bg_image,
+              themeColor: r.theme_color,
+              accentBg: r.accent_bg,
+              isCustom: Boolean(r.is_custom)
+            }));
+
+            // Query submitted projects (excluding precheck)
+            const includePrecheck = urlObj.searchParams.get('include_precheck') === 'true';
+            const precheckFilter = includePrecheck
+              ? ''
+              : "AND (is_precheck = 0 OR is_precheck IS NULL) AND id NOT LIKE 'precheck-%'";
+            let projRows: any[] = [];
+            if (provList) {
+              projRows = db.prepare(`SELECT * FROM pilot_hackathon_projects WHERE province IN (${provList.map(() => '?').join(',')}) ${precheckFilter} ORDER BY ai_score DESC, created_at DESC`).all(...provList) as any[];
+            } else {
+              const whereClause = includePrecheck
+                ? ''
+                : "WHERE (is_precheck = 0 OR is_precheck IS NULL) AND id NOT LIKE 'precheck-%'";
+              projRows = db.prepare(`SELECT * FROM pilot_hackathon_projects ${whereClause} ORDER BY ai_score DESC, created_at DESC`).all() as any[];
+            }
+
+            const submittedProjects = projRows.map((r) => ({
+              id: r.id,
+              province: r.province,
+              groupKey: r.group_key,
+              groupName: r.group_name,
+              projectName: r.project_name,
+              targetMoralVirtue: r.target_moral_virtue,
+              targetAudience: r.target_audience,
+              targetArea: r.target_area,
+              proposalDetails: r.proposal_details,
+              activityPlan: r.activity_plan,
+              behavioralKpi: r.behavioral_kpi,
+              proposerName: r.proposer_name,
+              proposerAgency: r.proposer_agency,
+              proposerPosition: r.proposer_position || '',
+              proposerLevel: r.proposer_level,
+              challengeTopic: r.challenge_topic,
+              evaluatedCriteriaVirtues: r.evaluated_criteria_virtues_json ? JSON.parse(r.evaluated_criteria_virtues_json) : [],
+              aiScore: Number(r.ai_score),
+              aiScoreBreakdown: r.ai_score_breakdown_json ? JSON.parse(r.ai_score_breakdown_json) : { alignment: 0, feasibility: 0, innovation: 0, participation: 0 },
+              aiRecommendations: r.ai_recommendations,
+              communityVotes: Number(r.community_votes || 0),
+              isPrecheck: Boolean(r.is_precheck),
+              createdAt: r.created_at
+            }));
+
+            const groupsRevision = coffeeGroups.map((g) => `${g.key}:${g.name}`).join('|');
+            const projectsRevision = submittedProjects.map((p) => `${p.id}:${p.aiScore}:${p.communityVotes}`).join('|');
+            const revisionHash = `${coffeeGroups.length}_${submittedProjects.length}_${Buffer.from(groupsRevision + '##' + projectsRevision).toString('base64').slice(0, 32)}`;
+
             res.statusCode = 200;
             res.end(
               JSON.stringify({
@@ -782,7 +838,11 @@ function createPilotSqlitePlugin(): Plugin {
                 dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16',
                 recordsDir: 'data/pilot_records/',
                 agencies,
-                lessonsPolicies
+                lessonsPolicies,
+                coffeeGroups,
+                submittedProjects,
+                revision: revisionHash,
+                syncTimestamp: new Date().toISOString()
               })
             );
             return;
