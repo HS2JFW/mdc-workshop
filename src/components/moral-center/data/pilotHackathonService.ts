@@ -4253,14 +4253,18 @@ export async function tryCallLlmForNewProject(
    รูปแบบ: โครงการ "[ชื่อ Concept ภาษาอังกฤษสั้นทรงพลัง หรือคำไทยเท่ๆ ติดหู]" [คำสรุปกลไกนวัตกรรมพฤติกรรมศาสตร์และการปฏิบัติการที่เฉพาะเจาะจง] จ.[จังหวัด]
 3. ห้ามนำข้อความ คำสั่ง คีย์เวิร์ด หรือประโยคจากโจทย์/Prompt มาใส่เป็นชื่อโครงการทั้งดุ้นเด็ดขาด
 
+[การร้อยเรียงคำสำคัญของโจทย์ลงในเนื้อหา (MANDATORY CHALLENGE FIT INCLUSION)]:
+- แม้ชื่อโครงการจะใช้ชื่อ Concept เท่ๆ แต่ในส่วน "proposalDetails" (วิธีการดำเนินงานและกลไกปรับเปลี่ยนพฤติกรรม) และ "activityPlan" คุณต้องระบุคำสำคัญของปัญหา (Problem Keywords), กลุ่มเป้าหมายเฉพาะ (Target Demographics), และรากเหง้าของปัญหาตามโจทย์ในส่วนที่ 1 อย่างชัดเจน เพื่อให้ผ่านเกณฑ์ Rubric เสาหลักที่ 1 (Problem Fit) อย่างสมบูรณ์และได้คะแนนเต็มในมิตินี้
+
 [กฎเหล็กกำกับคะแนน: คิดโครงการที่ตอบโจทย์ Rubric ไม่เกิน 80 คะแนนเท่านั้น (SCORE CAP <= 80 POINTS)]
 1. ให้คุณพิจารณาจาก "Rubric เกณฑ์การตัดสิน 4 เสาหลัก (100 คะแนนเต็ม)" ที่แนบมาในส่วนที่ 2
-2. คุณต้องคิดค้น "ข้อเสนอโครงการฉบับร่างที่ยังไม่สมบูรณ์ (Incomplete Draft Proposal / Work in Progress)" โดยออกแบบให้เนื้อหาโครงการนี้เมื่อตรวจประเมินตามเกณฑ์ Rubric แล้ว จะได้คะแนนอยู่ในช่วง "ไม่เกิน 80.00 คะแนนเท่านั้น" (คะแนนเป้าหมายอยู่ที่ช่วง 72.00 - 78.50 คะแนน หรือระดับ 'ดี') ห้ามสร้างโครงการที่สมบูรณ์แบบเกิน 80 คะแนนเด็ดขาด!
+2. คุณต้องคิดค้น "ข้อเสนอโครงการฉบับร่างที่ยังไม่สมบูรณ์ (Incomplete Draft Proposal / Work in Progress)" โดยออกแบบให้เนื้อหาโครงการนี้เมื่อตรวจประเมินตามเกณฑ์ Rubric แล้ว จะได้คะแนนอยู่ในช่วง "ไม่เกิน 80.00 คะแนนเท่านั้น" (คะแนนเป้าหมายอยู่ที่ช่วง 74.00 - 78.50 คะแนน หรือระดับ 'ดี') ห้ามสร้างโครงการที่สมบูรณ์แบบเกิน 80 คะแนนเด็ดขาด!
 3. อิงผ่าน Prompt ที่เขียนเป็นหลัก: ออกแบบสาระสำคัญ กิจกรรม และกลไก Nudge ให้มุ่งแก้ปัญหาตามโจทย์ในส่วนที่ 1 อย่างแท้จริง โดยเว้นช่องว่างและเปิดพื้นที่ให้ผู้เข้าร่วมกิจกรรม/มนุษย์ ได้มีส่วนร่วมในการเติมเต็มชื่อภาคีเครือข่ายจริง กติกาประชาคมเชิงลึก และตัวเลขเป้าหมาย KPI เชิงประจักษ์ เพื่อยกระดับโครงการสู่ 85-100 คะแนนในเวทีแข่งขันต่อไป
 
 ต้องตอบกลับเป็น JSON ที่มีฟิลด์ดังนี้เท่านั้น (ห้ามใส่ Markdown หรือคำอธิบายอื่นนอก JSON):
 {
   "projectName": "ชื่อโครงการใหม่ที่คิดขึ้นอย่างสร้างสรรค์เท่ๆ สื่อถึงประเด็นในส่วนที่ 1 ตามสถาปัตยกรรม โครงการ \\"[Catchy Concept]\\" [กลไกนวัตกรรม] (ห้าม copy ข้อความ Prompt มาเด็ดขาด)",
+  "challengeTopic": "โจทย์ปัญหาความท้าทายที่โครงการนี้มุ่งแก้ไขโดยตรงในพื้นที่",
   "targetMoralVirtue": "พอเพียง" หรือ "วินัย" หรือ "สุจริต" หรือ "จิตอาสา" หรือ "กตัญญู" (เลือกมิติที่ตรงกับโจทย์),
   "targetArea": "พื้นที่เป้าหมายเฉพาะเจาะจงในจังหวัด",
   "targetAudience": "กลุ่มเป้าหมายในพื้นที่",
@@ -4376,6 +4380,7 @@ ${rubricText}
 
 export interface AiIdeationResultWithPayload {
   projectName?: string;
+  challengeTopic?: string;
   targetMoralVirtue?: string;
   targetArea?: string;
   targetAudience?: string;
@@ -5759,6 +5764,7 @@ export async function aiSuggestHackathonIdea(
 
       const rawLlmProject: Partial<HackathonProject> = {
         projectName: finalLlmTitle,
+        challengeTopic: (llmRes.project as any)?.challengeTopic || (hasCustomUserIdea ? trimmedUserPrompt : challengeTopic) || 'การยกระดับพฤติกรรมคุณธรรม',
         targetMoralVirtue: normalizeVirtue(llmRes.project.targetMoralVirtue || weaknessVirtue),
         targetArea: llmRes.project.targetArea || `อ.เมือง${province} และพื้นที่นำร่อง`,
         targetAudience: llmRes.project.targetAudience || `ประชาชนในพื้นที่ 3,500 ราย`,
@@ -5772,7 +5778,7 @@ export async function aiSuggestHackathonIdea(
         normProject,
         province,
         groupName,
-        challengeTopic || 'การยกระดับพฤติกรรมคุณธรรม',
+        rawLlmProject.challengeTopic || challengeTopic || 'การยกระดับพฤติกรรมคุณธรรม',
         targetVirtues,
         weaknessVirtue,
         trimmedUserPrompt,
@@ -5786,6 +5792,7 @@ export async function aiSuggestHackathonIdea(
       return {
         ...normProject,
         project: normProject,
+        challengeTopic: rawLlmProject.challengeTopic,
         ...payloadStrings,
         generationSource: 'llm_api',
         timestamp: new Date().toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' }),
@@ -5900,11 +5907,15 @@ export async function aiSuggestHackathonIdea(
     };
     const dynamicProject = formatAsIncompleteDraftProject(rawDynamic);
 
+    const fallbackChallengeTopic = cleanSubject
+      ? `โครงการ${cleanSubject} จ.${effectiveProvince}`
+      : (challengeTopic || 'การยกระดับพฤติกรรมคุณธรรม');
+
     const payloadStrings = buildAiIdeationPayloadStrings(
       dynamicProject,
       province,
       groupName,
-      challengeTopic || 'การยกระดับพฤติกรรมคุณธรรม',
+      fallbackChallengeTopic,
       targetVirtues,
       weaknessVirtue,
       trimmedUserPrompt,
@@ -5918,6 +5929,7 @@ export async function aiSuggestHackathonIdea(
     return {
       ...dynamicProject,
       project: dynamicProject,
+      challengeTopic: fallbackChallengeTopic,
       ...payloadStrings,
       generationSource: 'user_custom_heuristic',
       timestamp: new Date().toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' }),
@@ -5966,11 +5978,13 @@ export async function aiSuggestHackathonIdea(
   };
   const genProject = formatAsIncompleteDraftProject(rawGen);
 
+  const fallbackGenChallengeTopic = challengeTopic || pickedModel.theme;
+
   const payloadStrings = buildAiIdeationPayloadStrings(
     genProject,
     province,
     groupName,
-    challengeTopic || 'การยกระดับพฤติกรรมคุณธรรม',
+    fallbackGenChallengeTopic,
     targetVirtues,
     weaknessVirtue,
     trimmedUserPrompt,
@@ -5984,6 +5998,7 @@ export async function aiSuggestHackathonIdea(
   return {
     ...genProject,
     project: genProject,
+    challengeTopic: fallbackGenChallengeTopic,
     ...payloadStrings,
     generationSource: 'generative_models_engine',
     timestamp: new Date().toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' }),
@@ -7760,6 +7775,30 @@ export const KNOWN_PROBLEM_DOMAINS: {
     name: 'ขยะทะเลและระบบนิเวศชายฝั่ง',
     triggerKeywords: ['ขยะทะเล', 'ชายฝั่ง', 'ปะการัง', 'สัตว์ทะเล'],
     subjectKeywords: ['ขยะทะเล', 'ชายฝั่ง', 'ปะการัง', 'สัตว์น้ำ', 'ทะเล', 'ชายหาด', 'ไมโครพลาสติก']
+  },
+  {
+    id: 'domestic_violence_vulnerable',
+    name: 'ความรุนแรงในครอบครัวและการคุ้มครองกลุ่มเปราะบาง',
+    triggerKeywords: ['ความรุนแรงในครอบครัว', 'ความรุนแรง', 'ทำร้ายร่างกาย', 'เปราะบาง', 'สตรี', 'เด็กและสตรี', 'ผู้ถูกกระทำ', 'ความรุนแรงต่อเด็ก'],
+    subjectKeywords: ['ความรุนแรง', 'ครอบครัว', 'ทำร้าย', 'เปราะบาง', 'สตรี', 'เด็ก', 'เยาวชน', 'คุ้มครอง', 'บ้านปลอดภัย', 'ศูนย์พึ่งได้', 'เยียวยา', 'สุขภาพจิต', 'ความอบอุ่น', 'ความปลอดภัยในบ้าน', 'ครัวเรือน']
+  },
+  {
+    id: 'waste_savings',
+    name: 'การจัดการขยะและวินัยการออม/ธนาคารขยะ',
+    triggerKeywords: ['ลดขยะ', 'ธนาคารขยะ', 'วินัยการออม', 'ขยะรีไซเคิล', 'ขยะทองคำ', 'ออมทรัพย์', 'zero-waste'],
+    subjectKeywords: ['ขยะ', 'รีไซเคิล', 'ธนาคารขยะ', 'วินัยการออม', 'ออมทรัพย์', 'ขยะทองคำ', 'คัดแยกขยะ', 'กองทุน', 'zero-waste', 'เงินออม', 'สัจจะออมทรัพย์']
+  },
+  {
+    id: 'startup_social',
+    name: 'นวัตกรรมสตาร์ทอัพและวิสาหกิจเพื่อสังคม',
+    triggerKeywords: ['สตาร์ทอัพ', 'startup', 'วิสาหกิจเพื่อสังคม', 'social enterprise', 'นวัตกรรมธุรกิจ', 'ผู้ประกอบการรุ่นใหม่'],
+    subjectKeywords: ['สตาร์ทอัพ', 'startup', 'วิสาหกิจเพื่อสังคม', 'ผู้ประกอบการ', 'นวัตกรรม', 'โมเดลธุรกิจ', 'social enterprise', 'se', 'ยกระดับรายได้', 'เศรษฐกิจสร้างสรรค์', 'บ่มเพาะ']
+  },
+  {
+    id: 'mental_health',
+    name: 'สุขภาพจิต สุขภาวะทางใจ และการป้องกันภาวะซึมเศร้า',
+    triggerKeywords: ['สุขภาพจิต', 'ซึมเศร้า', 'ความเครียด', 'สุขภาวะทางใจ', 'จิตเวช', 'ฆ่าตัวตาย', 'จิตวิทยา'],
+    subjectKeywords: ['สุขภาพจิต', 'ซึมเศร้า', 'เครียด', 'สุขภาวะ', 'ใจ', 'ให้คำปรึกษา', 'ฮีลใจ', 'รับฟัง', 'เพื่อนคู่คิด', 'สายด่วนสุขภาพจิต', 'ที่ปรึกษาทางใจ']
   }
 ];
 
@@ -7771,10 +7810,24 @@ export function checkChallengeDomainRelevance(
     proposalDetails?: string;
     activityPlan?: string;
     behavioralKpi?: string;
+    challengeTopic?: string;
+    aiDraftSnapshot?: any;
   },
   challengeStatement?: string
 ): ChallengeDomainRelevance {
-  if (!challengeStatement || challengeStatement.trim().length < 3) {
+  // Extract project challenge if available
+  let projectChallenge = '';
+  if (proposalInput && typeof proposalInput === 'object') {
+    projectChallenge = ((proposalInput as any).challengeTopic || '').trim();
+  }
+
+  // Determine effective challenge statement
+  let effectiveChallenge = (challengeStatement || '').trim();
+  if ((!effectiveChallenge || effectiveChallenge.length < 3 || effectiveChallenge.includes('การยกระดับพฤติกรรมคุณธรรม')) && projectChallenge.length >= 3) {
+    effectiveChallenge = projectChallenge;
+  }
+
+  if (!effectiveChallenge || effectiveChallenge.trim().length < 3) {
     return {
       isOffTopic: false,
       coreKeywords: [],
@@ -7782,7 +7835,8 @@ export function checkChallengeDomainRelevance(
     };
   }
 
-  const cText = challengeStatement.toLowerCase();
+  const cText = effectiveChallenge.toLowerCase();
+  const projCText = projectChallenge.toLowerCase();
 
   // Extract text fields
   let pName = '';
@@ -7803,16 +7857,18 @@ export function checkChallengeDomainRelevance(
 
   const fullProposalText = `${pName} ${pAud} ${pDetails} ${pPlan} ${pKpi}`.trim();
 
-  // 1. Detect challenge domain with keyword scoring
+  // 1. Detect challenge domain with keyword scoring (check both effectiveChallenge and projectChallenge)
   let detectedChallengeDomain: typeof KNOWN_PROBLEM_DOMAINS[0] | undefined;
   let maxChallengeScore = 0;
   for (const domain of KNOWN_PROBLEM_DOMAINS) {
     let score = 0;
     for (const kw of domain.triggerKeywords) {
       if (cText.includes(kw)) score += 3;
+      if (projCText && projCText.includes(kw)) score += 3;
     }
     for (const kw of domain.subjectKeywords) {
       if (cText.includes(kw)) score += 1;
+      if (projCText && projCText.includes(kw)) score += 1;
     }
     if (score > maxChallengeScore) {
       maxChallengeScore = score;
@@ -7821,7 +7877,6 @@ export function checkChallengeDomainRelevance(
   }
 
   // 2. Detect dominant proposal domain (Weighted Domain Detection)
-  // ชื่อโครงการ (projectName) น้ำหนัก 5x, กลุ่มเป้าหมาย (targetAudience) น้ำหนัก 3x, เนื้อหา/แผนงาน น้ำหนัก 1x
   let dominantProposalDomain: typeof KNOWN_PROBLEM_DOMAINS[0] | undefined;
   let maxProposalScore = 0;
   const domainScores: Record<string, number> = {};
@@ -7865,8 +7920,16 @@ export function checkChallengeDomainRelevance(
     const matched = detectedChallengeDomain.subjectKeywords.filter((k) => fullProposalText.includes(k));
     const challengeScoreInProposal = domainScores[detectedChallengeDomain.id] || 0;
 
+    // Check if the proposal has its own aligned challenge topic that matches the dominant domain
+    const isProjectChallengeAlignedWithDominant = Boolean(
+      dominantProposalDomain &&
+      projCText &&
+      dominantProposalDomain.triggerKeywords.some((kw) => projCText.includes(kw))
+    );
+
     // เกิดข้อขัดแย้งของโดเมน: โดเมนหลักของโครงการเป็นคนละเรื่องกับโจทย์อย่างสิ้นเชิง และข้อเสนอไม่มีความเชื่อมโยงกับโจทย์ความท้าทาย
     const isDomainConflict = Boolean(
+      !isProjectChallengeAlignedWithDominant &&
       dominantProposalDomain &&
       detectedChallengeDomain.id !== dominantProposalDomain.id &&
       maxProposalScore >= 5.0 &&
@@ -7874,7 +7937,7 @@ export function checkChallengeDomainRelevance(
       matched.length === 0
     );
 
-    if ((matched.length === 0 && challengeScoreInProposal === 0) || isDomainConflict) {
+    if ((matched.length === 0 && challengeScoreInProposal === 0 && !isProjectChallengeAlignedWithDominant) || isDomainConflict) {
       const propDesc = dominantProposalDomain
         ? `เรื่อง "${dominantProposalDomain.name}"`
         : 'ประเด็นอื่นที่ไม่ตรงกับโจทย์';
@@ -7919,16 +7982,35 @@ export function checkChallengeDomainRelevance(
     .map((t) => t.trim())
     .filter((t) => t.length >= 2 && !stopWords.has(t));
 
+  // แตกคำนำหน้าประสมภาษาไทย (Compound Prefix Splitting) เพื่อให้สามารถจับคู่คำต้นขั้วได้ (Stemming)
+  const compoundPrefixes = ['ความ', 'การ', 'กลุ่ม', 'ผู้', 'ด้าน', 'ปัญหา', 'ส่งเสริม', 'ช่วย'];
+  const stemTokens: string[] = [];
+  for (const t of rawTokens) {
+    for (const prefix of compoundPrefixes) {
+      if (t.startsWith(prefix) && t.length - prefix.length >= 3) {
+        const stem = t.slice(prefix.length);
+        if (!stopWords.has(stem) && !rawTokens.includes(stem)) {
+          stemTokens.push(stem);
+        }
+      }
+    }
+  }
+  rawTokens.push(...stemTokens);
+
   // แตกคีย์เวิร์ดประเด็นสำคัญ (Domain keywords & Subwords) จากโจทย์
   const commonDomainSubwords = [
     'แผ้วถาง', 'บุกรุก', 'ป่าต้นน้ำ', 'ตะนาวศรี', 'ทุเรียน', 'ปลูกทุเรียน', 'ตัดไม้', 'ป่าไม้', 'ป่าสงวน', 'วนเกษตร', 'อนุรักษ์ป่า', 'ป่าชุมชน', 'ลาดตระเวน', 'แนวกันชน', 'สวนทุเรียน',
     'ฟาร์มสุกร', 'สุกร', 'ฟาร์มหมู', 'กลิ่นเหม็น', 'น้ำเสีย', 'บำบัดน้ำเสีย', 'ก๊าซชีวภาพ', 'ไบโอแก๊ส', 'ปศุสัตว์', 'มูลสัตว์', 'มูลสุกร', 'ขี้หมู', 'ดับกลิ่น', 'ฟาร์มปิด', 'บ่อบำบัด',
     'พนัน', 'เว็บพนัน', 'สล็อต', 'บาคาร่า', 'คาสิโน', 'เกมออนไลน์',
-    'ขยะ', 'รีไซเคิล', 'คัดแยกขยะ', 'มลพิษขยะ',
+    'ขยะ', 'รีไซเคิล', 'คัดแยกขยะ', 'มลพิษขยะ', 'ธนาคารขยะ', 'ขยะทองคำ', 'zero-waste',
+    'ออม', 'ออมทรัพย์', 'วินัยการออม', 'วินัยการเงิน', 'กองทุนสัจจะ', 'สัจจะออมทรัพย์',
     'ไฟป่า', 'หมอกควัน', 'pm2.5', 'เผาป่า', 'ฮอตสปอต',
     'ยาเสพติด', 'ยาบ้า', 'สารเสพติด',
     'น้ำท่วม', 'อุทกภัย', 'ระบายน้ำ', 'แก้มลิง',
-    'ติดเตียง', 'ผู้สูงอายุ', 'สูงวัย',
+    'ติดเตียง', 'ผู้สูงอายุ', 'สูงวัย', 'เปราะบาง', 'ผู้ป่วยติดเตียง', 'อสม', 'แคร์กิฟเวอร์', 'caregiver',
+    'ความรุนแรง', 'ครอบครัว', 'รุนแรง', 'ทำร้าย', 'สตรี', 'เด็ก', 'ศูนย์พึ่งได้', 'บ้านปลอดภัย', 'คุ้มครอง',
+    'สตาร์ทอัพ', 'startup', 'วิสาหกิจ', 'ผู้ประกอบการ', 'นวัตกรรม', 'บ่มเพาะ',
+    'สุขภาพจิต', 'ซึมเศร้า', 'เครียด', 'สุขภาวะ', 'ใจ', 'ฮีลใจ',
     'ทางม้าลาย', 'จราจร', 'หมวกนิรภัย', 'หมวกกันน็อก',
     'ไซเบอร์', 'บัญชีม้า', 'คอลเซ็นเตอร์', 'หลอกลวง',
     'หนี้สิน', 'หนี้นอกระบบ', 'เงินกู้',
@@ -7949,7 +8031,13 @@ export function checkChallengeDomainRelevance(
     'ทุเรียน': ['สวนทุเรียน', 'วนเกษตร', 'ใต้ร่มเงา', 'เกษตรผสมผสาน', 'ป่าต้นน้ำ'],
     'ฟาร์มสุกร': ['ฟาร์มหมู', 'มูลสุกร', 'ขี้หมู', 'บำบัดน้ำเสีย', 'ก๊าซชีวภาพ', 'ไบโอแก๊ส', 'ดับกลิ่น', 'ฟาร์มปิด'],
     'น้ำเสีย': ['บำบัดน้ำ', 'คุณภาพน้ำ', 'ดักกลิ่น', 'บ่อบำบัด', 'ฟาร์มปิด', 'ไบโอแก๊ส', 'น้ำใส'],
-    'กลิ่นเหม็น': ['ดับกลิ่น', 'ม่านน้ำ', 'ก๊าซชีวภาพ', 'ฟาร์มปิด', 'จุลินทรีย์', 'em', 'กลิ่นรบกวน']
+    'กลิ่นเหม็น': ['ดับกลิ่น', 'ม่านน้ำ', 'ก๊าซชีวภาพ', 'ฟาร์มปิด', 'จุลินทรีย์', 'em', 'กลิ่นรบกวน'],
+    'ความรุนแรง': ['ครอบครัว', 'รุนแรง', 'ทำร้าย', 'เปราะบาง', 'สตรี', 'เด็ก', 'คุ้มครอง', 'บ้านปลอดภัย', 'ศูนย์พึ่งได้', 'เยียวยา', 'ปลอดภัย'],
+    'เปราะบาง': ['กลุ่มเปราะบาง', 'ยากไร้', 'ผู้ด้อยโอกาส', 'เด็ก', 'ผู้สูงอายุ', 'สตรี', 'ความรุนแรง', 'คุ้มครอง'],
+    'ขยะ': ['รีไซเคิล', 'คัดแยกขยะ', 'ขยะเปียก', 'ธนาคารขยะ', 'ขยะทองคำ', 'สิ่งแวดล้อม', 'zero-waste'],
+    'ออม': ['วินัยการออม', 'ออมทรัพย์', 'เงินออม', 'สัจจะออมทรัพย์', 'กองทุน', 'วินัยการเงิน', 'ธนาคารขยะ'],
+    'สตาร์ทอัพ': ['startup', 'วิสาหกิจ', 'ผู้ประกอบการ', 'นวัตกรรม', 'บ่มเพาะ', 'โมเดลธุรกิจ'],
+    'สุขภาพจิต': ['ซึมเศร้า', 'ความเครียด', 'สุขภาวะ', 'ฮีลใจ', 'รับฟัง', 'สายด่วน', 'สุขภาพใจ']
   };
   for (const [key, syns] of Object.entries(directionalSynonyms)) {
     if (cText.includes(key)) {
@@ -7962,9 +8050,17 @@ export function checkChallengeDomainRelevance(
   if (rawTokens.length > 0) {
     const matched = rawTokens.filter((t) => fullProposalText.includes(t));
     if (matched.length === 0) {
+      // Check if project has substantial details and plan before penalizing
+      if (pDetails.length > 80 && pPlan.length > 40 && !dominantProposalDomain) {
+        return {
+          isOffTopic: false,
+          coreKeywords: rawTokens,
+          matchedKeywords: []
+        };
+      }
       return {
         isOffTopic: true,
-        mismatchReason: `ข้อเสนอโครงการไม่ตรงกับโจทย์ความท้าทายที่ตั้งไว้: ไม่พบคำสำคัญหรือแนวคิดที่ตอบโจทย์ "${challengeStatement.slice(0, 50)}..."`,
+        mismatchReason: `ข้อเสนอโครงการไม่ตรงกับโจทย์ความท้าทายที่ตั้งไว้: ไม่พบคำสำคัญหรือแนวคิดที่ตอบโจทย์ "${effectiveChallenge.slice(0, 50)}..."`,
         coreKeywords: rawTokens,
         matchedKeywords: matched
       };
@@ -8169,6 +8265,7 @@ export function calculateSubstantiveQualityProfile(
     activityPlan?: string;
     behavioralKpi?: string;
     targetMoralVirtue?: string;
+    challengeTopic?: string;
     aiDraftSnapshot?: {
       projectName?: string;
       proposalDetails?: string;
@@ -9362,6 +9459,7 @@ export function evaluatePreSubmissionWithRubric(
     proposalDetails: string;
     activityPlan: string;
     behavioralKpi?: string;
+    challengeTopic?: string;
     proposerName?: string;
     proposerFirstName?: string;
     proposerLastName?: string;
@@ -10012,6 +10110,7 @@ export async function evaluatePreSubmissionWithOpenRouterLlm(
     proposalDetails: string;
     activityPlan: string;
     behavioralKpi?: string;
+    challengeTopic?: string;
     proposerName?: string;
     proposerFirstName?: string;
     proposerLastName?: string;

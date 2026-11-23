@@ -960,11 +960,13 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     proposalDetails: string;
     activityPlan: string;
     behavioralKpi: string;
+    challengeTopic?: string;
     lastAiGeneratedSnapshot?: {
       projectName: string;
       proposalDetails: string;
       activityPlan: string;
       behavioralKpi: string;
+      challengeTopic?: string;
     } | null;
     savedAt: string;
   }
@@ -1116,6 +1118,9 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
       if (typeof draft.proposalDetails === 'string') setPropProposalDetails(draft.proposalDetails);
       if (typeof draft.activityPlan === 'string') setPropActivityPlan(draft.activityPlan);
       if (typeof draft.behavioralKpi === 'string') setPropBehavioralKpi(draft.behavioralKpi);
+      if (typeof draft.challengeTopic === 'string' && draft.challengeTopic.trim().length > 0) {
+        setHackathonChallenge(draft.challengeTopic);
+      }
       if (draft.lastAiGeneratedSnapshot !== undefined) {
         saveAiSnapshot(draft.lastAiGeneratedSnapshot);
       }
@@ -1166,6 +1171,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
         proposalDetails: propProposalDetails,
         activityPlan: propActivityPlan,
         behavioralKpi: propBehavioralKpi,
+        challengeTopic: hackathonChallenge,
         lastAiGeneratedSnapshot
       });
       const now = new Date();
@@ -1826,6 +1832,15 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
       // บันทึก payload ของ Prompt และ Output สำหรับ Account Admin ตรวจสอบ
       setLastAiIdeationPayload(idea);
 
+      // สำคัญมาก: ซิงค์โจทย์ความท้าทายให้ตรงกับประเด็นที่ AI หรือผู้ใช้ต้องการโดยตรง
+      const resolvedChallenge = idea.challengeTopic || (promptInput && promptInput.trim().length > 0 ? `โครงการ${promptInput.replace(/^(?:อยากได้โครงการ|ช่วยคิดโครงการ|โครงการ)\s*/g, '').trim()} จ.${province}` : hackathonChallenge);
+      if (resolvedChallenge && resolvedChallenge.trim().length > 0) {
+        setHackathonChallenge(resolvedChallenge);
+        try {
+          localStorage.setItem(`pilot_active_challenge_${province}`, resolvedChallenge);
+        } catch {}
+      }
+
       if (idea.projectName) setPropProjectName(stripProvinceFromProjectTitle(idea.projectName));
       if (idea.targetMoralVirtue) {
         const v = idea.targetMoralVirtue;
@@ -1842,7 +1857,8 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
         projectName: idea.projectName || '',
         proposalDetails: idea.proposalDetails || '',
         activityPlan: idea.activityPlan || '',
-        behavioralKpi: idea.behavioralKpi || ''
+        behavioralKpi: idea.behavioralKpi || '',
+        challengeTopic: resolvedChallenge
       };
       saveAiSnapshot(initialAiSnap);
 
@@ -1855,6 +1871,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
         proposalDetails: idea.proposalDetails || '',
         activityPlan: idea.activityPlan || '',
         behavioralKpi: idea.behavioralKpi || '',
+        challengeTopic: resolvedChallenge,
         lastAiGeneratedSnapshot: initialAiSnap
       });
       const nowIdea = new Date();
@@ -1867,7 +1884,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
 
       // ซิงค์ชื่อโครงการแนะนำ (Suggested Titles) และกลยุทธ์ทางเลือกให้ไปในทิศทางเดียวกับบริบทส่วนที่ 2 ทันที
       const normVirtue = idea.targetMoralVirtue ? (idea.targetMoralVirtue.includes('วินัย') ? 'วินัย' : idea.targetMoralVirtue) : 'พอเพียง';
-      const alternativeTitles = suggestCreativeProjectTitles(effectiveProvince, normVirtue, promptInput || idea.projectName || idea.proposalDetails, promptInput || hackathonChallenge).map(stripProvinceFromProjectTitle);
+      const alternativeTitles = suggestCreativeProjectTitles(effectiveProvince, normVirtue, promptInput || idea.projectName || idea.proposalDetails, resolvedChallenge).map(stripProvinceFromProjectTitle);
       const combinedTitles = Array.from(new Set([idea.projectName, ...alternativeTitles].filter(Boolean) as string[]));
       setSuggestedTitles(combinedTitles.slice(0, 5));
 
@@ -1877,7 +1894,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
         province: effectiveProvince,
         targetAudience: idea.targetAudience,
         targetArea: idea.targetArea,
-        challengeTopic: promptInput || hackathonChallenge,
+        challengeTopic: resolvedChallenge,
         userPromptOrKeyword: promptInput
       });
       setSuggestedBehaviorStrategies(alternativeStrats);
@@ -1968,6 +1985,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
         proposalDetails: propProposalDetails,
         activityPlan: propActivityPlan || 'กลไกการมีส่วนร่วมของ 3 ระดับ',
         behavioralKpi: propBehavioralKpi || 'ร้อยละพฤติกรรมเชิงบวกที่เพิ่มขึ้นอย่างเป็นรูปธรรม',
+        challengeTopic: hackathonChallenge,
         proposerName: regFullName || `${candFirst} ${candLast}`.trim() || 'ผู้ร่วมกิจกรรม Hackathon',
         proposerFirstName: candFirst || undefined,
         proposerLastName: candLast || undefined,
