@@ -955,14 +955,87 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
   const [aiIdeationCount, setAiIdeationCount] = useState<number>(0);
   const [isAiGenerating, setIsAiGenerating] = useState<boolean>(false);
 
-  // ส่วนที่ 2: ฟอร์มใส่ข้อมูลโครงการที่ต้องการนำเสนอ - เริ่มต้นคุณธรรมเป้าหมายให้เลือกตัวที่อ่อนเป็น default
-  const [propProjectName, setPropProjectName] = useState<string>('');
-  const [propTargetVirtue, setPropTargetVirtue] = useState<string>(() => research.weaknessVirtue || 'พอเพียง');
-  const [propTargetAudience, setPropTargetAudience] = useState<string>('');
-  const [propTargetArea, setPropTargetArea] = useState<string>('');
-  const [propProposalDetails, setPropProposalDetails] = useState<string>('');
-  const [propActivityPlan, setPropActivityPlan] = useState<string>('');
-  const [propBehavioralKpi, setPropBehavioralKpi] = useState<string>('');
+  // Helper functions and interface for Step 4 Session Auto-Save Draft
+  interface Step4DraftData {
+    projectName: string;
+    targetVirtue: string;
+    targetAudience: string;
+    targetArea: string;
+    proposalDetails: string;
+    activityPlan: string;
+    behavioralKpi: string;
+    lastAiGeneratedSnapshot?: {
+      projectName: string;
+      proposalDetails: string;
+      activityPlan: string;
+      behavioralKpi: string;
+    } | null;
+    savedAt: string;
+  }
+
+  const getStep4DraftStorageKey = (prov: string, first: string, last: string) => {
+    const cleanFirst = (first || '').trim().toLowerCase();
+    const cleanLast = (last || '').trim().toLowerCase();
+    const userTag = (cleanFirst || cleanLast) ? `${cleanFirst}_${cleanLast}` : 'default';
+    return `mdc_step4_draft_${prov || 'อยุธยา'}_${userTag}`;
+  };
+
+  const loadStep4Draft = (prov: string, first: string, last: string): Step4DraftData | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const key = getStep4DraftStorageKey(prov, first, last);
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (err) {
+      console.warn('Error reading step 4 draft:', err);
+      return null;
+    }
+  };
+
+  const saveStep4Draft = (prov: string, first: string, last: string, data: Omit<Step4DraftData, 'savedAt'>) => {
+    if (typeof window === 'undefined') return;
+    try {
+      const key = getStep4DraftStorageKey(prov, first, last);
+      const payload: Step4DraftData = {
+        ...data,
+        savedAt: new Date().toISOString()
+      };
+      localStorage.setItem(key, JSON.stringify(payload));
+    } catch (err) {
+      console.warn('Error saving step 4 draft:', err);
+    }
+  };
+
+  const clearStep4Draft = (prov: string, first: string, last: string) => {
+    if (typeof window === 'undefined') return;
+    try {
+      const key = getStep4DraftStorageKey(prov, first, last);
+      localStorage.removeItem(key);
+    } catch (err) {
+      console.warn('Error clearing step 4 draft:', err);
+    }
+  };
+
+  // ส่วนที่ 2: ฟอร์มใส่ข้อมูลโครงการที่ต้องการนำเสนอ - เริ่มต้นคุณธรรมเป้าหมายให้เลือกตัวที่อ่อนเป็น default (กู้คืนจากแบบร่างอัตโนมัติถ้ามี)
+  const initialStep4Draft = useMemo(() => {
+    return loadStep4Draft(province, regFirstName, regLastName) || loadStep4Draft(province, '', '');
+  }, [province]);
+
+  const [propProjectName, setPropProjectName] = useState<string>(() => initialStep4Draft?.projectName || '');
+  const [propTargetVirtue, setPropTargetVirtue] = useState<string>(() => initialStep4Draft?.targetVirtue || research.weaknessVirtue || 'พอเพียง');
+  const [propTargetAudience, setPropTargetAudience] = useState<string>(() => initialStep4Draft?.targetAudience || '');
+  const [propTargetArea, setPropTargetArea] = useState<string>(() => initialStep4Draft?.targetArea || '');
+  const [propProposalDetails, setPropProposalDetails] = useState<string>(() => initialStep4Draft?.proposalDetails || '');
+  const [propActivityPlan, setPropActivityPlan] = useState<string>(() => initialStep4Draft?.activityPlan || '');
+  const [propBehavioralKpi, setPropBehavioralKpi] = useState<string>(() => initialStep4Draft?.behavioralKpi || '');
+  const [step4AutoSavedTime, setStep4AutoSavedTime] = useState<string | null>(() => {
+    if (initialStep4Draft?.savedAt) {
+      const d = new Date(initialStep4Draft.savedAt);
+      return !isNaN(d.getTime()) ? d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : null;
+    }
+    return null;
+  });
 
   // Sync propTargetVirtue when province / weakness changes
   useEffect(() => {
@@ -983,6 +1056,9 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     activityPlan: string;
     behavioralKpi: string;
   } | null>(() => {
+    if (initialStep4Draft?.lastAiGeneratedSnapshot) {
+      return initialStep4Draft.lastAiGeneratedSnapshot;
+    }
     if (typeof window !== 'undefined') {
       try {
         const saved = sessionStorage.getItem('last_ai_generated_snapshot');
@@ -1013,6 +1089,108 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     }
   };
 
+  // User/Province change: restore Step 4 draft for the current participant
+  const prevUserDraftRef = useRef<string>(`${province}_${regFirstName}_${regLastName}`);
+  useEffect(() => {
+    const userTag = `${province}_${(regFirstName || '').trim()}_${(regLastName || '').trim()}`;
+    if (prevUserDraftRef.current === userTag) return;
+    prevUserDraftRef.current = userTag;
+
+    let draft = loadStep4Draft(province, regFirstName, regLastName);
+    // If specific user has no draft yet, migrate unassigned default draft if present
+    if (!draft && (regFirstName.trim() || regLastName.trim())) {
+      const defaultDraft = loadStep4Draft(province, '', '');
+      if (defaultDraft && (
+        defaultDraft.projectName ||
+        defaultDraft.proposalDetails ||
+        defaultDraft.activityPlan ||
+        defaultDraft.behavioralKpi
+      )) {
+        draft = defaultDraft;
+        saveStep4Draft(province, regFirstName, regLastName, defaultDraft);
+        clearStep4Draft(province, '', '');
+      }
+    }
+
+    if (draft) {
+      if (typeof draft.projectName === 'string') setPropProjectName(draft.projectName);
+      if (typeof draft.targetVirtue === 'string') setPropTargetVirtue(draft.targetVirtue);
+      if (typeof draft.targetAudience === 'string') setPropTargetAudience(draft.targetAudience);
+      if (typeof draft.targetArea === 'string') setPropTargetArea(draft.targetArea);
+      if (typeof draft.proposalDetails === 'string') setPropProposalDetails(draft.proposalDetails);
+      if (typeof draft.activityPlan === 'string') setPropActivityPlan(draft.activityPlan);
+      if (typeof draft.behavioralKpi === 'string') setPropBehavioralKpi(draft.behavioralKpi);
+      if (draft.lastAiGeneratedSnapshot !== undefined) {
+        saveAiSnapshot(draft.lastAiGeneratedSnapshot);
+      }
+      if (draft.savedAt) {
+        const d = new Date(draft.savedAt);
+        if (!isNaN(d.getTime())) {
+          setStep4AutoSavedTime(d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+        }
+      }
+    } else {
+      setPropProjectName('');
+      setPropTargetVirtue(selectedWeaknessVirtues[0] || 'พอเพียง');
+      setPropTargetAudience('');
+      setPropTargetArea('');
+      setPropProposalDetails('');
+      setPropActivityPlan('');
+      setPropBehavioralKpi('');
+      saveAiSnapshot(null);
+      setStep4AutoSavedTime(null);
+    }
+  }, [province, regFirstName, regLastName, selectedWeaknessVirtues]);
+
+  // Auto-Save Step 4 Form on change (Debounce 300ms)
+  const isStep4InitialMount = useRef(true);
+  useEffect(() => {
+    if (isStep4InitialMount.current) {
+      isStep4InitialMount.current = false;
+      return;
+    }
+
+    const hasAnyContent = Boolean(
+      propProjectName.trim() ||
+      propTargetAudience.trim() ||
+      propTargetArea.trim() ||
+      propProposalDetails.trim() ||
+      propActivityPlan.trim() ||
+      propBehavioralKpi.trim()
+    );
+
+    if (!hasAnyContent) return;
+
+    const timer = setTimeout(() => {
+      saveStep4Draft(province, regFirstName, regLastName, {
+        projectName: propProjectName,
+        targetVirtue: propTargetVirtue,
+        targetAudience: propTargetAudience,
+        targetArea: propTargetArea,
+        proposalDetails: propProposalDetails,
+        activityPlan: propActivityPlan,
+        behavioralKpi: propBehavioralKpi,
+        lastAiGeneratedSnapshot
+      });
+      const now = new Date();
+      setStep4AutoSavedTime(now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [
+    province,
+    regFirstName,
+    regLastName,
+    propProjectName,
+    propTargetVirtue,
+    propTargetAudience,
+    propTargetArea,
+    propProposalDetails,
+    propActivityPlan,
+    propBehavioralKpi,
+    lastAiGeneratedSnapshot
+  ]);
+
   // เมื่อเริ่มต้น หรือเมื่อสลับจังหวัด ยังไม่มีปุ่มชื่อโครงการแนะนำ จนกว่าจะกดปุ่มให้ AI ช่วยคิดหัวข้อโครงการในส่วนที่สอง
   useEffect(() => {
     setSuggestedTitles([]);
@@ -1037,9 +1215,22 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
       setSuggestedTitles(titles);
       const pickedTitle = titles[nextIndex % titles.length] || titles[0];
       setPropProjectName(pickedTitle);
+      const updatedSnap = lastAiGeneratedSnapshot ? { ...lastAiGeneratedSnapshot, projectName: pickedTitle } : null;
       if (lastAiGeneratedSnapshot) {
-        saveAiSnapshot({ ...lastAiGeneratedSnapshot, projectName: pickedTitle });
+        saveAiSnapshot(updatedSnap);
       }
+      saveStep4Draft(province, regFirstName, regLastName, {
+        projectName: pickedTitle,
+        targetVirtue: propTargetVirtue,
+        targetAudience: propTargetAudience,
+        targetArea: propTargetArea,
+        proposalDetails: propProposalDetails,
+        activityPlan: propActivityPlan,
+        behavioralKpi: propBehavioralKpi,
+        lastAiGeneratedSnapshot: updatedSnap
+      });
+      const nowTitle = new Date();
+      setStep4AutoSavedTime(nowTitle.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
       setSubmitFeedback(`✨ AI ได้คิดชื่อโครงการเท่ ๆ เฉพาะทางจากบริบทในส่วนที่ 2 ให้ใหม่: "${pickedTitle}"`);
       setTimeout(() => setSubmitFeedback(null), 4000);
       setIsGeneratingTitle(false);
@@ -1047,7 +1238,12 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
   };
 
   // ฟังก์ชันล้างข้อมูลฟอร์มส่วนที่ 2 ให้กลับเป็นค่าว่างเริ่มต้น (คุณธรรมเป้าหมายกลับเป็นจุดอ่อน default)
-  const handleClearSection2Form = () => {
+  const handleClearSection2Form = (skipConfirm: boolean = false) => {
+    if (!skipConfirm) {
+      const confirmClear = window.confirm('คุณต้องการล้างข้อมูลโครงการที่กรอกไว้ทั้งหมดใช่หรือไม่? (แบบร่างที่บันทึกไว้ในระบบจะถูกลบออก)');
+      if (!confirmClear) return;
+    }
+
     setPropProjectName('');
     setPropTargetVirtue(selectedWeaknessVirtues[0] || 'พอเพียง');
     setPropTargetAudience('');
@@ -1060,6 +1256,8 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     setSuggestedTitles([]);
     setSuggestedBehaviorStrategies([]);
     saveAiSnapshot(null);
+    clearStep4Draft(province, regFirstName, regLastName);
+    setStep4AutoSavedTime(null);
   };
 
   // Step 4: Behavior Modification Strategy AI Generator State
@@ -1097,12 +1295,25 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
       });
 
       setPropProposalDetails(generated);
-      saveAiSnapshot({
+      const updatedStratSnap = {
         projectName: propProjectName,
         proposalDetails: generated,
         activityPlan: propActivityPlan,
         behavioralKpi: propBehavioralKpi
+      };
+      saveAiSnapshot(updatedStratSnap);
+      saveStep4Draft(province, regFirstName, regLastName, {
+        projectName: propProjectName,
+        targetVirtue: propTargetVirtue,
+        targetAudience: propTargetAudience,
+        targetArea: propTargetArea,
+        proposalDetails: generated,
+        activityPlan: propActivityPlan,
+        behavioralKpi: propBehavioralKpi,
+        lastAiGeneratedSnapshot: updatedStratSnap
       });
+      const nowStrat = new Date();
+      setStep4AutoSavedTime(nowStrat.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
       setSuggestedBehaviorStrategies(alternatives);
       setSubmitFeedback('✨ AI ได้คิดแนวคิดและกลยุทธ์ปรับเปลี่ยนพฤติกรรมที่สอดคล้องกับชื่อโครงการและ Prompt ให้เรียบร้อยแล้ว!');
       setTimeout(() => setSubmitFeedback(null), 4000);
@@ -1624,12 +1835,27 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
       if (idea.behavioralKpi) setPropBehavioralKpi(idea.behavioralKpi);
 
       // บันทึก Snapshot ของข้อเสนอฉบับร่างตั้งต้นจาก AI เพื่อใช้ตรวจสอบระดับการมีส่วนร่วมของมนุษย์
-      saveAiSnapshot({
+      const initialAiSnap = {
         projectName: idea.projectName || '',
         proposalDetails: idea.proposalDetails || '',
         activityPlan: idea.activityPlan || '',
         behavioralKpi: idea.behavioralKpi || ''
+      };
+      saveAiSnapshot(initialAiSnap);
+
+      // บันทึกร่างโครงการลง Storage ของ Session ผู้ใช้ทันที
+      saveStep4Draft(province, regFirstName, regLastName, {
+        projectName: stripProvinceFromProjectTitle(idea.projectName || ''),
+        targetVirtue: idea.targetMoralVirtue ? (idea.targetMoralVirtue.includes('วินัย') ? 'วินัย' : idea.targetMoralVirtue) : 'พอเพียง',
+        targetAudience: idea.targetAudience || '',
+        targetArea: idea.targetArea || '',
+        proposalDetails: idea.proposalDetails || '',
+        activityPlan: idea.activityPlan || '',
+        behavioralKpi: idea.behavioralKpi || '',
+        lastAiGeneratedSnapshot: initialAiSnap
       });
+      const nowIdea = new Date();
+      setStep4AutoSavedTime(nowIdea.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
 
       // ล้าง Temp File ประวัติ 5 ครั้งล่าสุดของการตรวจคะแนนเดิมออกทันที และรีเซ็ตการตรวจกลับสู่รอบที่ 1
       clearTempEvaluationHistory(province);
@@ -1882,7 +2108,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     setScoreboardFilterTab('all');
     setDashboardViewMode('submitted_only');
     setCurrentStep(5);
-    handleClearSection2Form();
+    handleClearSection2Form(true);
     setSubmitFeedback(`🚀 โครงการ "${created.projectName}" บันทึกลงฐานข้อมูล PostgreSQL (DB-MDC) และส่งเข้าสู่ Hackathon เรียบร้อยแล้ว! (คะแนนประเมิน AI: ${created.aiScore}/100)`);
     setTimeout(() => setSubmitFeedback(null), 5000);
   };
@@ -4363,10 +4589,29 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
                 <span style={{ fontSize: '15.5px', color: '#64748b' }}>
                   กลุ่ม: <strong>{coffeeGroups.find((g) => g.key === selectedGroup)?.name || selectedGroup}</strong>
                 </span>
+                {step4AutoSavedTime && (
+                  <span
+                    style={{
+                      fontSize: '12px',
+                      color: '#059669',
+                      background: '#ecfdf5',
+                      border: '1px solid #a7f3d0',
+                      padding: '3px 9px',
+                      borderRadius: '999px',
+                      fontWeight: 600,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                    title="ระบบทำการบันทึกแบบร่างโครงการในเครื่องของคุณอัตโนมัติ"
+                  >
+                    <span>💾 ร่างอัตโนมัติ ({step4AutoSavedTime})</span>
+                  </span>
+                )}
                 <button
                   type="button"
                   className="btn-clear-section2-form"
-                  onClick={handleClearSection2Form}
+                  onClick={() => handleClearSection2Form(false)}
                   title="ล้างข้อมูลในฟอร์มส่วนที่ 2 ให้กลับเป็นค่าว่างเริ่มต้น"
                 >
                   <RotateCcw size={13} />
