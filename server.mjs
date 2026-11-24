@@ -533,11 +533,28 @@ async function initDatabase() {
       await pgPool.query('SELECT 1 as connected');
       console.log(`[Database] Connected to PostgreSQL database "${targetDbName}" successfully!`);
 
-      // 4. Verify & Create all tables and indexes in DB-MDC
+      // 4. Ensure province column and composite primary key on PostgreSQL BEFORE schema/index creation
+      try {
+        const tblRes = await pgPool.query("SELECT 1 FROM information_schema.tables WHERE table_name = 'pilot_coffee_groups'");
+        if (tblRes.rows.length > 0) {
+          const colCheck = await pgPool.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'pilot_coffee_groups' AND column_name = 'province'");
+          if (colCheck.rows.length === 0) {
+            console.log('[Migration] Adding province column and updating primary key on pilot_coffee_groups in PostgreSQL...');
+            await pgPool.query("ALTER TABLE pilot_coffee_groups ADD COLUMN IF NOT EXISTS province TEXT NOT NULL DEFAULT 'พระนครศรีอยุธยา'");
+            await pgPool.query("ALTER TABLE pilot_coffee_groups ADD COLUMN IF NOT EXISTS order_index INTEGER DEFAULT 0");
+            await pgPool.query("ALTER TABLE pilot_coffee_groups DROP CONSTRAINT IF EXISTS pilot_coffee_groups_pkey");
+            await pgPool.query("ALTER TABLE pilot_coffee_groups ADD PRIMARY KEY (province, key)");
+          }
+        }
+      } catch (err) {
+        console.warn('[Migration] Note on pilot_coffee_groups table alteration:', err.message);
+      }
+
+      // 5. Verify & Create all tables and indexes in DB-MDC
       await pgPool.query(PG_SCHEMA_SQL);
       console.log(`[Database] PostgreSQL schema in "${targetDbName}" verified and initialized.`);
 
-      // 5. Seed / Migrate initial data if DB-MDC tables are empty
+      // 6. Seed / Migrate initial data if DB-MDC tables are empty
       if (fs.existsSync(dbPath)) {
         try {
           const localSqlite = new DatabaseSync(dbPath);
@@ -545,19 +562,6 @@ async function initDatabase() {
         } catch (mErr) {
           console.warn('[Database] Local SQLite migration check warning:', mErr.message);
         }
-      }
-
-      // Ensure province column and composite primary key on PostgreSQL
-      try {
-        const colCheck = await pgPool.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'pilot_coffee_groups' AND column_name = 'province'");
-        if (colCheck.rows.length === 0) {
-          console.log('[Migration] Adding province column and updating primary key on pilot_coffee_groups in PostgreSQL...');
-          await pgPool.query("ALTER TABLE pilot_coffee_groups ADD COLUMN province TEXT NOT NULL DEFAULT 'พระนครศรีอยุธยา'");
-          await pgPool.query("ALTER TABLE pilot_coffee_groups DROP CONSTRAINT IF EXISTS pilot_coffee_groups_pkey");
-          await pgPool.query("ALTER TABLE pilot_coffee_groups ADD PRIMARY KEY (province, key)");
-        }
-      } catch (err) {
-        console.warn('[Migration] Note on pilot_coffee_groups table alteration:', err.message);
       }
 
       // Bootstrap coffee groups for all 4 provinces
@@ -598,32 +602,38 @@ async function initDatabase() {
   try {
     sqliteDb.exec('PRAGMA journal_mode = WAL;');
     sqliteDb.exec('PRAGMA busy_timeout = 5000;');
-    sqliteDb.exec(PG_SCHEMA_SQL);
 
-    // Check if province column exists in SQLite
-    const cols = sqliteDb.prepare("PRAGMA table_info(pilot_coffee_groups)").all();
-    if (!cols.some(c => c.name === 'province')) {
-      console.log('[Migration] Migrating pilot_coffee_groups to include province in SQLite...');
-      sqliteDb.exec(`
-        ALTER TABLE pilot_coffee_groups RENAME TO pilot_coffee_groups_backup;
-        CREATE TABLE pilot_coffee_groups (
-          province TEXT NOT NULL DEFAULT 'พระนครศรีอยุธยา',
-          key TEXT NOT NULL,
-          name TEXT NOT NULL,
-          bg_image TEXT,
-          theme_color TEXT,
-          accent_bg TEXT,
-          is_custom INTEGER DEFAULT 0,
-          order_index INTEGER DEFAULT 0,
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL,
-          PRIMARY KEY (province, key)
-        );
-        INSERT INTO pilot_coffee_groups (province, key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
-        SELECT 'พระนครศรีอยุธยา', key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at FROM pilot_coffee_groups_backup;
-        DROP TABLE pilot_coffee_groups_backup;
-      `);
+    // 1. Check if pilot_coffee_groups exists and migrate BEFORE executing schema/indices
+    try {
+      const cols = sqliteDb.prepare("PRAGMA table_info(pilot_coffee_groups)").all();
+      if (cols.length > 0 && !cols.some(c => c.name === 'province')) {
+        console.log('[Migration] Migrating pilot_coffee_groups to include province in SQLite...');
+        sqliteDb.exec(`
+          ALTER TABLE pilot_coffee_groups RENAME TO pilot_coffee_groups_backup;
+          CREATE TABLE pilot_coffee_groups (
+            province TEXT NOT NULL DEFAULT 'พระนครศรีอยุธยา',
+            key TEXT NOT NULL,
+            name TEXT NOT NULL,
+            bg_image TEXT,
+            theme_color TEXT,
+            accent_bg TEXT,
+            is_custom INTEGER DEFAULT 0,
+            order_index INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (province, key)
+          );
+          INSERT INTO pilot_coffee_groups (province, key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
+          SELECT 'พระนครศรีอยุธยา', key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at FROM pilot_coffee_groups_backup;
+          DROP TABLE pilot_coffee_groups_backup;
+        `);
+      }
+    } catch (migErr) {
+      console.warn('[Migration] Note on initial SQLite coffee group check:', migErr.message);
     }
+
+    // 2. Now execute full schema and indexes safely
+    sqliteDb.exec(PG_SCHEMA_SQL);
 
     const now = new Date().toISOString();
     const insertStmt = sqliteDb.prepare(`
