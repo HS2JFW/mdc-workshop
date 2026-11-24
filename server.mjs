@@ -76,7 +76,7 @@ class UniversalDb {
   toPgSql(sql) {
     let transformed = sql;
     // Transform INSERT OR REPLACE INTO table (cols) VALUES (vals)
-    const match = sql.match(/INSERT\s+OR\s+REPLACE\s+INTO\s+([a-zA-Z0-9_]+)\s*\(([\s\S]*?)\)\s*VALUES\s*\(([\s\S]*?)\)/i);
+    const match = sql.match(/INSERT\s+OR\s+REPLACE\s+INTO\s+([a-zA-Z0-9_]+)\s*\(([\s\S]*?)\)\s*VALUES\s*\(([\s\S]*)\)/i);
     if (match) {
       const table = match[1];
       const cols = match[2].split(',').map(c => c.trim());
@@ -86,7 +86,11 @@ class UniversalDb {
         .filter(c => c.toLowerCase() !== pk && c.toLowerCase() !== 'created_at')
         .map(c => `${c} = EXCLUDED.${c}`)
         .join(', ');
-      transformed = `INSERT INTO ${table} (${match[2]}) VALUES (${match[3]}) ON CONFLICT (${pk}) DO UPDATE SET ${updateCols}`;
+      let vals = match[3].trim();
+      if (vals.endsWith(')')) {
+        vals = vals.slice(0, -1).trim();
+      }
+      transformed = `INSERT INTO ${table} (${match[2]}) VALUES (${vals}) ON CONFLICT (${pk}) DO UPDATE SET ${updateCols}`;
     }
     let paramIdx = 0;
     return transformed.replace(/\?/g, () => `$${++paramIdx}`);
@@ -1467,10 +1471,14 @@ async function handleApiRequest(req, res, urlObj) {
         const maxOrder = await db.prepare('SELECT MAX(order_index) as m FROM pilot_coffee_groups').get()?.m || 0;
         const orderIndex = typeof grp.orderIndex === 'number' ? grp.orderIndex : maxOrder + 1;
 
+        const lookupKey = body.originalKey || key;
+        const existingGroup = await db.prepare('SELECT created_at FROM pilot_coffee_groups WHERE key = ?').get(lookupKey);
+        const createdAt = existingGroup?.created_at || now;
+
         await db.prepare(`
           INSERT OR REPLACE INTO pilot_coffee_groups 
           (key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM pilot_coffee_groups WHERE key = ?), ?), ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           key,
           grp.name || 'กลุ่มกาแฟสร้างสรรค์คุณธรรม',
@@ -1479,10 +1487,13 @@ async function handleApiRequest(req, res, urlObj) {
           grp.accentBg || grp.accent_bg || '#fef3c7',
           grp.isCustom !== undefined ? (grp.isCustom ? 1 : 0) : 1,
           orderIndex,
-          key,
-          now,
+          createdAt,
           now
         );
+
+        if (body.isEdit && body.originalKey && body.originalKey !== key) {
+          await db.prepare('DELETE FROM pilot_coffee_groups WHERE key = ?').run(body.originalKey);
+        }
       }
 
       const rows = await db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all();

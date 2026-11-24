@@ -499,6 +499,10 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
 
   // Group Handlers
   const handleOpenAddGroup = () => {
+    if (!isAdmin) {
+      alert('เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถเพิ่มกลุ่มกาแฟใหม่ได้');
+      return;
+    }
     setGroupModalMode('add');
     setGroupToEdit(null);
     setIsGroupModalOpen(true);
@@ -545,6 +549,10 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
   };
 
   const handleSaveGroup = async (groupData: Partial<CoffeeGroupMeta>) => {
+    if (!isAdmin) {
+      alert('เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถสร้างหรือแก้ไขกลุ่มกาแฟได้');
+      return;
+    }
     try {
       if (groupModalMode === 'add') {
         const updated = await addCoffeeGroupToDb(groupData as any);
@@ -556,10 +564,6 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
         setSubmitFeedback(`✨ เพิ่มกลุ่ม "${groupData.name}" ลงฐานข้อมูล PostgreSQL (DB-MDC) สำเร็จ (ผู้ใช้ทุกคนจะมองเห็นและเลือกกลุ่มนี้ได้ทันที)!`);
         setTimeout(() => setSubmitFeedback(null), 4500);
       } else if (groupModalMode === 'edit' && groupData.key) {
-        if (!isAdmin) {
-          alert('เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถแก้ไขข้อมูลกลุ่มกาแฟได้');
-          return;
-        }
         const updated = await updateCoffeeGroupInDb(groupData.key, groupData);
         setCoffeeGroups(updated);
         setSubmitFeedback(`💾 อัปเดตข้อมูลกลุ่ม "${groupData.name}" ลงฐานข้อมูล PostgreSQL (DB-MDC) สำเร็จ!`);
@@ -1613,7 +1617,15 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
 
           // Update Coffee Groups while preserving current selectedGroup if still valid
           if (res.coffeeGroups && Array.isArray(res.coffeeGroups) && res.coffeeGroups.length > 0) {
-            setCoffeeGroups(res.coffeeGroups);
+            setCoffeeGroups((prevGroups) => {
+              const prevKeys = new Set(prevGroups.map((g) => g.key));
+              const brandNew = res.coffeeGroups!.filter((g) => !prevKeys.has(g.key));
+              if (brandNew.length > 0 && prevGroups.length > 0) {
+                setLiveSyncToast(`☕ พบกลุ่มกาแฟใหม่ (${brandNew.map((g) => g.name).join(', ')}) ถูกเพิ่มเข้ามาในระบบ`);
+                setTimeout(() => setLiveSyncToast(null), 4500);
+              }
+              return res.coffeeGroups!;
+            });
             setSelectedGroup((curr) => {
               const stillExists = res.coffeeGroups!.some((g) => g.key === curr);
               return stillExists ? curr : (res.coffeeGroups![0]?.key || 'mocha');
@@ -2907,16 +2919,18 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
                 </button>
               </div>
 
-              {/* Add Coffee Group Button - Always accessible to all participants & admins */}
-              <button
-                type="button"
-                className="coffee-add-group-btn"
-                onClick={handleOpenAddGroup}
-                title="คลิกเพื่อเพิ่มกลุ่มกาแฟใหม่สำหรับทีมหรือกิจกรรม"
-              >
-                <Plus size={18} />
-                <span>เพิ่มกลุ่มกาแฟใหม่ (Add Group)</span>
-              </button>
+              {/* Add Coffee Group Button - Accessible to Admins only */}
+              {isAdmin && (
+                <button
+                  type="button"
+                  className="coffee-add-group-btn"
+                  onClick={handleOpenAddGroup}
+                  title="คลิกเพื่อเพิ่มกลุ่มกาแฟใหม่สำหรับทีมหรือกิจกรรม (เฉพาะผู้ดูแลระบบ)"
+                >
+                  <Plus size={18} />
+                  <span>เพิ่มกลุ่มกาแฟใหม่ (Add Group)</span>
+                </button>
+              )}
 
               {isAdmin && (
                 <button

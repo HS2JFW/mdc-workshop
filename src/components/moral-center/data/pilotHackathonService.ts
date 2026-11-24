@@ -343,9 +343,13 @@ export async function addCoffeeGroupToDb(newGroup: Omit<CoffeeGroupMeta, 'key'> 
         saveStoredCoffeeGroups(data.groups);
         return data.groups;
       }
+    } else {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `Server responded with status ${res.status}`);
     }
-  } catch (err) {
-    console.warn('addCoffeeGroupToDb server fallback:', err);
+  } catch (err: any) {
+    console.error('addCoffeeGroupToDb error:', err);
+    throw err;
   }
 
   const updated = [...current, groupToAdd];
@@ -380,9 +384,13 @@ export async function updateCoffeeGroupInDb(key: string, updates: Partial<Coffee
         saveStoredCoffeeGroups(data.groups);
         return data.groups;
       }
+    } else {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `Server responded with status ${res.status}`);
     }
-  } catch (err) {
-    console.warn('updateCoffeeGroupInDb server fallback:', err);
+  } catch (err: any) {
+    console.error('updateCoffeeGroupInDb error:', err);
+    throw err;
   }
 
   const updated = current.map((g) => (g.key === key ? { ...g, ...updates } : g));
@@ -411,11 +419,11 @@ export async function deleteCoffeeGroupFromDb(key: string): Promise<CoffeeGroupM
       }
     } else {
       const data = await res.json().catch(() => ({}));
-      if (data.error) throw new Error(data.error);
+      throw new Error(data.error || `Server responded with status ${res.status}`);
     }
   } catch (err: any) {
-    if (err.message && err.message.includes('อย่างน้อย 1 กลุ่ม')) throw err;
-    console.warn('deleteCoffeeGroupFromDb server fallback:', err);
+    console.error('deleteCoffeeGroupFromDb error:', err);
+    throw err;
   }
 
   const updated = current.filter((g) => g.key !== key);
@@ -439,9 +447,13 @@ export async function resetCoffeeGroupsInDb(): Promise<CoffeeGroupMeta[]> {
         saveStoredCoffeeGroups(data.groups);
         return data.groups;
       }
+    } else {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `Server responded with status ${res.status}`);
     }
-  } catch (err) {
-    console.warn('resetCoffeeGroupsInDb server fallback:', err);
+  } catch (err: any) {
+    console.error('resetCoffeeGroupsInDb error:', err);
+    throw err;
   }
 
   const defaults = Object.values(COFFEE_GROUPS);
