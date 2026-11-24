@@ -376,7 +376,10 @@ export const AdminProfileDropdownMenu: React.FC<AdminProfileDropdownMenuProps> =
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0f172a' }}>
-                Database
+                Database (ฐานข้อมูล)
+              </div>
+              <div style={{ fontSize: '11px', color: '#64748b' }}>
+                PostgreSQL • DuckDB • SQLite
               </div>
             </div>
             <ChevronRight size={15} color="#94a3b8" />

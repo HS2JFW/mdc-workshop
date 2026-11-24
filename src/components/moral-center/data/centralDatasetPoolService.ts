@@ -38,6 +38,7 @@ export interface PageMetaItem {
   pageId: string;
   pageTitle: string;
   category: string;
+  sectionGroup: 'synergy' | 'activity';
   iconName: string;
   relatedTableNames: string[];
   description: string;
@@ -55,6 +56,7 @@ export const MASTER_PAGES_REGISTRY: PageMetaItem[] = [
     pageId: 'moral-analysis',
     pageTitle: 'วิเคราะห์ (ภาพรวม 20 ปี & บวร)',
     category: 'ภาพรวมยุทธศาสตร์',
+    sectionGroup: 'synergy',
     iconName: 'Network',
     relatedTableNames: [
       'mdc_moral_national_overview',
@@ -68,6 +70,7 @@ export const MASTER_PAGES_REGISTRY: PageMetaItem[] = [
     pageId: 'policy-1-1',
     pageTitle: 'ดัชนีคุณธรรม 5 มิติ',
     category: 'ดัชนีคุณธรรม',
+    sectionGroup: 'synergy',
     iconName: 'BarChart3',
     relatedTableNames: [
       'mdc_moral_national_overview',
@@ -82,6 +85,7 @@ export const MASTER_PAGES_REGISTRY: PageMetaItem[] = [
     pageId: 'policy-1-2',
     pageTitle: 'ทุนชีวิต (Life Capital)',
     category: 'ทุนชีวิต',
+    sectionGroup: 'synergy',
     iconName: 'HeartHandshake',
     relatedTableNames: [
       'mdc_lifecapital_national_overview',
@@ -96,6 +100,7 @@ export const MASTER_PAGES_REGISTRY: PageMetaItem[] = [
     pageId: 'policy-national',
     pageTitle: 'จังหวัดคุณธรรม 77 จังหวัด',
     category: 'เชิงพื้นที่ระดับชาติ',
+    sectionGroup: 'synergy',
     iconName: 'MapPin',
     relatedTableNames: [
       'mdc_moral_regional_breakdown',
@@ -108,6 +113,7 @@ export const MASTER_PAGES_REGISTRY: PageMetaItem[] = [
     pageId: 'policy-moral-lecturers',
     pageTitle: 'วิทยากรคุณธรรม',
     category: 'ทำเนียบบุคลากร',
+    sectionGroup: 'synergy',
     iconName: 'GraduationCap',
     relatedTableNames: [
       'moral_lecturers_directory',
@@ -119,6 +125,7 @@ export const MASTER_PAGES_REGISTRY: PageMetaItem[] = [
     pageId: 'policy-moral-credit',
     pageTitle: 'Moral Credit (เครดิตคุณธรรม)',
     category: 'ชุมชนและสังคม',
+    sectionGroup: 'synergy',
     iconName: 'Coins',
     relatedTableNames: [
       'moral_credit_members',
@@ -131,6 +138,7 @@ export const MASTER_PAGES_REGISTRY: PageMetaItem[] = [
     pageId: 'pilot-dashboard',
     pageTitle: 'กิจกรรมนำร่อง 4 ภูมิภาค',
     category: 'กิจกรรมเชิงลึก',
+    sectionGroup: 'activity',
     iconName: 'Activity',
     relatedTableNames: [
       'pilot_hackathon_projects',
@@ -144,6 +152,7 @@ export const MASTER_PAGES_REGISTRY: PageMetaItem[] = [
     pageId: 'pilot-vote',
     pageTitle: 'โหวตโครงการคุณธรรม (Hackathon)',
     category: 'การตัดสินและโหวต',
+    sectionGroup: 'activity',
     iconName: 'Award',
     relatedTableNames: [
       'pilot_hackathon_projects',
@@ -156,6 +165,7 @@ export const MASTER_PAGES_REGISTRY: PageMetaItem[] = [
     pageId: 'project-tracking',
     pageTitle: 'PMS (ระบบติดตามโครงการ)',
     category: 'การบริหารโครงการ',
+    sectionGroup: 'activity',
     iconName: 'FolderKanban',
     relatedTableNames: [
       'task_project',
@@ -587,58 +597,91 @@ export function onCentralPoolChange(callback: () => void): () => void {
   };
 }
 
+export type DatabaseEngineType = 'PostgreSQL' | 'DuckDB' | 'SQLite';
+
+export function getTableDatabaseEngine(tableName: string): DatabaseEngineType {
+  // Activity / Workshop & PMS tables stored in PostgreSQL (DB-MDC) and mirrored in SQLite
+  if (
+    tableName.startsWith('pilot_') ||
+    tableName.startsWith('pms_') ||
+    tableName === 'task_project'
+  ) {
+    return 'PostgreSQL';
+  }
+  // Moral Synergy & Research datasets powered by DuckDB
+  if (
+    tableName.startsWith('mdc_') ||
+    tableName.startsWith('ext_') ||
+    tableName.startsWith('provincial_') ||
+    tableName.startsWith('moral_lecturers_') ||
+    tableName === 'pilot_4_provinces_meta'
+  ) {
+    return 'DuckDB';
+  }
+  return 'SQLite';
+}
+
 // ----------------------------------------------------------------------------
-// 4. Unified Table Data Fetcher (Handles DuckDB, SQLite & In-Memory Fallback)
+// 4. Unified Table Data Fetcher (Handles PostgreSQL, DuckDB, SQLite & In-Memory)
 // ----------------------------------------------------------------------------
 export interface UnifiedTableDataResult {
   tableName: string;
   sourceType: string;
+  engine: DatabaseEngineType;
   columns: DatasetColumn[];
   rows: Record<string, any>[];
   totalRows: number;
 }
 
 export async function fetchUnifiedTableData(tableName: string): Promise<UnifiedTableDataResult> {
-  // Check if DuckDB table
-  const duckMeta = ALL_DUCKDB_TABLES_META.find((m) => m.tableName === tableName);
-  if (duckMeta) {
-    try {
-      const data = await fetchDuckDbTable(tableName);
-      if (data && data.rows) {
-        return {
-          tableName,
-          sourceType: 'DuckDB',
-          columns: data.columns || (data.rows.length > 0 ? Object.keys(data.rows[0]).map((k) => ({ name: k, type: 'VARCHAR' })) : []),
-          rows: data.rows,
-          totalRows: data.rows.length
-        };
+  const engine = getTableDatabaseEngine(tableName);
+
+  // 1. Check if DuckDB table
+  if (engine === 'DuckDB') {
+    const duckMeta = ALL_DUCKDB_TABLES_META.find((m) => m.tableName === tableName);
+    if (duckMeta) {
+      try {
+        const data = await fetchDuckDbTable(tableName);
+        if (data && data.rows) {
+          return {
+            tableName,
+            sourceType: 'DuckDB',
+            engine: 'DuckDB',
+            columns: data.columns || (data.rows.length > 0 ? Object.keys(data.rows[0]).map((k) => ({ name: k, type: 'VARCHAR' })) : []),
+            rows: data.rows,
+            totalRows: data.rows.length
+          };
+        }
+      } catch (err) {
+        console.warn(`Error fetching DuckDB table ${tableName}:`, err);
       }
-    } catch (err) {
-      console.warn(`Error fetching DuckDB table ${tableName}:`, err);
     }
   }
 
-  // Try SQLite API
+  // 2. Try PostgreSQL / SQLite API
   try {
     const sqliteRes = await fetchSqliteTableData(tableName);
     if (sqliteRes && sqliteRes.rows) {
+      const isPg = sqliteRes.engine === 'PostgreSQL 16' || sqliteRes.dbType === 'postgres' || engine === 'PostgreSQL';
       return {
         tableName,
-        sourceType: 'SQLite',
+        sourceType: isPg ? 'PostgreSQL 16 (DB-MDC)' : 'SQLite',
+        engine: isPg ? 'PostgreSQL' : 'SQLite',
         columns: sqliteRes.columns.map((c) => ({ name: c.name, type: c.type })),
         rows: sqliteRes.rows,
         totalRows: sqliteRes.rows.length
       };
     }
   } catch (err) {
-    console.warn(`Error fetching SQLite table ${tableName}:`, err);
+    console.warn(`Error fetching DB table ${tableName}:`, err);
   }
 
   // Fallback: Mock rows based on table name
-  return generateFallbackTableData(tableName);
+  return generateFallbackTableData(tableName, engine);
 }
 
-function generateFallbackTableData(tableName: string): UnifiedTableDataResult {
+function generateFallbackTableData(tableName: string, defaultEngine?: DatabaseEngineType): UnifiedTableDataResult {
+  const engine = defaultEngine || getTableDatabaseEngine(tableName);
   const sampleRows: Record<string, any>[] = [];
   const provinces = ['พระนครศรีอยุธยา', 'กาฬสินธุ์', 'น่าน', 'สุราษฎร์ธานี', 'เชียงใหม่', 'ขอนแก่น', 'สงขลา'];
 
@@ -655,7 +698,8 @@ function generateFallbackTableData(tableName: string): UnifiedTableDataResult {
 
   return {
     tableName,
-    sourceType: 'Central Pool',
+    sourceType: engine === 'PostgreSQL' ? 'PostgreSQL 16 (DB-MDC)' : engine === 'DuckDB' ? 'DuckDB' : 'SQLite',
+    engine,
     columns: [
       { name: 'id', type: 'VARCHAR' },
       { name: 'province_name', type: 'VARCHAR' },

@@ -65,7 +65,6 @@ import {
   fetchPilotSqliteState,
   registerPilotAgencyInSqlite
 } from '../data/pilotActivitiesSqliteService';
-import { DatabaseTablesExplorer } from '../components/DatabaseTablesExplorer';
 import {
   type CoffeeGroupKey,
   type CoffeeGroupMeta,
@@ -392,7 +391,6 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
   // Registered participants list from SQLite (Step 1 & Step 2 live synchronization)
   const [registeredParticipantsList, setRegisteredParticipantsList] = useState<PilotAgencyRegistration[]>([]);
   const [isLoadingParticipants, setIsLoadingParticipants] = useState<boolean>(false);
-  const [isDbExplorerModalOpen, setIsDbExplorerModalOpen] = useState<boolean>(false);
 
   const reloadParticipants = useCallback(async () => {
     setIsLoadingParticipants(true);
@@ -5494,41 +5492,6 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
         </div>
       )}
 
-      {/* SQLite Database Tables Explorer Modal (ตรวจเช็คข้อมูลผู้ร่วมกิจกรรม และทุกตารางในระบบ) */}
-      {isDbExplorerModalOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 9999,
-            backgroundColor: 'rgba(15, 23, 42, 0.65)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '24px',
-            backdropFilter: 'blur(4px)'
-          }}
-          onClick={() => setIsDbExplorerModalOpen(false)}
-        >
-          <div
-            style={{
-              backgroundColor: '#ffffff',
-              borderRadius: '16px',
-              maxWidth: '1320px',
-              width: '100%',
-              maxHeight: '92vh',
-              overflowY: 'auto',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <DatabaseTablesExplorer
-              initialTable="pilot_agency_registrations"
-              onClose={() => setIsDbExplorerModalOpen(false)}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 };

@@ -23,13 +23,18 @@ import {
   FolderKanban,
   CheckCircle2,
   RefreshCw,
-  Eye
+  Eye,
+  Sparkles,
+  Server,
+  HardDrive
 } from 'lucide-react';
 import {
   MASTER_PAGES_REGISTRY,
   fetchUnifiedTableData,
+  getTableDatabaseEngine,
   type PageMetaItem,
-  type UnifiedTableDataResult
+  type UnifiedTableDataResult,
+  type DatabaseEngineType
 } from '../data/centralDatasetPoolService';
 
 interface AdminDatabaseModalProps {
@@ -47,6 +52,7 @@ export const AdminDatabaseModal: React.FC<AdminDatabaseModalProps> = ({
   initialTable,
   initialPageId
 }) => {
+  const [activeDomainTab, setActiveDomainTab] = useState<'all' | 'synergy' | 'activity'>('synergy');
   const [selectedPageId, setSelectedPageId] = useState<string>(
     initialPageId || MASTER_PAGES_REGISTRY[0].pageId
   );
@@ -66,14 +72,22 @@ export const AdminDatabaseModal: React.FC<AdminDatabaseModalProps> = ({
     if (initialPageId) {
       setSelectedPageId(initialPageId);
       const foundPage = MASTER_PAGES_REGISTRY.find((p) => p.pageId === initialPageId);
-      if (foundPage && foundPage.relatedTableNames.length > 0) {
-        setSelectedTableName(initialTable || foundPage.relatedTableNames[0]);
+      if (foundPage) {
+        if (foundPage.sectionGroup) {
+          setActiveDomainTab(foundPage.sectionGroup);
+        }
+        if (foundPage.relatedTableNames.length > 0) {
+          setSelectedTableName(initialTable || foundPage.relatedTableNames[0]);
+        }
       }
     } else if (initialTable) {
       setSelectedTableName(initialTable);
       const foundPage = MASTER_PAGES_REGISTRY.find((p) => p.relatedTableNames.includes(initialTable));
       if (foundPage) {
         setSelectedPageId(foundPage.pageId);
+        if (foundPage.sectionGroup) {
+          setActiveDomainTab(foundPage.sectionGroup);
+        }
       }
     }
   }, [initialPageId, initialTable]);
@@ -172,7 +186,7 @@ export const AdminDatabaseModal: React.FC<AdminDatabaseModalProps> = ({
   };
 
   const renderPageIcon = (iconName: string) => {
-    const props = { size: 18, color: '#3b82f6' };
+    const props = { size: 18, color: '#38bdf8' };
     switch (iconName) {
       case 'Network': return <Network {...props} />;
       case 'BarChart3': return <BarChart3 {...props} />;
@@ -187,9 +201,88 @@ export const AdminDatabaseModal: React.FC<AdminDatabaseModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   const activePageMeta = MASTER_PAGES_REGISTRY.find((p) => p.pageId === selectedPageId);
+
+  const currentTableEngine: DatabaseEngineType = useMemo(() => {
+    return tableDataResult?.engine || getTableDatabaseEngine(selectedTableName);
+  }, [tableDataResult, selectedTableName]);
+
+  const filteredPages = useMemo(() => {
+    if (activeDomainTab === 'all') return MASTER_PAGES_REGISTRY;
+    return MASTER_PAGES_REGISTRY.filter((p) => p.sectionGroup === activeDomainTab);
+  }, [activeDomainTab]);
+
+  const renderEngineBadge = (engine: DatabaseEngineType | string, compact = false) => {
+    const isPostgres = engine === 'PostgreSQL' || engine.includes('PostgreSQL');
+    const isDuckDb = engine === 'DuckDB' || engine.includes('DuckDB');
+    const isSqlite = engine === 'SQLite' || engine.includes('SQLite');
+
+    let bg = 'rgba(99, 102, 241, 0.2)';
+    let border = '1px solid rgba(129, 140, 248, 0.45)';
+    let color = '#a5b4fc';
+    let label = 'PostgreSQL 16 (DB-MDC)';
+    let icon = '🐘';
+
+    if (isDuckDb) {
+      bg = 'rgba(245, 158, 11, 0.18)';
+      border = '1px solid rgba(245, 158, 11, 0.45)';
+      color = '#fbbf24';
+      label = 'DuckDB (Analytical)';
+      icon = '🦆';
+    } else if (isSqlite) {
+      bg = 'rgba(16, 185, 129, 0.18)';
+      border = '1px solid rgba(16, 185, 129, 0.45)';
+      color = '#34d399';
+      label = 'SQLite (Local Edge)';
+      icon = '🗄️';
+    }
+
+    if (compact) {
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '3px',
+            backgroundColor: bg,
+            color,
+            border,
+            borderRadius: '5px',
+            padding: '1px 5px',
+            fontSize: '9.5px',
+            fontWeight: 700,
+            lineHeight: 1.2
+          }}
+          title={label}
+        >
+          <span>{icon}</span>
+          <span>{isPostgres ? 'Postgres' : isDuckDb ? 'DuckDB' : 'SQLite'}</span>
+        </span>
+      );
+    }
+
+    return (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          backgroundColor: bg,
+          color,
+          border,
+          borderRadius: '20px',
+          padding: '4px 12px',
+          fontSize: '12px',
+          fontWeight: 700
+        }}
+      >
+        <span>{icon}</span>
+        <span>{label}</span>
+      </span>
+    );
+  };
+
+  if (!isOpen) return null;
 
   return (
     <div
@@ -345,6 +438,107 @@ export const AdminDatabaseModal: React.FC<AdminDatabaseModalProps> = ({
             gap: '20px'
           }}
         >
+          {/* DOMAIN NAVIGATION TABS: Moral Synergy vs Activities */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '6px',
+              backgroundColor: 'rgba(15, 23, 42, 0.85)',
+              borderRadius: '16px',
+              border: '1.5px solid rgba(148, 163, 184, 0.25)',
+              width: 'fit-content',
+              flexWrap: 'wrap'
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setActiveDomainTab('synergy');
+                const firstSynergy = MASTER_PAGES_REGISTRY.find((p) => p.sectionGroup === 'synergy');
+                if (firstSynergy && (!activePageMeta || activePageMeta.sectionGroup !== 'synergy')) {
+                  setSelectedPageId(firstSynergy.pageId);
+                  setSelectedTableName(firstSynergy.relatedTableNames[0]);
+                }
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '9px 18px',
+                borderRadius: '12px',
+                border: 'none',
+                backgroundColor: activeDomainTab === 'synergy' ? '#0284c7' : 'transparent',
+                color: activeDomainTab === 'synergy' ? '#ffffff' : '#94a3b8',
+                fontSize: '13.5px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.18s ease',
+                boxShadow: activeDomainTab === 'synergy' ? '0 4px 14px rgba(2, 132, 199, 0.4)' : 'none'
+              }}
+            >
+              <span>🌐</span>
+              <span>Moral Synergy (วิเคราะห์ยุทธศาสตร์ & ดัชนีคุณธรรม)</span>
+              <span style={{ fontSize: '11px', padding: '1px 7px', borderRadius: '10px', backgroundColor: activeDomainTab === 'synergy' ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.08)' }}>
+                🦆 DuckDB
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveDomainTab('activity');
+                const firstAct = MASTER_PAGES_REGISTRY.find((p) => p.sectionGroup === 'activity');
+                if (firstAct && (!activePageMeta || activePageMeta.sectionGroup !== 'activity')) {
+                  setSelectedPageId(firstAct.pageId);
+                  setSelectedTableName(firstAct.relatedTableNames[0]);
+                }
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '9px 18px',
+                borderRadius: '12px',
+                border: 'none',
+                backgroundColor: activeDomainTab === 'activity' ? '#7c3aed' : 'transparent',
+                color: activeDomainTab === 'activity' ? '#ffffff' : '#94a3b8',
+                fontSize: '13.5px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.18s ease',
+                boxShadow: activeDomainTab === 'activity' ? '0 4px 14px rgba(124, 58, 237, 0.4)' : 'none'
+              }}
+            >
+              <span>🏆</span>
+              <span>กิจกรรมเชิงพื้นที่ & Hackathon (เวิร์กช็อป 4 ภูมิภาค)</span>
+              <span style={{ fontSize: '11px', padding: '1px 7px', borderRadius: '10px', backgroundColor: activeDomainTab === 'activity' ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.08)' }}>
+                🐘 PostgreSQL 16
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveDomainTab('all')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '9px 16px',
+                borderRadius: '12px',
+                border: 'none',
+                backgroundColor: activeDomainTab === 'all' ? 'rgba(255, 255, 255, 0.15)' : 'transparent',
+                color: activeDomainTab === 'all' ? '#ffffff' : '#64748b',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              <span>📑 ทุกหน้าระบบ ({MASTER_PAGES_REGISTRY.length})</span>
+            </button>
+          </div>
+
           {/* SECTION 1: PAGE CARDS GRID */}
           <div>
             <div
@@ -352,13 +546,19 @@ export const AdminDatabaseModal: React.FC<AdminDatabaseModalProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                marginBottom: '12px'
+                marginBottom: '12px',
+                flexWrap: 'wrap',
+                gap: '10px'
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Layers size={17} color="#38bdf8" />
                 <span style={{ fontSize: '15px', fontWeight: 700, color: '#f1f5f9' }}>
-                  หน้าระบบทั้งหมด ({MASTER_PAGES_REGISTRY.length} Pages) และ Table ที่เกี่ยวข้อง
+                  {activeDomainTab === 'synergy'
+                    ? 'หมวดหมู่ Moral Synergy (แผนยุทธศาสตร์ 20 ปี, 4 ดัชนีหลัก, ทุนชีวิต & DuckDB)'
+                    : activeDomainTab === 'activity'
+                    ? 'หมวดหมู่ กิจกรรมเชิงพื้นที่ (เวิร์กช็อป 4 จังหวัด, ข้อเสนอโครงการ & PostgreSQL)'
+                    : `หน้าระบบทั้งหมด (${MASTER_PAGES_REGISTRY.length} Pages)`} ({filteredPages.length} Pages แสดงผล)
                 </span>
               </div>
               <span style={{ fontSize: '12px', color: '#64748b' }}>
@@ -373,7 +573,7 @@ export const AdminDatabaseModal: React.FC<AdminDatabaseModalProps> = ({
                 gap: '14px'
               }}
             >
-              {MASTER_PAGES_REGISTRY.map((page) => {
+              {filteredPages.map((page) => {
                 const isPageActive = page.pageId === selectedPageId;
                 return (
                   <div
@@ -412,17 +612,31 @@ export const AdminDatabaseModal: React.FC<AdminDatabaseModalProps> = ({
                           <div style={{ fontSize: '14px', fontWeight: 700, color: isPageActive ? '#38bdf8' : '#f8fafc' }}>
                             {page.pageTitle}
                           </div>
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              color: '#94a3b8',
-                              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                              padding: '2px 6px',
-                              borderRadius: '6px'
-                            }}
-                          >
-                            {page.category}
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                color: page.sectionGroup === 'synergy' ? '#38bdf8' : '#c084fc',
+                                backgroundColor: page.sectionGroup === 'synergy' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(168, 85, 247, 0.15)',
+                                padding: '1px 6px',
+                                borderRadius: '6px',
+                                fontWeight: 600
+                              }}
+                            >
+                              {page.sectionGroup === 'synergy' ? 'Synergy' : 'กิจกรรม'}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                color: '#94a3b8',
+                                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                                padding: '1px 6px',
+                                borderRadius: '6px'
+                              }}
+                            >
+                              {page.category}
+                            </span>
+                          </div>
                         </div>
                       </div>
 
@@ -459,6 +673,7 @@ export const AdminDatabaseModal: React.FC<AdminDatabaseModalProps> = ({
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
                         {page.relatedTableNames.map((tbl) => {
                           const isTableActive = tbl === selectedTableName;
+                          const tblEngine = getTableDatabaseEngine(tbl);
                           return (
                             <button
                               key={tbl}
@@ -467,7 +682,7 @@ export const AdminDatabaseModal: React.FC<AdminDatabaseModalProps> = ({
                               style={{
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '4px',
+                                gap: '5px',
                                 backgroundColor: isTableActive ? '#0284c7' : 'rgba(255, 255, 255, 0.07)',
                                 color: isTableActive ? '#ffffff' : '#94a3b8',
                                 border: isTableActive
@@ -480,10 +695,11 @@ export const AdminDatabaseModal: React.FC<AdminDatabaseModalProps> = ({
                                 cursor: 'pointer',
                                 transition: 'all 0.15s'
                               }}
-                              title={`คลิกเพื่อดูชุดข้อมูลของตาราง ${tbl}`}
+                              title={`คลิกเพื่อดูชุดข้อมูลของตาราง ${tbl} (${tblEngine})`}
                             >
                               <TableIcon size={11} />
                               <span>{tbl}</span>
+                              {renderEngineBadge(tblEngine, true)}
                             </button>
                           );
                         })}
@@ -496,7 +712,7 @@ export const AdminDatabaseModal: React.FC<AdminDatabaseModalProps> = ({
           </div>
 
           {/* ===================================================================
-              SECTION 2: DATA RECORDS VIEWER & PAGINATION (ชุดข้อมูลด้านล่าง)
+              SECTION 2: SUMMARY DASHBOARD CARD & DATA RECORDS VIEWER
           =================================================================== */}
           <div
             style={{
@@ -506,10 +722,192 @@ export const AdminDatabaseModal: React.FC<AdminDatabaseModalProps> = ({
               padding: '20px',
               display: 'flex',
               flexDirection: 'column',
-              gap: '16px'
+              gap: '20px'
             }}
           >
-            {/* Table Viewer Header */}
+            {/* SUMMARY DASHBOARD CARD */}
+            <div
+              style={{
+                background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%)',
+                borderRadius: '16px',
+                border: '1.5px solid rgba(56, 189, 248, 0.3)',
+                padding: '18px 20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px',
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)'
+              }}
+            >
+              {/* Header Row: Domain badge, Table Name, Engine Badge & Action Buttons */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '14px',
+                  borderBottom: '1px solid rgba(148, 163, 184, 0.15)',
+                  paddingBottom: '14px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                  <div
+                    style={{
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '12px',
+                      background: activePageMeta?.sectionGroup === 'synergy'
+                        ? 'linear-gradient(135deg, #0284c7, #38bdf8)'
+                        : 'linear-gradient(135deg, #7c3aed, #a855f7)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#ffffff',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+                    }}
+                  >
+                    {activePageMeta ? renderPageIcon(activePageMeta.iconName) : <TableIcon size={20} />}
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                          backgroundColor: activePageMeta?.sectionGroup === 'synergy'
+                            ? 'rgba(56, 189, 248, 0.2)'
+                            : 'rgba(168, 85, 247, 0.2)',
+                          color: activePageMeta?.sectionGroup === 'synergy' ? '#38bdf8' : '#c084fc',
+                          border: `1px solid ${activePageMeta?.sectionGroup === 'synergy' ? 'rgba(56, 189, 248, 0.4)' : 'rgba(168, 85, 247, 0.4)'}`
+                        }}
+                      >
+                        {activePageMeta?.sectionGroup === 'synergy' ? '🌐 Moral Synergy' : '🏆 กิจกรรมเชิงพื้นที่'}
+                      </span>
+                      <span style={{ fontSize: '13px', color: '#94a3b8' }}>• {activePageMeta?.pageTitle}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px', flexWrap: 'wrap' }}>
+                      <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#f8fafc', fontFamily: 'monospace' }}>
+                        {selectedTableName}
+                      </h3>
+                      {renderEngineBadge(currentTableEngine)}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={handleExportCsv}
+                    disabled={!tableDataResult || !tableDataResult.rows || tableDataResult.rows.length === 0}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                      color: '#4ade80',
+                      border: '1px solid rgba(34, 197, 94, 0.4)',
+                      borderRadius: '10px',
+                      padding: '8px 14px',
+                      fontSize: '12.5px',
+                      fontWeight: 600,
+                      cursor: tableDataResult?.rows?.length ? 'pointer' : 'not-allowed',
+                      opacity: tableDataResult?.rows?.length ? 1 : 0.5,
+                      transition: 'all 0.15s'
+                    }}
+                    title="ดาวน์โหลดข้อมูลตารางนี้เป็นไฟล์ CSV"
+                  >
+                    <Download size={14} />
+                    <span>ดาวน์โหลด CSV ({processedRows.length})</span>
+                  </button>
+
+                  {activePageMeta && onNavigatePage && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onNavigatePage(activePageMeta.pageId);
+                        onClose();
+                      }}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                        color: '#38bdf8',
+                        border: '1px solid rgba(56, 189, 248, 0.4)',
+                        borderRadius: '10px',
+                        padding: '8px 14px',
+                        fontSize: '12.5px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s'
+                      }}
+                      title={`เปิดไปยังหน้า ${activePageMeta.pageTitle}`}
+                    >
+                      <ExternalLink size={14} />
+                      <span>ไปยังหน้านี้ในระบบ</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Metrics Summary Grid */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                  gap: '12px'
+                }}
+              >
+                {/* Metric 1: Total Records */}
+                <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.04)', borderRadius: '12px', padding: '12px 14px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                  <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600 }}>📊 จำนวนแถวข้อมูล (Total Records)</div>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: '#f8fafc', marginTop: '4px' }}>
+                    {tableDataResult ? `${tableDataResult.totalRows.toLocaleString()} แถว` : 'กำลังโหลด...'}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                    {searchQuery ? `กรองพบ ${processedRows.length} แถว` : 'ข้อมูลพร้อมใช้งาน'}
+                  </div>
+                </div>
+
+                {/* Metric 2: Column Fields */}
+                <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.04)', borderRadius: '12px', padding: '12px 14px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                  <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600 }}>📋 โครงสร้างคอลัมน์ (Schema Fields)</div>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: '#f8fafc', marginTop: '4px' }}>
+                    {tableDataResult ? `${tableDataResult.columns.length} คอลัมน์` : '-'}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {tableDataResult?.columns.slice(0, 3).map(c => c.name).join(', ')}{tableDataResult && tableDataResult.columns.length > 3 ? '...' : ''}
+                  </div>
+                </div>
+
+                {/* Metric 3: Storage Engine */}
+                <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.04)', borderRadius: '12px', padding: '12px 14px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                  <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600 }}>🗄️ ฐานข้อมูลจัดเก็บ (Engine)</div>
+                  <div style={{ fontSize: '15px', fontWeight: 700, color: currentTableEngine === 'PostgreSQL' ? '#a78bfa' : currentTableEngine === 'DuckDB' ? '#fde047' : '#6ee7b7', marginTop: '6px' }}>
+                    {currentTableEngine === 'PostgreSQL' ? '🐘 PostgreSQL 16 (DB-MDC)' : currentTableEngine === 'DuckDB' ? '🦆 DuckDB In-Memory' : '🗄️ SQLite Local Edge'}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
+                    {currentTableEngine === 'PostgreSQL' ? 'Dual-Engine Server Database' : currentTableEngine === 'DuckDB' ? 'High-Speed Analytic DB' : 'Embedded Local Database'}
+                  </div>
+                </div>
+
+                {/* Metric 4: Connection & Sync Status */}
+                <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.04)', borderRadius: '12px', padding: '12px 14px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                  <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600 }}>⚡ สถานะการเชื่อมต่อ (Sync Status)</div>
+                  <div style={{ fontSize: '15px', fontWeight: 700, color: '#22c55e', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 8px #22c55e' }} />
+                    <span>เชื่อมต่อสมบูรณ์ (Online)</span>
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
+                    {activePageMeta?.description.slice(0, 38)}...
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Table Viewer Header: Search & Record Filter Controls */}
             <div
               style={{
                 display: 'flex',
@@ -521,48 +919,13 @@ export const AdminDatabaseModal: React.FC<AdminDatabaseModalProps> = ({
                 paddingBottom: '14px'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div
-                  style={{
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '12px',
-                    backgroundColor: 'rgba(2, 132, 199, 0.2)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#38bdf8'
-                  }}
-                >
-                  <TableIcon size={20} />
-                </div>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '16px', fontWeight: 800, color: '#f8fafc', fontFamily: 'monospace' }}>
-                      {selectedTableName}
-                    </span>
-                    <span
-                      style={{
-                        backgroundColor:
-                          tableDataResult?.sourceType === 'DuckDB'
-                            ? 'rgba(234, 179, 8, 0.15)'
-                            : 'rgba(56, 189, 248, 0.15)',
-                        color: tableDataResult?.sourceType === 'DuckDB' ? '#facc15' : '#38bdf8',
-                        borderRadius: '6px',
-                        padding: '2px 8px',
-                        fontSize: '11px',
-                        fontWeight: 700
-                      }}
-                    >
-                      {tableDataResult?.sourceType || 'กำลังโหลด'}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-                    หน้า: <strong>{activePageMeta?.pageTitle || selectedPageId}</strong> | จำนวนแถวทั้งหมด:{' '}
-                    <strong style={{ color: '#38bdf8' }}>{tableDataResult?.totalRows || 0}</strong> แถว |{' '}
-                    จำนวนคอลัมน์: <strong style={{ color: '#38bdf8' }}>{tableDataResult?.columns.length || 0}</strong> คอลัมน์
-                  </div>
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '14px', fontWeight: 700, color: '#f1f5f9' }}>
+                  รายการข้อมูลในตาราง <code style={{ color: '#38bdf8' }}>{selectedTableName}</code>
+                </span>
+                <span style={{ fontSize: '12px', color: '#64748b' }}>
+                  ({processedRows.length} รายการที่กำลังแสดงผล)
+                </span>
               </div>
 
               {/* Action Controls: Search & CSV Export */}

@@ -1939,6 +1939,9 @@ export interface SqliteTableDataResponse {
   columns: SqliteTableColumnMeta[];
   rows: any[];
   dbPath?: string;
+  dbType?: string;
+  engine?: string;
+  database?: string;
   error?: string;
 }
 
