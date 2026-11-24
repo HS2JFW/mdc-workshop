@@ -710,18 +710,24 @@ export const PreSubmissionEvaluationModal: React.FC<PreSubmissionEvaluationModal
               )}
 
               {/* Revision Progression Banner (เปรียบเทียบกับรอบก่อนหน้าจาก Temp File) */}
-              {evaluationResult.iteration && evaluationResult.iteration > 1 && evaluationResult.previousScore !== undefined ? (
+              {evaluationResult.iteration && evaluationResult.iteration > 1 && evaluationResult.previousScore !== undefined ? (() => {
+                const deltaForDisplay = evaluationResult.scoreDelta !== undefined
+                  ? evaluationResult.scoreDelta
+                  : (evaluationResult.baseSnapshotScore !== undefined
+                      ? Number((evaluationResult.finalScore - evaluationResult.baseSnapshotScore).toFixed(2))
+                      : Number((evaluationResult.finalScore - evaluationResult.previousScore).toFixed(2)));
+                return (
                 <div
                   className="precheck-progression-banner"
                   style={{
                     padding: '14px 18px',
                     borderRadius: '12px',
-                    background: (evaluationResult.scoreDelta ?? 0) > 0
+                    background: deltaForDisplay > 0
                       ? 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)'
-                      : (evaluationResult.scoreDelta ?? 0) < 0
+                      : deltaForDisplay < 0
                       ? 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)'
                       : 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
-                    border: `1.5px solid ${(evaluationResult.scoreDelta ?? 0) > 0 ? '#10b981' : (evaluationResult.scoreDelta ?? 0) < 0 ? '#f87171' : '#cbd5e1'}`,
+                    border: `1.5px solid ${deltaForDisplay > 0 ? '#10b981' : deltaForDisplay < 0 ? '#f87171' : '#cbd5e1'}`,
                     marginBottom: '16px',
                     display: 'flex',
                     flexDirection: 'column',
@@ -731,7 +737,7 @@ export const PreSubmissionEvaluationModal: React.FC<PreSubmissionEvaluationModal
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <GitCompare size={18} color={(evaluationResult.scoreDelta ?? 0) > 0 ? '#059669' : (evaluationResult.scoreDelta ?? 0) < 0 ? '#dc2626' : '#475569'} />
+                      <GitCompare size={18} color={deltaForDisplay > 0 ? '#059669' : deltaForDisplay < 0 ? '#dc2626' : '#475569'} />
                       <strong style={{ fontSize: '15px', color: '#0f172a', fontFamily: "'Kanit', sans-serif" }}>
                         🔄 ตรวจสอบรอบที่ {evaluationResult.iteration}
                         {evaluationResult.baseSnapshotIteration !== undefined && (
@@ -769,19 +775,19 @@ export const PreSubmissionEvaluationModal: React.FC<PreSubmissionEvaluationModal
                           borderRadius: '20px',
                           fontSize: '13px',
                           fontWeight: 700,
-                          backgroundColor: (evaluationResult.scoreDelta ?? 0) > 0 ? '#059669' : (evaluationResult.scoreDelta ?? 0) < 0 ? '#dc2626' : '#64748b',
+                          backgroundColor: deltaForDisplay > 0 ? '#059669' : deltaForDisplay < 0 ? '#dc2626' : '#64748b',
                           color: '#ffffff'
                         }}
                       >
-                        {(evaluationResult.scoreDelta ?? 0) > 0 ? (
+                        {deltaForDisplay > 0 ? (
                           <>
                             <TrendingUp size={14} />
-                            +{(evaluationResult.scoreDelta ?? 0).toFixed(2)} คะแนน (ดีขึ้น 🎉)
+                            +{deltaForDisplay.toFixed(2)} คะแนน (ดีขึ้น 🎉)
                           </>
-                        ) : (evaluationResult.scoreDelta ?? 0) < 0 ? (
+                        ) : deltaForDisplay < 0 ? (
                           <>
                             <TrendingDown size={14} />
-                            {(evaluationResult.scoreDelta ?? 0).toFixed(2)} คะแนน (ปรับลด ⚠️)
+                            {deltaForDisplay.toFixed(2)} คะแนน (ปรับลด ⚠️)
                           </>
                         ) : (
                           'เท่าเดิม 0.00 คะแนน ⚖️'
@@ -795,7 +801,8 @@ export const PreSubmissionEvaluationModal: React.FC<PreSubmissionEvaluationModal
                     </div>
                   )}
                 </div>
-              ) : (
+                );
+              })() : (
                 <div
                   style={{
                     padding: '10px 16px',

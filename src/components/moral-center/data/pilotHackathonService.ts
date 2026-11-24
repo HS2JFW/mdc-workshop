@@ -7016,12 +7016,30 @@ export function computeProjectProposalDiff(
 
   // กรองตัวชี้วัดที่เป็นไปไม่ได้ในอดีต (เช่น 1 วัน, 3 วัน, 10 ปี หรือ 100% หรือเป้าเกินจริง)
   // เพราะการลบตัวเลขที่ไม่สมจริงออก ถือเป็นการแก้ไขข้อบกพร่อง ไม่ใช่การตัดทอนตัวชี้วัดที่ดี
+  const timeUnits = ['ปี', 'เดือน', 'สัปดาห์', 'วัน'];
+  const countUnits = ['คน', 'ครัวเรือน', 'หลังคาเรือน', 'หลัง', 'ครอบครัว', 'หมู่บ้าน', 'ชุมชน', 'แห่ง', 'ครั้ง', 'โรงเรียน', 'กลุ่ม'];
+  const amountUnits = ['กิโลกรัม', 'ตัน', 'บาท'];
+
   const filteredRemovedMetrics = removedMetrics.filter(m => {
     if (impossibleMetricRegex.test(m)) return false;
-    // หากมีการแทนที่ด้วยหน่วยเดียวกัน (เช่น เปลี่ยน 10 ปี เป็น 1 ปี หรือเปลี่ยนจำนวนครัวเรือน) ให้ถือเป็นการปรับค่า ไม่ใช่การตัดทอน
-    const unitMatch = m.match(/(?:ปี|เดือน|สัปดาห์|วัน|คน|ครัวเรือน|หลังคาเรือน)/);
-    if (unitMatch && validAddedMetrics.some(am => am.includes(unitMatch[0]))) {
-      return false;
+    // หากมีการแทนที่ด้วยหน่วยในหมวดหมู่เดียวกัน (เช่น เปลี่ยน 6 เดือน เป็น 2 ปี หรือเปลี่ยนจำนวนคน/ครัวเรือน) ให้ถือเป็นการปรับค่า ไม่ใช่การตัดทอน
+    const unitMatch = m.match(/(?:ปี|เดือน|สัปดาห์|วัน|คน|ครัวเรือน|หลังคาเรือน|หลัง|ครอบครัว|หมู่บ้าน|ชุมชน|แห่ง|ครั้ง|โรงเรียน|กลุ่ม|กิโลกรัม|ตัน|บาท)/);
+    if (unitMatch) {
+      const u = unitMatch[0];
+      const isTime = timeUnits.includes(u);
+      const isCount = countUnits.includes(u);
+      const isAmount = amountUnits.includes(u);
+
+      const hasCategoryReplacement = validAddedMetrics.some(am => {
+        if (isTime && timeUnits.some(tu => am.includes(tu))) return true;
+        if (isCount && countUnits.some(cu => am.includes(cu))) return true;
+        if (isAmount && amountUnits.some(au => am.includes(au))) return true;
+        return am.includes(u);
+      });
+
+      if (hasCategoryReplacement) {
+        return false;
+      }
     }
     return true;
   });
@@ -10347,6 +10365,41 @@ export async function evaluatePreSubmissionWithOpenRouterLlm(
     localResult.evaluationSource = 'openrouter_ai';
     localResult.modelName = model;
     localResult.openRouterLatencyMs = latency;
+
+    // ซิงค์ scoreDelta, proximityBadgeText และ progressionSummary ให้ตรงกับคะแนนจริงของ OpenRouter AI
+    const prevScore = typeof localResult.previousScore === 'number'
+      ? localResult.previousScore
+      : (typeof localResult.baseSnapshotScore === 'number' ? localResult.baseSnapshotScore : undefined);
+
+    if (prevScore !== undefined) {
+      const newScoreDelta = Number((aiFinalScore - prevScore).toFixed(2));
+      localResult.scoreDelta = newScoreDelta;
+
+      const baseIter = localResult.baseSnapshotIteration || 1;
+      const simPct = Math.round((localResult.baseSnapshotSimilarity ?? 0.8) * 100);
+
+      if (newScoreDelta >= 0.05) {
+        localResult.comparativeContext.proximityTarget = 'top1_better';
+        localResult.comparativeContext.proximityRatio = 1.15;
+        localResult.comparativeContext.proximityPercentage = 100;
+        localResult.comparativeContext.proximityBadgeText = `📈 พัฒนาการดีขึ้น (+${newScoreDelta.toFixed(2)} คะแนน)`;
+      } else if (newScoreDelta <= -0.05) {
+        localResult.comparativeContext.proximityTarget = 'below_top3';
+        localResult.comparativeContext.proximityRatio = -0.15;
+        localResult.comparativeContext.proximityPercentage = 0;
+        localResult.comparativeContext.proximityBadgeText = `📉 รายละเอียดลดทอนลง (${newScoreDelta.toFixed(2)} คะแนน)`;
+      } else {
+        localResult.comparativeContext.proximityTarget = 'midway';
+        localResult.comparativeContext.proximityRatio = 0.5;
+        localResult.comparativeContext.proximityPercentage = 50;
+        localResult.comparativeContext.proximityBadgeText = `⚖️ คุณภาพเทียบเท่าโครงการตั้งต้น (${aiFinalScore.toFixed(2)} คะแนน)`;
+      }
+
+      if (localResult.progressionSummary) {
+        localResult.progressionSummary = `📈 ตรวจสอบพบโครงการนี้เหมือนกับโครงการครั้งที่ ${baseIter} มากที่สุด (${simPct}%): จึงใช้โครงการครั้งที่ ${baseIter} เป็นตัวตั้งต้นในการวัดคะแนนใหม่ (${prevScore.toFixed(2)} คะแนน) เคลียร์คะแนนที่เคยถูกหักในรอบที่ผ่านมาออก และผลการประเมินโดย OpenRouter AI (${model}) ให้คะแนนรวมเป็น ${aiFinalScore.toFixed(2)} คะแนน (${newScoreDelta >= 0 ? `+${newScoreDelta.toFixed(2)}` : newScoreDelta.toFixed(2)} คะแนนจากรอบก่อนหน้า)`;
+      }
+    }
+
     localResult.comparativeContext.proximityBadgeText = `${localResult.comparativeContext.proximityBadgeText} ⚡ [AI: ${model}]`;
 
     return localResult;
