@@ -519,6 +519,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
 
   const handleDeleteGroup = async (key: string, groupNameToDelete: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    e.preventDefault();
     if (!isAdmin) {
       alert('เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถลบกลุ่มกาแฟได้');
       return;

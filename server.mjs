@@ -1468,7 +1468,8 @@ async function handleApiRequest(req, res, urlObj) {
           ? (body.isEdit ? rawKey : `${rawKey}_${Date.now()}`)
           : rawKey;
 
-        const maxOrder = await db.prepare('SELECT MAX(order_index) as m FROM pilot_coffee_groups').get()?.m || 0;
+        const maxOrderRow = await db.get('SELECT MAX(order_index) as m FROM pilot_coffee_groups');
+        const maxOrder = Number(maxOrderRow?.m || 0);
         const orderIndex = typeof grp.orderIndex === 'number' ? grp.orderIndex : maxOrder + 1;
 
         const lookupKey = body.originalKey || key;
@@ -1532,7 +1533,8 @@ async function handleApiRequest(req, res, urlObj) {
         res.end(JSON.stringify({ ok: false, error: 'Missing key parameter' }));
         return;
       }
-      const count = await db.prepare('SELECT COUNT(*) as cnt FROM pilot_coffee_groups').get()?.cnt || 0;
+      const countRow = await db.get('SELECT COUNT(*) as cnt FROM pilot_coffee_groups');
+      const count = Number(countRow?.cnt || 0);
       if (count <= 1) {
         res.statusCode = 400;
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -1540,7 +1542,7 @@ async function handleApiRequest(req, res, urlObj) {
         return;
       }
 
-      await db.prepare('DELETE FROM pilot_coffee_groups WHERE key = ?').run(key);
+      await db.run('DELETE FROM pilot_coffee_groups WHERE key = ?', key);
 
       const rows = await db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all();
       const groups = rows.map((r) => ({
@@ -1745,10 +1747,14 @@ async function handleApiRequest(req, res, urlObj) {
   // 5.5.1 POST /api/pilot-sqlite/clear-activity-vote-system
   if (req.method === 'POST' && (pathname === '/api/activity/clear-activity-vote-system' || pathname === '/api/pilot-sqlite/clear-activity-vote-system')) {
     try {
-      const delProj = Number(await db.prepare('DELETE FROM pilot_hackathon_projects').run().changes);
-      const delCrit = Number(await db.prepare('DELETE FROM pilot_hackathon_criteria').run().changes);
-      const delAgency = Number(await db.prepare('DELETE FROM pilot_agency_registrations').run().changes);
-      const delLesson = Number(await db.prepare('DELETE FROM pilot_lessons_and_policies').run().changes);
+      const delProjRes = await db.run('DELETE FROM pilot_hackathon_projects');
+      const delCritRes = await db.run('DELETE FROM pilot_hackathon_criteria');
+      const delAgencyRes = await db.run('DELETE FROM pilot_agency_registrations');
+      const delLessonRes = await db.run('DELETE FROM pilot_lessons_and_policies');
+      const delProj = Number(delProjRes?.changes || 0);
+      const delCrit = Number(delCritRes?.changes || 0);
+      const delAgency = Number(delAgencyRes?.changes || 0);
+      const delLesson = Number(delLessonRes?.changes || 0);
       const totalDeleted = delProj + delCrit + delAgency + delLesson;
 
       res.statusCode = 200;
@@ -1779,9 +1785,11 @@ async function handleApiRequest(req, res, urlObj) {
       let deletedCount = 0;
       if (province && province !== 'ALL') {
         const provList = (province === 'อยุธยา' || province === 'พระนครศรีอยุธยา') ? ['อยุธยา', 'พระนครศรีอยุธยา'] : [province];
-        deletedCount = Number(await db.prepare(`DELETE FROM pilot_agency_registrations WHERE province IN (${provList.map(() => '?').join(',')})`).run(...provList).changes);
+        const res = await db.run(`DELETE FROM pilot_agency_registrations WHERE province IN (${provList.map(() => '?').join(',')})`, ...provList);
+        deletedCount = Number(res?.changes || 0);
       } else {
-        deletedCount = Number(await db.prepare('DELETE FROM pilot_agency_registrations').run().changes);
+        const res = await db.run('DELETE FROM pilot_agency_registrations');
+        deletedCount = Number(res?.changes || 0);
       }
 
       res.statusCode = 200;
