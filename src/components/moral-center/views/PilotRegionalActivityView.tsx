@@ -450,25 +450,32 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     setTimeout(() => setStep1ClearToast(null), 3500);
   };
 
-  // Step 2: Dynamic Coffee Groups State & CRUD (Synced with SQLite Server)
-  const [coffeeGroups, setCoffeeGroups] = useState<CoffeeGroupMeta[]>(() => getStoredCoffeeGroups());
+  // Step 2: Dynamic Coffee Groups State & CRUD (Synced with PostgreSQL / SQLite Server per Province)
+  const [coffeeGroups, setCoffeeGroups] = useState<CoffeeGroupMeta[]>(() => getStoredCoffeeGroups(province));
   const [selectedGroup, setSelectedGroup] = useState<CoffeeGroupKey>(() => {
-    const stored = getStoredCoffeeGroups();
+    const stored = getStoredCoffeeGroups(province);
     return stored[0]?.key || 'mocha';
   });
 
-  // Fetch latest coffee groups from SQLite on mount and subscribe to changes
+  // Fetch latest coffee groups for the current province on mount and when province changes
   useEffect(() => {
     let isMounted = true;
-    fetchCoffeeGroupsFromDb().then((groups) => {
+    fetchCoffeeGroupsFromDb(province).then((groups) => {
       if (isMounted && groups && groups.length > 0) {
         setCoffeeGroups(groups);
+        setSelectedGroup(groups[0]?.key || 'mocha');
+        setDashboardTabGroup(groups[0]?.key || 'mocha');
       }
     });
 
     const handleGroupsChanged = (e: any) => {
       if (e.detail?.groups && Array.isArray(e.detail.groups)) {
-        setCoffeeGroups(e.detail.groups);
+        const normDetailProv = (e.detail.province === 'อยุธยา' || e.detail.province === 'พระนครศรีอยุธยา') ? 'พระนครศรีอยุธยา' : e.detail.province;
+        const curProvStr = province as string;
+        const normCurrentProv = (curProvStr === 'อยุธยา' || curProvStr === 'พระนครศรีอยุธยา') ? 'พระนครศรีอยุธยา' : curProvStr;
+        if (!normDetailProv || normDetailProv === normCurrentProv) {
+          setCoffeeGroups(e.detail.groups);
+        }
       }
     };
 
@@ -477,18 +484,18 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
       isMounted = false;
       window.removeEventListener('coffee_groups_changed', handleGroupsChanged);
     };
-  }, []);
+  }, [province]);
 
   // Re-fetch latest groups whenever user enters Step 2 (Group selection)
   useEffect(() => {
     if (currentStep === 2) {
-      fetchCoffeeGroupsFromDb().then((groups) => {
+      fetchCoffeeGroupsFromDb(province).then((groups) => {
         if (groups && groups.length > 0) {
           setCoffeeGroups(groups);
         }
       });
     }
-  }, [currentStep]);
+  }, [currentStep, province]);
 
   // Modal State for Add / Edit Coffee Group
   const [isGroupModalOpen, setIsGroupModalOpen] = useState<boolean>(false);
@@ -525,14 +532,14 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
       return;
     }
     if (coffeeGroups.length <= 1) {
-      alert('ไม่สามารถลบกลุ่มได้ เนื่องจากระบบต้องมีกลุ่มกาแฟอย่างน้อย 1 กลุ่ม');
+      alert(`ไม่สามารถลบกลุ่มได้ เนื่องจากระบบใน จ.${province} ต้องมีกลุ่มกาแฟอย่างน้อย 1 กลุ่ม`);
       return;
     }
-    const confirmed = window.confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบ "${groupNameToDelete}" ออกจากฐานข้อมูล PostgreSQL (DB-MDC)?`);
+    const confirmed = window.confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบ "${groupNameToDelete}" ออกจากฐานข้อมูลของ จ.${province}?`);
     if (!confirmed) return;
 
     try {
-      const updated = await deleteCoffeeGroupFromDb(key);
+      const updated = await deleteCoffeeGroupFromDb(key, province);
       setCoffeeGroups(updated);
       if (selectedGroup === key) {
         setSelectedGroup(updated[0]?.key || 'mocha');
@@ -540,7 +547,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
       if (dashboardTabGroup === key) {
         setDashboardTabGroup(updated[0]?.key || 'mocha');
       }
-      setSubmitFeedback(`🗑️ ลบ "${groupNameToDelete}" จากฐานข้อมูล PostgreSQL (DB-MDC) เรียบร้อยแล้ว`);
+      setSubmitFeedback(`🗑️ ลบ "${groupNameToDelete}" จากฐานข้อมูล จ.${province} เรียบร้อยแล้ว`);
       setTimeout(() => setSubmitFeedback(null), 3000);
     } catch (err: any) {
       alert(err?.message || 'เกิดข้อผิดพลาดในการลบกลุ่ม');
@@ -554,18 +561,18 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     }
     try {
       if (groupModalMode === 'add') {
-        const updated = await addCoffeeGroupToDb(groupData as any);
+        const updated = await addCoffeeGroupToDb(groupData as any, province);
         setCoffeeGroups(updated);
         const newlyAdded = updated.find((g) => g.name === groupData.name) || updated[updated.length - 1];
         if (newlyAdded) {
           setSelectedGroup(newlyAdded.key);
         }
-        setSubmitFeedback(`✨ เพิ่มกลุ่ม "${groupData.name}" ลงฐานข้อมูล PostgreSQL (DB-MDC) สำเร็จ (ผู้ใช้ทุกคนจะมองเห็นและเลือกกลุ่มนี้ได้ทันที)!`);
+        setSubmitFeedback(`✨ เพิ่มกลุ่ม "${groupData.name}" ลงฐานข้อมูล จ.${province} สำเร็จ (ผู้ใช้ใน จ.${province} จะมองเห็นและเลือกกลุ่มนี้ได้ทันที)!`);
         setTimeout(() => setSubmitFeedback(null), 4500);
       } else if (groupModalMode === 'edit' && groupData.key) {
-        const updated = await updateCoffeeGroupInDb(groupData.key, groupData);
+        const updated = await updateCoffeeGroupInDb(groupData.key, groupData, province);
         setCoffeeGroups(updated);
-        setSubmitFeedback(`💾 อัปเดตข้อมูลกลุ่ม "${groupData.name}" ลงฐานข้อมูล PostgreSQL (DB-MDC) สำเร็จ!`);
+        setSubmitFeedback(`💾 อัปเดตข้อมูลกลุ่ม "${groupData.name}" ลงฐานข้อมูล จ.${province} สำเร็จ!`);
         setTimeout(() => setSubmitFeedback(null), 3500);
       }
     } catch (err: any) {
@@ -578,15 +585,15 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
       alert('เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถรีเซ็ตกลุ่มกาแฟได้');
       return;
     }
-    const confirmed = window.confirm('คุณต้องการรีเซ็ตกลุ่มกาแฟในฐานข้อมูล PostgreSQL (DB-MDC) กลับเป็นค่าเริ่มต้น 5 กลุ่ม (มอคค่า, คาปูชิโน, อเมริกาโน, เอสเพรสโซ, ลาเต้) หรือไม่?');
+    const confirmed = window.confirm(`คุณต้องการรีเซ็ตกลุ่มกาแฟในฐานข้อมูลของ จ.${province} กลับเป็นค่าเริ่มต้น 5 กลุ่ม (มอคค่า, คาปูชิโน, อเมริกาโน, เอสเพรสโซ, ลาเต้) หรือไม่?`);
     if (!confirmed) return;
 
     try {
-      const defs = await resetCoffeeGroupsInDb();
+      const defs = await resetCoffeeGroupsInDb(province);
       setCoffeeGroups(defs);
       setSelectedGroup(defs[0]?.key || 'mocha');
       setDashboardTabGroup(defs[0]?.key || 'mocha');
-      setSubmitFeedback('↺ รีเซ็ตกลุ่มกาแฟในฐานข้อมูล PostgreSQL (DB-MDC) กลับเป็นค่าเริ่มต้น 5 กลุ่มเรียบร้อยแล้ว');
+      setSubmitFeedback(`↺ รีเซ็ตกลุ่มกาแฟของ จ.${province} กลับเป็นค่าเริ่มต้น 5 กลุ่มเรียบร้อยแล้ว`);
       setTimeout(() => setSubmitFeedback(null), 3500);
     } catch (err: any) {
       alert(`เกิดข้อผิดพลาดในการรีเซ็ตกลุ่ม: ${err?.message || err}`);

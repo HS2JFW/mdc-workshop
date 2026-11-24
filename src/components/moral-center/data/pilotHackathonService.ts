@@ -37,6 +37,8 @@ export interface CoffeeGroupMeta {
   themeColor: string;
   accentBg: string;
   isCustom?: boolean;
+  province?: string;
+  orderIndex?: number;
 }
 
 // ----------------------------------------------------------------------------
@@ -156,59 +158,77 @@ export const COFFEE_GROUPS: Record<string, CoffeeGroupMeta> = {
   }
 };
 
-const COFFEE_GROUPS_STORAGE_KEY = 'pilot_hackathon_coffee_groups_v4';
+function getProvinceStorageKey(province?: string): string {
+  const norm = (province === 'อยุธยา' || province === 'พระนครศรีอยุธยา')
+    ? 'พระนครศรีอยุธยา'
+    : (province || 'พระนครศรีอยุธยา');
+  return `pilot_hackathon_coffee_groups_v5_${norm}`;
+}
 
-let cachedCoffeeGroups: CoffeeGroupMeta[] | null = null;
+let cachedCoffeeGroupsByProv: Record<string, CoffeeGroupMeta[]> = {};
 let isFetchingCoffeeGroups = false;
 
-export function getStoredCoffeeGroups(): CoffeeGroupMeta[] {
-  if (cachedCoffeeGroups && cachedCoffeeGroups.length > 0) {
-    return cachedCoffeeGroups;
+export function getStoredCoffeeGroups(province?: string): CoffeeGroupMeta[] {
+  const normProv = (province === 'อยุธยา' || province === 'พระนครศรีอยุธยา')
+    ? 'พระนครศรีอยุธยา'
+    : (province || 'พระนครศรีอยุธยา');
+
+  if (cachedCoffeeGroupsByProv[normProv] && cachedCoffeeGroupsByProv[normProv].length > 0) {
+    return cachedCoffeeGroupsByProv[normProv];
   }
   if (typeof window === 'undefined') {
-    return Object.values(COFFEE_GROUPS);
+    return Object.values(COFFEE_GROUPS).map((g, idx) => ({ ...g, province: normProv, orderIndex: idx + 1 }));
   }
   try {
-    const raw = localStorage.getItem(COFFEE_GROUPS_STORAGE_KEY);
+    const raw = localStorage.getItem(getProvinceStorageKey(normProv));
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        cachedCoffeeGroups = parsed.map((g) => ({
+        const mapped = parsed.map((g, idx) => ({
+          province: g.province || normProv,
           key: g.key,
           name: g.name || 'ชื่อกลุ่ม',
           bgImage: g.bgImage || getRandomCoffeeBgUrl(),
           themeColor: g.themeColor || '#78350f',
           accentBg: g.accentBg || '#fef3c7',
-          isCustom: g.isCustom
+          isCustom: g.isCustom,
+          orderIndex: g.orderIndex ?? (idx + 1)
         }));
-        return cachedCoffeeGroups;
+        cachedCoffeeGroupsByProv[normProv] = mapped;
+        return mapped;
       }
     }
   } catch (e) {
     console.warn('Failed to parse stored coffee groups:', e);
   }
-  const defaults = Object.values(COFFEE_GROUPS);
-  cachedCoffeeGroups = defaults;
-  saveStoredCoffeeGroups(defaults);
+  const defaults = Object.values(COFFEE_GROUPS).map((g, idx) => ({ ...g, province: normProv, orderIndex: idx + 1 }));
+  cachedCoffeeGroupsByProv[normProv] = defaults;
+  saveStoredCoffeeGroups(defaults, normProv);
   return defaults;
 }
 
-export function saveStoredCoffeeGroups(groups: CoffeeGroupMeta[]): void {
-  cachedCoffeeGroups = groups;
+export function saveStoredCoffeeGroups(groups: CoffeeGroupMeta[], province?: string): void {
+  const normProv = (province === 'อยุธยา' || province === 'พระนครศรีอยุธยา')
+    ? 'พระนครศรีอยุธยา'
+    : (province || 'พระนครศรีอยุธยา');
+
+  cachedCoffeeGroupsByProv[normProv] = groups;
   if (typeof window === 'undefined') return;
   try {
-    const sanitized = groups.map((g) => ({
+    const sanitized = groups.map((g, idx) => ({
+      province: g.province || normProv,
       key: g.key,
       name: g.name,
       bgImage: g.bgImage,
       themeColor: g.themeColor,
       accentBg: g.accentBg,
-      isCustom: g.isCustom
+      isCustom: g.isCustom,
+      orderIndex: g.orderIndex ?? (idx + 1)
     }));
-    localStorage.setItem(COFFEE_GROUPS_STORAGE_KEY, JSON.stringify(sanitized));
+    localStorage.setItem(getProvinceStorageKey(normProv), JSON.stringify(sanitized));
     try {
       window.dispatchEvent(new CustomEvent('coffee_groups_changed', {
-        detail: { groups: sanitized }
+        detail: { groups: sanitized, province: normProv }
       }));
     } catch {}
   } catch (e) {
@@ -217,31 +237,37 @@ export function saveStoredCoffeeGroups(groups: CoffeeGroupMeta[]): void {
 }
 
 /**
- * ดึงรายชื่อกลุ่มกาแฟจากฐานข้อมูล SQLite Server (/api/activity/coffee-groups)
+ * ดึงรายชื่อกลุ่มกาแฟจากฐานข้อมูล SQLite / PostgreSQL Server (/api/activity/coffee-groups?province=...)
  */
-export async function fetchCoffeeGroupsFromDb(): Promise<CoffeeGroupMeta[]> {
+export async function fetchCoffeeGroupsFromDb(province?: string): Promise<CoffeeGroupMeta[]> {
+  const normProv = (province === 'อยุธยา' || province === 'พระนครศรีอยุธยา')
+    ? 'พระนครศรีอยุธยา'
+    : (province || 'พระนครศรีอยุธยา');
+
   try {
-    const res = await fetch('/api/activity/coffee-groups');
+    const res = await fetch(`/api/activity/coffee-groups?province=${encodeURIComponent(normProv)}`);
     if (res.ok) {
       const data = await res.json();
       if (data && data.ok && Array.isArray(data.groups) && data.groups.length > 0) {
-        const groups: CoffeeGroupMeta[] = data.groups.map((g: any) => ({
+        const groups: CoffeeGroupMeta[] = data.groups.map((g: any, idx: number) => ({
+          province: g.province || normProv,
           key: g.key,
           name: g.name || 'ชื่อกลุ่ม',
           bgImage: g.bgImage || g.bg_image || getRandomCoffeeBgUrl(),
           themeColor: g.themeColor || g.theme_color || '#78350f',
           accentBg: g.accentBg || g.accent_bg || '#fef3c7',
-          isCustom: Boolean(g.isCustom ?? g.is_custom)
+          isCustom: Boolean(g.isCustom ?? g.is_custom),
+          orderIndex: g.orderIndex ?? g.order_index ?? (idx + 1)
         }));
-        cachedCoffeeGroups = groups;
-        saveStoredCoffeeGroups(groups);
+        cachedCoffeeGroupsByProv[normProv] = groups;
+        saveStoredCoffeeGroups(groups, normProv);
         return groups;
       }
     }
   } catch (err) {
-    console.warn('fetchCoffeeGroupsFromDb SQLite fallback:', err);
+    console.warn('fetchCoffeeGroupsFromDb fallback:', err);
   }
-  return getStoredCoffeeGroups();
+  return getStoredCoffeeGroups(normProv);
 }
 
 export interface ActivityStatePollResult {
@@ -271,18 +297,21 @@ export async function pollActivityState(params: {
       const changed = !lastRevision || currentRev !== lastRevision;
 
       let coffeeGroups: CoffeeGroupMeta[] | undefined = undefined;
+      const provNorm = (province === 'อยุธยา' || province === 'พระนครศรีอยุธยา') ? 'พระนครศรีอยุธยา' : (province || 'พระนครศรีอยุธยา');
       if (Array.isArray(data.coffeeGroups) && data.coffeeGroups.length > 0) {
-        const mappedGroups: CoffeeGroupMeta[] = data.coffeeGroups.map((g: any) => ({
+        const mappedGroups: CoffeeGroupMeta[] = data.coffeeGroups.map((g: any, idx: number) => ({
+          province: g.province || provNorm,
           key: g.key,
           name: g.name || 'ชื่อกลุ่ม',
           bgImage: g.bgImage || g.bg_image || getRandomCoffeeBgUrl(),
           themeColor: g.themeColor || g.theme_color || '#78350f',
           accentBg: g.accentBg || g.accent_bg || '#fef3c7',
-          isCustom: Boolean(g.isCustom ?? g.is_custom)
+          isCustom: Boolean(g.isCustom ?? g.is_custom),
+          orderIndex: g.orderIndex ?? g.order_index ?? (idx + 1)
         }));
         coffeeGroups = mappedGroups;
-        cachedCoffeeGroups = mappedGroups;
-        saveStoredCoffeeGroups(mappedGroups);
+        cachedCoffeeGroupsByProv[provNorm] = mappedGroups;
+        saveStoredCoffeeGroups(mappedGroups, provNorm);
       }
 
       let submittedProjects: HackathonProject[] | undefined = undefined;
@@ -313,16 +342,18 @@ export async function pollActivityState(params: {
 }
 
 /**
- * เพิ่มกลุ่มกาแฟใหม่ลงฐานข้อมูล SQLite Server
+ * เพิ่มกลุ่มกาแฟใหม่ลงฐานข้อมูล SQLite / PostgreSQL Server ประจำจังหวัด
  */
-export async function addCoffeeGroupToDb(newGroup: Omit<CoffeeGroupMeta, 'key'> & { key?: string }): Promise<CoffeeGroupMeta[]> {
-  const current = getStoredCoffeeGroups();
+export async function addCoffeeGroupToDb(newGroup: Omit<CoffeeGroupMeta, 'key'> & { key?: string }, province?: string): Promise<CoffeeGroupMeta[]> {
+  const normProv = (province === 'อยุธยา' || province === 'พระนครศรีอยุธยา') ? 'พระนครศรีอยุธยา' : (province || 'พระนครศรีอยุธยา');
+  const current = getStoredCoffeeGroups(normProv);
   const rawKey = (newGroup.key || `group_${Date.now()}`)
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '_');
   const uniqueKey = current.some((g) => g.key === rawKey) ? `${rawKey}_${Date.now()}` : rawKey;
 
   const groupToAdd: CoffeeGroupMeta = {
+    province: normProv,
     key: uniqueKey,
     name: newGroup.name || 'กลุ่มกาแฟสร้างสรรค์คุณธรรม',
     bgImage: newGroup.bgImage || getRandomCoffeeBgUrl(),
@@ -335,12 +366,12 @@ export async function addCoffeeGroupToDb(newGroup: Omit<CoffeeGroupMeta, 'key'> 
     const res = await fetch('/api/activity/coffee-groups', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'add', group: groupToAdd })
+      body: JSON.stringify({ action: 'add', province: normProv, group: groupToAdd })
     });
     if (res.ok) {
       const data = await res.json();
       if (data && data.ok && Array.isArray(data.groups)) {
-        saveStoredCoffeeGroups(data.groups);
+        saveStoredCoffeeGroups(data.groups, normProv);
         return data.groups;
       }
     } else {
@@ -353,17 +384,19 @@ export async function addCoffeeGroupToDb(newGroup: Omit<CoffeeGroupMeta, 'key'> 
   }
 
   const updated = [...current, groupToAdd];
-  saveStoredCoffeeGroups(updated);
+  saveStoredCoffeeGroups(updated, normProv);
   return updated;
 }
 
 /**
- * อัปเดตกลุ่มกาแฟลงฐานข้อมูล SQLite Server
+ * อัปเดตกลุ่มกาแฟลงฐานข้อมูล SQLite / PostgreSQL Server ประจำจังหวัด
  */
-export async function updateCoffeeGroupInDb(key: string, updates: Partial<CoffeeGroupMeta>): Promise<CoffeeGroupMeta[]> {
-  const current = getStoredCoffeeGroups();
+export async function updateCoffeeGroupInDb(key: string, updates: Partial<CoffeeGroupMeta>, province?: string): Promise<CoffeeGroupMeta[]> {
+  const normProv = (province === 'อยุธยา' || province === 'พระนครศรีอยุธยา') ? 'พระนครศรีอยุธยา' : (province || 'พระนครศรีอยุธยา');
+  const current = getStoredCoffeeGroups(normProv);
   const target = current.find((g) => g.key === key);
   const updatedGroup: CoffeeGroupMeta = {
+    province: normProv,
     key,
     name: updates.name || target?.name || 'กลุ่มกาแฟ',
     bgImage: updates.bgImage || target?.bgImage || getRandomCoffeeBgUrl(),
@@ -376,12 +409,12 @@ export async function updateCoffeeGroupInDb(key: string, updates: Partial<Coffee
     const res = await fetch('/api/activity/coffee-groups', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'update', isEdit: true, originalKey: key, group: updatedGroup })
+      body: JSON.stringify({ action: 'update', isEdit: true, originalKey: key, province: normProv, group: updatedGroup })
     });
     if (res.ok) {
       const data = await res.json();
       if (data && data.ok && Array.isArray(data.groups)) {
-        saveStoredCoffeeGroups(data.groups);
+        saveStoredCoffeeGroups(data.groups, normProv);
         return data.groups;
       }
     } else {
@@ -394,27 +427,28 @@ export async function updateCoffeeGroupInDb(key: string, updates: Partial<Coffee
   }
 
   const updated = current.map((g) => (g.key === key ? { ...g, ...updates } : g));
-  saveStoredCoffeeGroups(updated);
+  saveStoredCoffeeGroups(updated, normProv);
   return updated;
 }
 
 /**
- * ลบกลุ่มกาแฟออกจากฐานข้อมูล SQLite Server
+ * ลบกลุ่มกาแฟออกจากฐานข้อมูล SQLite / PostgreSQL Server ประจำจังหวัด
  */
-export async function deleteCoffeeGroupFromDb(key: string): Promise<CoffeeGroupMeta[]> {
-  const current = getStoredCoffeeGroups();
+export async function deleteCoffeeGroupFromDb(key: string, province?: string): Promise<CoffeeGroupMeta[]> {
+  const normProv = (province === 'อยุธยา' || province === 'พระนครศรีอยุธยา') ? 'พระนครศรีอยุธยา' : (province || 'พระนครศรีอยุธยา');
+  const current = getStoredCoffeeGroups(normProv);
   if (current.length <= 1) {
-    throw new Error('ไม่สามารถลบกลุ่มทั้งหมดได้ ต้องมีอย่างน้อย 1 กลุ่ม');
+    throw new Error(`ไม่สามารถลบกลุ่มทั้งหมดใน จ.${normProv} ได้ ต้องมีอย่างน้อย 1 กลุ่ม`);
   }
 
   try {
-    const res = await fetch(`/api/activity/coffee-groups?key=${encodeURIComponent(key)}`, {
+    const res = await fetch(`/api/activity/coffee-groups?key=${encodeURIComponent(key)}&province=${encodeURIComponent(normProv)}`, {
       method: 'DELETE'
     });
     if (res.ok) {
       const data = await res.json();
       if (data && data.ok && Array.isArray(data.groups)) {
-        saveStoredCoffeeGroups(data.groups);
+        saveStoredCoffeeGroups(data.groups, normProv);
         return data.groups;
       }
     } else {
@@ -427,49 +461,52 @@ export async function deleteCoffeeGroupFromDb(key: string): Promise<CoffeeGroupM
   }
 
   const updated = current.filter((g) => g.key !== key);
-  saveStoredCoffeeGroups(updated);
+  saveStoredCoffeeGroups(updated, normProv);
   return updated;
 }
 
 /**
- * รีเซ็ตกลุ่มกาแฟในฐานข้อมูล SQLite Server กลับสู่ 5 กลุ่มเริ่มต้น
+ * รีเซ็ตกลุ่มกาแฟในฐานข้อมูล SQLite / PostgreSQL Server กลับสู่ 5 กลุ่มเริ่มต้นประจำจังหวัด
  */
-export async function resetCoffeeGroupsInDb(): Promise<CoffeeGroupMeta[]> {
+export async function resetCoffeeGroupsInDb(province?: string): Promise<CoffeeGroupMeta[]> {
+  const normProv = (province === 'อยุธยา' || province === 'พระนครศรีอยุธยา') ? 'พระนครศรีอยุธยา' : (province || 'พระนครศรีอยุธยา');
   try {
     const res = await fetch('/api/activity/coffee-groups', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'reset' })
+      body: JSON.stringify({ action: 'reset', province: normProv })
     });
     if (res.ok) {
       const data = await res.json();
       if (data && data.ok && Array.isArray(data.groups)) {
-        saveStoredCoffeeGroups(data.groups);
+        saveStoredCoffeeGroups(data.groups, normProv);
         return data.groups;
       }
     } else {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || `Server responded with status ${res.status}`);
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `Server responded with status ${res.status}`);
     }
   } catch (err: any) {
     console.error('resetCoffeeGroupsInDb error:', err);
     throw err;
   }
 
-  const defaults = Object.values(COFFEE_GROUPS);
-  saveStoredCoffeeGroups(defaults);
+  const defaults = Object.values(COFFEE_GROUPS).map((g, idx) => ({ ...g, province: normProv, orderIndex: idx + 1 }));
+  saveStoredCoffeeGroups(defaults, normProv);
   return defaults;
 }
 
-// Synchronous wrapper functions for backward compatibility
-export function addCoffeeGroup(newGroup: Omit<CoffeeGroupMeta, 'key'> & { key?: string }): CoffeeGroupMeta[] {
-  const current = getStoredCoffeeGroups();
+// Synchronous wrapper functions for backward compatibility (scoped by province)
+export function addCoffeeGroup(newGroup: Omit<CoffeeGroupMeta, 'key'> & { key?: string }, province?: string): CoffeeGroupMeta[] {
+  const normProv = (province === 'อยุธยา' || province === 'พระนครศรีอยุธยา') ? 'พระนครศรีอยุธยา' : (province || 'พระนครศรีอยุธยา');
+  const current = getStoredCoffeeGroups(normProv);
   const rawKey = (newGroup.key || `group_${Date.now()}`)
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '_');
   const uniqueKey = current.some((g) => g.key === rawKey) ? `${rawKey}_${Date.now()}` : rawKey;
 
   const groupToAdd: CoffeeGroupMeta = {
+    province: normProv,
     key: uniqueKey,
     name: newGroup.name || 'กลุ่มกาแฟสร้างสรรค์คุณธรรม',
     bgImage: newGroup.bgImage || getRandomCoffeeBgUrl(),
@@ -479,38 +516,41 @@ export function addCoffeeGroup(newGroup: Omit<CoffeeGroupMeta, 'key'> & { key?: 
   };
 
   const updated = [...current, groupToAdd];
-  saveStoredCoffeeGroups(updated);
-  // Async sync to SQLite in background
-  addCoffeeGroupToDb(newGroup).catch(() => {});
+  saveStoredCoffeeGroups(updated, normProv);
+  // Async sync to SQLite / PostgreSQL in background
+  addCoffeeGroupToDb(newGroup, normProv).catch(() => {});
   return updated;
 }
 
-export function updateCoffeeGroup(key: string, updates: Partial<CoffeeGroupMeta>): CoffeeGroupMeta[] {
-  const current = getStoredCoffeeGroups();
-  const updated = current.map((g) => (g.key === key ? { ...g, ...updates } : g));
-  saveStoredCoffeeGroups(updated);
-  // Async sync to SQLite in background
-  updateCoffeeGroupInDb(key, updates).catch(() => {});
+export function updateCoffeeGroup(key: string, updates: Partial<CoffeeGroupMeta>, province?: string): CoffeeGroupMeta[] {
+  const normProv = (province === 'อยุธยา' || province === 'พระนครศรีอยุธยา') ? 'พระนครศรีอยุธยา' : (province || 'พระนครศรีอยุธยา');
+  const current = getStoredCoffeeGroups(normProv);
+  const updated = current.map((g) => (g.key === key ? { ...g, ...updates, province: normProv } : g));
+  saveStoredCoffeeGroups(updated, normProv);
+  // Async sync to SQLite / PostgreSQL in background
+  updateCoffeeGroupInDb(key, updates, normProv).catch(() => {});
   return updated;
 }
 
-export function deleteCoffeeGroup(key: string): CoffeeGroupMeta[] {
-  const current = getStoredCoffeeGroups();
+export function deleteCoffeeGroup(key: string, province?: string): CoffeeGroupMeta[] {
+  const normProv = (province === 'อยุธยา' || province === 'พระนครศรีอยุธยา') ? 'พระนครศรีอยุธยา' : (province || 'พระนครศรีอยุธยา');
+  const current = getStoredCoffeeGroups(normProv);
   if (current.length <= 1) {
-    throw new Error('ไม่สามารถลบกลุ่มทั้งหมดได้ ต้องมีอย่างน้อย 1 กลุ่ม');
+    throw new Error(`ไม่สามารถลบกลุ่มทั้งหมดใน จ.${normProv} ได้ ต้องมีอย่างน้อย 1 กลุ่ม`);
   }
   const updated = current.filter((g) => g.key !== key);
-  saveStoredCoffeeGroups(updated);
-  // Async sync to SQLite in background
-  deleteCoffeeGroupFromDb(key).catch(() => {});
+  saveStoredCoffeeGroups(updated, normProv);
+  // Async sync to SQLite / PostgreSQL in background
+  deleteCoffeeGroupFromDb(key, normProv).catch(() => {});
   return updated;
 }
 
-export function resetCoffeeGroupsToDefault(): CoffeeGroupMeta[] {
-  const defaults = Object.values(COFFEE_GROUPS);
-  saveStoredCoffeeGroups(defaults);
-  // Async sync to SQLite in background
-  resetCoffeeGroupsInDb().catch(() => {});
+export function resetCoffeeGroupsToDefault(province?: string): CoffeeGroupMeta[] {
+  const normProv = (province === 'อยุธยา' || province === 'พระนครศรีอยุธยา') ? 'พระนครศรีอยุธยา' : (province || 'พระนครศรีอยุธยา');
+  const defaults = Object.values(COFFEE_GROUPS).map((g, idx) => ({ ...g, province: normProv, orderIndex: idx + 1 }));
+  saveStoredCoffeeGroups(defaults, normProv);
+  // Async sync to SQLite / PostgreSQL in background
+  resetCoffeeGroupsInDb(normProv).catch(() => {});
   return defaults;
 }
 
@@ -1349,9 +1389,6 @@ export function getUserSubmittedProjects(province?: PilotProvinceName): Hackatho
         const pProv = String(p.province || '');
         if (pProv === provStr) return true;
         if ((provStr === 'อยุธยา' || provStr === 'พระนครศรีอยุธยา') && (pProv === 'อยุธยา' || pProv === 'พระนครศรีอยุธยา')) return true;
-        if ((provStr === 'อุดรธานี' || provStr === 'กาฬสินธุ์') && (pProv === 'อุดรธานี' || pProv === 'กาฬสินธุ์')) return true;
-        if ((provStr === 'ลำปาง' || provStr === 'น่าน') && (pProv === 'ลำปาง' || pProv === 'น่าน')) return true;
-        if ((provStr === 'สุราษฎร์ธานี' || provStr === 'พังงา') && (pProv === 'สุราษฎร์ธานี' || pProv === 'พังงา')) return true;
         return false;
       });
     }
@@ -2788,10 +2825,11 @@ export function getHackathonProjects(province?: PilotProvinceName, groupKey?: Co
 function filterProjects(list: HackathonProject[], province?: PilotProvinceName, groupKey?: CoffeeGroupKey): HackathonProject[] {
   return list.filter(p => {
     if (province) {
+      const provStr = String(province);
+      const pProv = String(p.province || '');
       const matchProv =
-        p.province === province ||
-        ((province === 'อุดรธานี' || province === 'กาฬสินธุ์') && (p.province === 'อุดรธานี' || p.province === 'กาฬสินธุ์')) ||
-        ((province === 'ลำปาง' || province === 'น่าน') && (p.province === 'ลำปาง' || p.province === 'น่าน'));
+        pProv === provStr ||
+        ((provStr === 'อยุธยา' || provStr === 'พระนครศรีอยุธยา') && (pProv === 'อยุธยา' || pProv === 'พระนครศรีอยุธยา'));
       if (!matchProv) return false;
     }
     if (groupKey && p.groupKey !== groupKey) return false;

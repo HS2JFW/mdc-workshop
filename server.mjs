@@ -80,17 +80,21 @@ class UniversalDb {
     if (match) {
       const table = match[1];
       const cols = match[2].split(',').map(c => c.trim());
-      const pkMap = { pilot_criteria_selected_virtues: 'province', pilot_coffee_groups: 'key' };
-      const pk = pkMap[table] || 'id';
+      const pkMap = {
+        pilot_criteria_selected_virtues: ['province'],
+        pilot_coffee_groups: ['province', 'key']
+      };
+      const pkCols = pkMap[table] || ['id'];
+      const pkSql = pkCols.join(', ');
       const updateCols = cols
-        .filter(c => c.toLowerCase() !== pk && c.toLowerCase() !== 'created_at')
+        .filter(c => !pkCols.includes(c.toLowerCase()) && c.toLowerCase() !== 'created_at')
         .map(c => `${c} = EXCLUDED.${c}`)
         .join(', ');
       let vals = match[3].trim();
       if (vals.endsWith(')')) {
         vals = vals.slice(0, -1).trim();
       }
-      transformed = `INSERT INTO ${table} (${match[2]}) VALUES (${vals}) ON CONFLICT (${pk}) DO UPDATE SET ${updateCols}`;
+      transformed = `INSERT INTO ${table} (${match[2]}) VALUES (${vals}) ON CONFLICT (${pkSql}) DO UPDATE SET ${updateCols}`;
     }
     let paramIdx = 0;
     return transformed.replace(/\?/g, () => `$${++paramIdx}`);
@@ -374,7 +378,8 @@ const PG_SCHEMA_SQL = `
   );
 
   CREATE TABLE IF NOT EXISTS pilot_coffee_groups (
-    key TEXT PRIMARY KEY,
+    province TEXT NOT NULL DEFAULT 'พระนครศรีอยุธยา',
+    key TEXT NOT NULL,
     name TEXT NOT NULL,
     bg_image TEXT,
     theme_color TEXT,
@@ -382,8 +387,10 @@ const PG_SCHEMA_SQL = `
     is_custom INTEGER DEFAULT 0,
     order_index INTEGER DEFAULT 0,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (province, key)
   );
+  CREATE INDEX IF NOT EXISTS idx_coffee_groups_prov ON pilot_coffee_groups (province);
 `;
 
 async function migrateSqliteToPostgresIfEmpty(pgPool, sqliteDb) {
@@ -436,6 +443,16 @@ async function migrateSqliteToPostgresIfEmpty(pgPool, sqliteDb) {
     console.warn('[Migration] Error checking PostgreSQL data:', err.message);
   }
 }
+
+const PILOT_PROVINCES = ['พระนครศรีอยุธยา', 'เชียงราย', 'อุดรธานี', 'สุราษฎร์ธานี'];
+
+const DEFAULT_5_COFFEE_GROUPS = [
+  { key: 'mocha', name: 'กลุ่มมอคค่า', bg_image: '/theme/coffee_mocha_bg.jpg', theme_color: '#78350f', accent_bg: '#fef3c7', is_custom: 0, order_index: 1 },
+  { key: 'cappuccino', name: 'กลุ่มคาปูชิโน', bg_image: '/theme/coffee_cappuccino_bg.jpg', theme_color: '#92400e', accent_bg: '#ffedd5', is_custom: 0, order_index: 2 },
+  { key: 'americano', name: 'กลุ่มอเมริกาโน', bg_image: '/theme/coffee_americano_bg.jpg', theme_color: '#1c1917', accent_bg: '#f5f5f4', is_custom: 0, order_index: 3 },
+  { key: 'espresso', name: 'กลุ่มเอสเพรสโซ', bg_image: '/theme/coffee_preset_05_espresso.jpg', theme_color: '#451a03', accent_bg: '#fef2f2', is_custom: 0, order_index: 4 },
+  { key: 'latte', name: 'กลุ่มลาเต้', bg_image: '/theme/coffee_preset_06_latte.jpg', theme_color: '#b45309', accent_bg: '#fffbeb', is_custom: 0, order_index: 5 }
+];
 
 async function initDatabase() {
   if (typeof process.loadEnvFile === 'function') {
@@ -530,24 +547,37 @@ async function initDatabase() {
         }
       }
 
-      // Bootstrap coffee groups if empty
-      const coffeeCnt = (await pgPool.query('SELECT COUNT(*) as c FROM pilot_coffee_groups')).rows[0]?.c || 0;
-      if (Number(coffeeCnt) === 0) {
-        console.log(`[Database] Seeding default 5 coffee groups in "${targetDbName}"...`);
-        const now = new Date().toISOString();
-        const seedGroups = [
-          { key: 'mocha', name: 'กลุ่มมอคค่า', bg_image: '/theme/coffee_mocha_bg.jpg', theme_color: '#78350f', accent_bg: '#fef3c7', is_custom: 0, order_index: 1 },
-          { key: 'cappuccino', name: 'กลุ่มคาปูชิโน', bg_image: '/theme/coffee_cappuccino_bg.jpg', theme_color: '#92400e', accent_bg: '#ffedd5', is_custom: 0, order_index: 2 },
-          { key: 'americano', name: 'กลุ่มอเมริกาโน', bg_image: '/theme/coffee_americano_bg.jpg', theme_color: '#1c1917', accent_bg: '#f5f5f4', is_custom: 0, order_index: 3 },
-          { key: 'espresso', name: 'กลุ่มเอสเพรสโซ', bg_image: '/theme/coffee_preset_05_espresso.jpg', theme_color: '#451a03', accent_bg: '#fef2f2', is_custom: 0, order_index: 4 },
-          { key: 'latte', name: 'กลุ่มลาเต้', bg_image: '/theme/coffee_preset_06_latte.jpg', theme_color: '#b45309', accent_bg: '#fffbeb', is_custom: 0, order_index: 5 }
-        ];
-        for (const g of seedGroups) {
-          await pgPool.query(
-            `INSERT INTO pilot_coffee_groups (key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (key) DO NOTHING`,
-            [g.key, g.name, g.bg_image, g.theme_color, g.accent_bg, g.is_custom, g.order_index, now, now]
-          );
+      // Ensure province column and composite primary key on PostgreSQL
+      try {
+        const colCheck = await pgPool.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'pilot_coffee_groups' AND column_name = 'province'");
+        if (colCheck.rows.length === 0) {
+          console.log('[Migration] Adding province column and updating primary key on pilot_coffee_groups in PostgreSQL...');
+          await pgPool.query("ALTER TABLE pilot_coffee_groups ADD COLUMN province TEXT NOT NULL DEFAULT 'พระนครศรีอยุธยา'");
+          await pgPool.query("ALTER TABLE pilot_coffee_groups DROP CONSTRAINT IF EXISTS pilot_coffee_groups_pkey");
+          await pgPool.query("ALTER TABLE pilot_coffee_groups ADD PRIMARY KEY (province, key)");
+        }
+      } catch (err) {
+        console.warn('[Migration] Note on pilot_coffee_groups table alteration:', err.message);
+      }
+
+      // Bootstrap coffee groups for all 4 provinces
+      const now = new Date().toISOString();
+      for (const prov of PILOT_PROVINCES) {
+        try {
+          const res = await pgPool.query('SELECT COUNT(*) as c FROM pilot_coffee_groups WHERE province = $1', [prov]);
+          const cnt = Number(res.rows[0]?.c || 0);
+          if (cnt === 0) {
+            console.log(`[Database] Seeding 5 default coffee groups for province "${prov}" in "${targetDbName}"...`);
+            for (const g of DEFAULT_5_COFFEE_GROUPS) {
+              await pgPool.query(
+                `INSERT INTO pilot_coffee_groups (province, key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (province, key) DO NOTHING`,
+                [prov, g.key, g.name, g.bg_image, g.theme_color, g.accent_bg, g.is_custom, g.order_index, now, now]
+              );
+            }
+          }
+        } catch (provSeedErr) {
+          console.warn(`[Database] Error seeding province ${prov}:`, provSeedErr.message);
         }
       }
 
@@ -569,7 +599,48 @@ async function initDatabase() {
     sqliteDb.exec('PRAGMA journal_mode = WAL;');
     sqliteDb.exec('PRAGMA busy_timeout = 5000;');
     sqliteDb.exec(PG_SCHEMA_SQL);
-  } catch {}
+
+    // Check if province column exists in SQLite
+    const cols = sqliteDb.prepare("PRAGMA table_info(pilot_coffee_groups)").all();
+    if (!cols.some(c => c.name === 'province')) {
+      console.log('[Migration] Migrating pilot_coffee_groups to include province in SQLite...');
+      sqliteDb.exec(`
+        ALTER TABLE pilot_coffee_groups RENAME TO pilot_coffee_groups_backup;
+        CREATE TABLE pilot_coffee_groups (
+          province TEXT NOT NULL DEFAULT 'พระนครศรีอยุธยา',
+          key TEXT NOT NULL,
+          name TEXT NOT NULL,
+          bg_image TEXT,
+          theme_color TEXT,
+          accent_bg TEXT,
+          is_custom INTEGER DEFAULT 0,
+          order_index INTEGER DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY (province, key)
+        );
+        INSERT INTO pilot_coffee_groups (province, key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
+        SELECT 'พระนครศรีอยุธยา', key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at FROM pilot_coffee_groups_backup;
+        DROP TABLE pilot_coffee_groups_backup;
+      `);
+    }
+
+    const now = new Date().toISOString();
+    const insertStmt = sqliteDb.prepare(`
+      INSERT OR IGNORE INTO pilot_coffee_groups (province, key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const prov of PILOT_PROVINCES) {
+      const cnt = sqliteDb.prepare('SELECT COUNT(*) as c FROM pilot_coffee_groups WHERE province = ?').get(prov)?.c || 0;
+      if (Number(cnt) === 0) {
+        for (const g of DEFAULT_5_COFFEE_GROUPS) {
+          insertStmt.run(prov, g.key, g.name, g.bg_image, g.theme_color, g.accent_bg, g.is_custom, g.order_index, now, now);
+        }
+      }
+    }
+  } catch (sqErr) {
+    console.warn('[Database] SQLite setup notice:', sqErr.message);
+  }
 
   return new UniversalDb(null, sqliteDb, 'DB-MDC (Offline Simulated)');
 }
@@ -937,15 +1008,19 @@ async function handleApiRequest(req, res, urlObj) {
           .all(...provList)
       : await db.prepare('SELECT * FROM pilot_lessons_and_policies ORDER BY updated_at DESC').all();
 
-    // Query coffee groups
-    const groupRows = await db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all();
+    // Query coffee groups scoped to province
+    const groupRows = provList
+      ? await db.all(`SELECT * FROM pilot_coffee_groups WHERE province IN (${provList.map(() => '?').join(',')}) ORDER BY order_index ASC, created_at ASC`, ...provList)
+      : await db.all('SELECT * FROM pilot_coffee_groups ORDER BY province ASC, order_index ASC, created_at ASC');
     const coffeeGroups = groupRows.map((r) => ({
+      province: r.province,
       key: r.key,
       name: r.name,
       bgImage: r.bg_image,
       themeColor: r.theme_color,
       accentBg: r.accent_bg,
-      isCustom: Boolean(r.is_custom)
+      isCustom: Boolean(r.is_custom),
+      orderIndex: r.order_index
     }));
 
     // Query submitted projects (excluding precheck)
@@ -1417,18 +1492,48 @@ async function handleApiRequest(req, res, urlObj) {
   // 5.2.5 GET /api/pilot-sqlite/coffee-groups
   if (req.method === 'GET' && (pathname === '/api/activity/coffee-groups' || pathname === '/api/pilot-sqlite/coffee-groups')) {
     try {
-      const rows = await db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all();
+      const province = urlObj.searchParams.get('province');
+      const provList = province
+        ? (province === 'อยุธยา' || province === 'พระนครศรีอยุธยา'
+            ? ['อยุธยา', 'พระนครศรีอยุธยา']
+            : [province])
+        : null;
+
+      let rows = [];
+      if (provList) {
+        rows = await db.all(`SELECT * FROM pilot_coffee_groups WHERE province IN (${provList.map(() => '?').join(',')}) ORDER BY order_index ASC, created_at ASC`, ...provList);
+      } else {
+        rows = await db.all('SELECT * FROM pilot_coffee_groups ORDER BY province ASC, order_index ASC, created_at ASC');
+      }
+
+      // If rows are empty for this specific province, auto-seed the 5 default groups for this province!
+      if (rows.length === 0 && province) {
+        const normProv = (province === 'อยุธยา' || province === 'พระนครศรีอยุธยา') ? 'พระนครศรีอยุธยา' : province;
+        const now = new Date().toISOString();
+        for (const g of DEFAULT_5_COFFEE_GROUPS) {
+          await db.run(
+            `INSERT OR REPLACE INTO pilot_coffee_groups 
+            (province, key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            normProv, g.key, g.name, g.bg_image, g.theme_color, g.accent_bg, g.is_custom, g.order_index, now, now
+          );
+        }
+        rows = await db.all('SELECT * FROM pilot_coffee_groups WHERE province = ? ORDER BY order_index ASC, created_at ASC', normProv);
+      }
+
       const groups = rows.map((r) => ({
+        province: r.province,
         key: r.key,
         name: r.name,
         bgImage: r.bg_image,
         themeColor: r.theme_color,
         accentBg: r.accent_bg,
-        isCustom: Boolean(r.is_custom)
+        isCustom: Boolean(r.is_custom),
+        orderIndex: r.order_index
       }));
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      res.end(JSON.stringify({ ok: true, groups }));
+      res.end(JSON.stringify({ ok: true, groups, total: groups.length }));
       return;
     } catch (err) {
       res.statusCode = 500;
@@ -1442,45 +1547,42 @@ async function handleApiRequest(req, res, urlObj) {
   if (req.method === 'POST' && (pathname === '/api/activity/coffee-groups' || pathname === '/api/pilot-sqlite/coffee-groups')) {
     try {
       const body = await readJsonBody(req);
+      const rawProvince = body.province || urlObj.searchParams.get('province') || 'พระนครศรีอยุธยา';
+      const targetProvince = (rawProvince === 'อยุธยา' || rawProvince === 'พระนครศรีอยุธยา') ? 'พระนครศรีอยุธยา' : rawProvince;
       const now = new Date().toISOString();
 
       if (body.action === 'reset') {
-        await db.prepare('DELETE FROM pilot_coffee_groups').run();
-        const defaultGroups = [
-          { key: 'mocha', name: 'กลุ่มมอคค่า', bg_image: '/theme/coffee_mocha_bg.jpg', theme_color: '#78350f', accent_bg: '#fef3c7', is_custom: 0, order_index: 1 },
-          { key: 'cappuccino', name: 'กลุ่มคาปูชิโน', bg_image: '/theme/coffee_cappuccino_bg.jpg', theme_color: '#92400e', accent_bg: '#ffedd5', is_custom: 0, order_index: 2 },
-          { key: 'americano', name: 'กลุ่มอเมริกาโน', bg_image: '/theme/coffee_americano_bg.jpg', theme_color: '#1c1917', accent_bg: '#f5f5f4', is_custom: 0, order_index: 3 },
-          { key: 'espresso', name: 'กลุ่มเอสเพรสโซ', bg_image: '/theme/coffee_preset_05_espresso.jpg', theme_color: '#451a03', accent_bg: '#fef2f2', is_custom: 0, order_index: 4 },
-          { key: 'latte', name: 'กลุ่มลาเต้', bg_image: '/theme/coffee_preset_06_latte.jpg', theme_color: '#b45309', accent_bg: '#fffbeb', is_custom: 0, order_index: 5 }
-        ];
-        const insertStmt = await db.prepare(`
-          INSERT INTO pilot_coffee_groups (key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        for (const g of defaultGroups) {
-          await insertStmt.run(g.key, g.name, g.bg_image, g.theme_color, g.accent_bg, g.is_custom, g.order_index, now, now);
+        await db.run('DELETE FROM pilot_coffee_groups WHERE province = ?', targetProvince);
+        for (const g of DEFAULT_5_COFFEE_GROUPS) {
+          await db.run(
+            `INSERT OR REPLACE INTO pilot_coffee_groups 
+            (province, key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            targetProvince, g.key, g.name, g.bg_image, g.theme_color, g.accent_bg, g.is_custom, g.order_index, now, now
+          );
         }
       } else {
         const grp = body.group || body;
-        const currentRows = await db.prepare('SELECT * FROM pilot_coffee_groups').all();
+        const currentRows = await db.all('SELECT * FROM pilot_coffee_groups WHERE province = ?', targetProvince);
         const rawKey = (grp.key || `group_${Date.now()}`).toLowerCase().replace(/[^a-z0-9]/g, '_');
         const key = currentRows.some((r) => r.key === rawKey && (!body.isEdit || body.originalKey !== r.key))
           ? (body.isEdit ? rawKey : `${rawKey}_${Date.now()}`)
           : rawKey;
 
-        const maxOrderRow = await db.get('SELECT MAX(order_index) as m FROM pilot_coffee_groups');
+        const maxOrderRow = await db.get('SELECT MAX(order_index) as m FROM pilot_coffee_groups WHERE province = ?', targetProvince);
         const maxOrder = Number(maxOrderRow?.m || 0);
         const orderIndex = typeof grp.orderIndex === 'number' ? grp.orderIndex : maxOrder + 1;
 
         const lookupKey = body.originalKey || key;
-        const existingGroup = await db.prepare('SELECT created_at FROM pilot_coffee_groups WHERE key = ?').get(lookupKey);
+        const existingGroup = await db.get('SELECT created_at FROM pilot_coffee_groups WHERE province = ? AND key = ?', targetProvince, lookupKey);
         const createdAt = existingGroup?.created_at || now;
 
-        await db.prepare(`
+        await db.run(`
           INSERT OR REPLACE INTO pilot_coffee_groups 
-          (key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
+          (province, key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+          targetProvince,
           key,
           grp.name || 'กลุ่มกาแฟสร้างสรรค์คุณธรรม',
           grp.bgImage || grp.bg_image || '/theme/coffee_preset_01_beans.jpg',
@@ -1493,27 +1595,25 @@ async function handleApiRequest(req, res, urlObj) {
         );
 
         if (body.isEdit && body.originalKey && body.originalKey !== key) {
-          await db.prepare('DELETE FROM pilot_coffee_groups WHERE key = ?').run(body.originalKey);
+          await db.run('DELETE FROM pilot_coffee_groups WHERE province = ? AND key = ?', targetProvince, body.originalKey);
         }
       }
 
-      const rows = await db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all();
+      const rows = await db.all('SELECT * FROM pilot_coffee_groups WHERE province = ? ORDER BY order_index ASC, created_at ASC', targetProvince);
       const groups = rows.map((r) => ({
+        province: r.province,
         key: r.key,
         name: r.name,
         bgImage: r.bg_image,
         themeColor: r.theme_color,
         accentBg: r.accent_bg,
-        isCustom: Boolean(r.is_custom)
+        isCustom: Boolean(r.is_custom),
+        orderIndex: r.order_index
       }));
-
-      try {
-        fs.writeFileSync(coffeeGroupsFile, JSON.stringify(groups, null, 2), 'utf8');
-      } catch {}
 
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      res.end(JSON.stringify({ ok: true, groups, message: 'บันทึกกลุ่มกาแฟลง SQLite เรียบร้อยแล้ว' }));
+      res.end(JSON.stringify({ ok: true, groups, province: targetProvince, message: `บันทึกกลุ่มกาแฟ จ.${targetProvince} เรียบร้อยแล้ว` }));
       return;
     } catch (err) {
       res.statusCode = 500;
@@ -1527,40 +1627,41 @@ async function handleApiRequest(req, res, urlObj) {
   if (req.method === 'DELETE' && (pathname === '/api/activity/coffee-groups' || pathname === '/api/pilot-sqlite/coffee-groups')) {
     try {
       const key = urlObj.searchParams.get('key');
+      const rawProvince = urlObj.searchParams.get('province') || 'พระนครศรีอยุธยา';
+      const targetProvince = (rawProvince === 'อยุธยา' || rawProvince === 'พระนครศรีอยุธยา') ? 'พระนครศรีอยุธยา' : rawProvince;
+
       if (!key) {
         res.statusCode = 400;
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.end(JSON.stringify({ ok: false, error: 'Missing key parameter' }));
         return;
       }
-      const countRow = await db.get('SELECT COUNT(*) as cnt FROM pilot_coffee_groups');
+      const countRow = await db.get('SELECT COUNT(*) as cnt FROM pilot_coffee_groups WHERE province = ?', targetProvince);
       const count = Number(countRow?.cnt || 0);
       if (count <= 1) {
         res.statusCode = 400;
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        res.end(JSON.stringify({ ok: false, error: 'ไม่สามารถลบกลุ่มทั้งหมดได้ ต้องมีอย่างน้อย 1 กลุ่ม' }));
+        res.end(JSON.stringify({ ok: false, error: `ไม่สามารถลบกลุ่มทั้งหมดใน จ.${targetProvince} ได้ ต้องมีอย่างน้อย 1 กลุ่ม` }));
         return;
       }
 
-      await db.run('DELETE FROM pilot_coffee_groups WHERE key = ?', key);
+      await db.run('DELETE FROM pilot_coffee_groups WHERE province = ? AND key = ?', targetProvince, key);
 
-      const rows = await db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all();
+      const rows = await db.all('SELECT * FROM pilot_coffee_groups WHERE province = ? ORDER BY order_index ASC, created_at ASC', targetProvince);
       const groups = rows.map((r) => ({
+        province: r.province,
         key: r.key,
         name: r.name,
         bgImage: r.bg_image,
         themeColor: r.theme_color,
         accentBg: r.accent_bg,
-        isCustom: Boolean(r.is_custom)
+        isCustom: Boolean(r.is_custom),
+        orderIndex: r.order_index
       }));
-
-      try {
-        fs.writeFileSync(coffeeGroupsFile, JSON.stringify(groups, null, 2), 'utf8');
-      } catch {}
 
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      res.end(JSON.stringify({ ok: true, groups, message: 'ลบกลุ่มกาแฟจาก SQLite เรียบร้อยแล้ว' }));
+      res.end(JSON.stringify({ ok: true, groups, province: targetProvince, message: `ลบกลุ่มกาแฟใน จ.${targetProvince} เรียบร้อยแล้ว` }));
       return;
     } catch (err) {
       res.statusCode = 500;
@@ -1579,16 +1680,9 @@ async function handleApiRequest(req, res, urlObj) {
       ? ''
       : "AND (is_precheck = 0 OR is_precheck IS NULL) AND id NOT LIKE 'precheck-%'";
     if (rawProvince) {
-      let matchProvs = [rawProvince];
-      if (rawProvince === 'อยุธยา' || rawProvince === 'พระนครศรีอยุธยา') {
-        matchProvs = ['อยุธยา', 'พระนครศรีอยุธยา'];
-      } else if (rawProvince === 'อุดรธานี' || rawProvince === 'กาฬสินธุ์') {
-        matchProvs = ['อุดรธานี', 'กาฬสินธุ์'];
-      } else if (rawProvince === 'ลำปาง' || rawProvince === 'น่าน') {
-        matchProvs = ['ลำปาง', 'น่าน'];
-      } else if (rawProvince === 'สุราษฎร์ธานี' || rawProvince === 'พังงา') {
-        matchProvs = ['สุราษฎร์ธานี', 'พังงา'];
-      }
+      let matchProvs = (rawProvince === 'อยุธยา' || rawProvince === 'พระนครศรีอยุธยา')
+        ? ['อยุธยา', 'พระนครศรีอยุธยา']
+        : [rawProvince];
       const placeholders = matchProvs.map(() => '?').join(', ');
       rows = await db.prepare(`SELECT * FROM pilot_hackathon_projects WHERE province IN (${placeholders}) ${precheckFilter} ORDER BY created_at DESC`).all(...matchProvs);
     } else {

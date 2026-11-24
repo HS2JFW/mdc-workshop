@@ -66,6 +66,7 @@ export const AdminDatabaseModal: React.FC<AdminDatabaseModalProps> = ({
   const [rowsPerPage, setRowsPerPage] = useState<number>(10);
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortAsc, setSortAsc] = useState<boolean>(true);
+  const [selectedProvinceFilter, setSelectedProvinceFilter] = useState<string>('all');
 
   // Sync initial selection
   useEffect(() => {
@@ -98,6 +99,7 @@ export const AdminDatabaseModal: React.FC<AdminDatabaseModalProps> = ({
     const load = async () => {
       setIsLoadingData(true);
       setSearchQuery('');
+      setSelectedProvinceFilter('all');
       setCurrentPage(1);
       try {
         const res = await fetchUnifiedTableData(selectedTableName);
@@ -120,10 +122,27 @@ export const AdminDatabaseModal: React.FC<AdminDatabaseModalProps> = ({
     };
   }, [isOpen, selectedTableName]);
 
+  // Check if current table has a province column
+  const hasProvinceColumn = useMemo(() => {
+    return (
+      tableDataResult?.columns.some(
+        (c) => c.name.toLowerCase() === 'province' || c.name.toLowerCase() === 'จังหวัด'
+      ) ?? false
+    );
+  }, [tableDataResult]);
+
   // Filtered and sorted rows
   const processedRows = useMemo(() => {
     if (!tableDataResult || !tableDataResult.rows) return [];
     let rows = [...tableDataResult.rows];
+
+    // Filter by province if selected
+    if (hasProvinceColumn && selectedProvinceFilter !== 'all') {
+      rows = rows.filter((row) => {
+        const provVal = String(row.province || row['จังหวัด'] || '').trim();
+        return provVal.toLowerCase().includes(selectedProvinceFilter.toLowerCase());
+      });
+    }
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
@@ -148,7 +167,7 @@ export const AdminDatabaseModal: React.FC<AdminDatabaseModalProps> = ({
     }
 
     return rows;
-  }, [tableDataResult, searchQuery, sortCol, sortAsc]);
+  }, [tableDataResult, selectedProvinceFilter, hasProvinceColumn, searchQuery, sortCol, sortAsc]);
 
   // Pagination calculation
   const totalRowsCount = processedRows.length;
@@ -928,8 +947,49 @@ export const AdminDatabaseModal: React.FC<AdminDatabaseModalProps> = ({
                 </span>
               </div>
 
-              {/* Action Controls: Search & CSV Export */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {/* Action Controls: Province Filter, Search & CSV Export */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                {hasProvinceColumn && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      backgroundColor: 'rgba(15, 23, 42, 0.7)',
+                      border: '1px solid rgba(148, 163, 184, 0.25)',
+                      borderRadius: '10px',
+                      padding: '4px 10px'
+                    }}
+                  >
+                    <MapPin size={13} color="#38bdf8" />
+                    <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600 }}>จังหวัด:</span>
+                    <select
+                      value={selectedProvinceFilter}
+                      onChange={(e) => {
+                        setSelectedProvinceFilter(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      style={{
+                        backgroundColor: '#1e293b',
+                        color: '#f8fafc',
+                        border: '1px solid rgba(148, 163, 184, 0.3)',
+                        borderRadius: '6px',
+                        padding: '3px 8px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        outline: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="all">📍 ทุกจังหวัด (ทั้งหมด)</option>
+                      <option value="พระนครศรีอยุธยา">🏛️ พระนครศรีอยุธยา</option>
+                      <option value="เชียงราย">🏔️ เชียงราย</option>
+                      <option value="อุดรธานี">🌸 อุดรธานี</option>
+                      <option value="สุราษฎร์ธานี">🌊 สุราษฎร์ธานี</option>
+                    </select>
+                  </div>
+                )}
+
                 <div
                   style={{
                     display: 'flex',
@@ -1128,6 +1188,67 @@ export const AdminDatabaseModal: React.FC<AdminDatabaseModalProps> = ({
                           </td>
                           {tableDataResult.columns.map((col) => {
                             const val = row[col.name];
+                            const isProvinceCol = col.name.toLowerCase() === 'province' || col.name.toLowerCase() === 'จังหวัด';
+
+                            if (isProvinceCol && val) {
+                              const pStr = String(val).trim();
+                              let bg = 'rgba(148, 163, 184, 0.15)';
+                              let textCol = '#cbd5e1';
+                              let border = '1px solid rgba(148, 163, 184, 0.3)';
+                              let pIcon = '📍';
+
+                              if (pStr.includes('อยุธยา')) {
+                                bg = 'rgba(245, 158, 11, 0.2)';
+                                textCol = '#fbbf24';
+                                border = '1px solid rgba(245, 158, 11, 0.5)';
+                                pIcon = '🏛️';
+                              } else if (pStr.includes('เชียงราย')) {
+                                bg = 'rgba(16, 185, 129, 0.2)';
+                                textCol = '#34d399';
+                                border = '1px solid rgba(16, 185, 129, 0.5)';
+                                pIcon = '🏔️';
+                              } else if (pStr.includes('อุดร')) {
+                                bg = 'rgba(168, 85, 247, 0.2)';
+                                textCol = '#c084fc';
+                                border = '1px solid rgba(168, 85, 247, 0.5)';
+                                pIcon = '🌸';
+                              } else if (pStr.includes('สุราษฎร์')) {
+                                bg = 'rgba(56, 189, 248, 0.2)';
+                                textCol = '#38bdf8';
+                                border = '1px solid rgba(56, 189, 248, 0.5)';
+                                pIcon = '🌊';
+                              }
+
+                              return (
+                                <td
+                                  key={col.name}
+                                  style={{
+                                    padding: '9px 14px',
+                                    borderBottom: '1px solid rgba(148, 163, 184, 0.08)',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '5px',
+                                      backgroundColor: bg,
+                                      color: textCol,
+                                      border,
+                                      borderRadius: '6px',
+                                      padding: '2px 8px',
+                                      fontSize: '11.5px',
+                                      fontWeight: 700
+                                    }}
+                                  >
+                                    <span>{pIcon}</span>
+                                    <span>{pStr}</span>
+                                  </span>
+                                </td>
+                              );
+                            }
+
                             return (
                               <td
                                 key={col.name}
