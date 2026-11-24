@@ -28,6 +28,7 @@ export interface SynergyInitiative {
   compatibilityScore: number;
   summaryHeadline: string;
   lastSynergizedAt: string;
+  isPublishedToMain?: boolean;
 }
 
 export interface DimensionTopicConfig {
@@ -93,7 +94,7 @@ export const DEFAULT_HIERARCHICAL_DOMAINS: HierarchicalDomainConfig[] = [
             dimensionId: 'overview',
             targetPageId: 'policy-1-1',
             description: 'วิเคราะห์ความเชื่อมโยงระหว่างระดับคุณธรรมภาพรวมกับสถิติเศรษฐกิจและสังคม',
-            internalTableIds: ['mdc_moral_national_overview', 'mdc_moral_regional_breakdown', 'mdc_moral_demographics'],
+            internalTableIds: ['mdc_moral_regional_breakdown', 'mdc_moral_national_overview', 'mdc_moral_demographics'],
             externalTableIds: ['ext_traffic_accidents_provincial', 'ext_bot_financial_literacy', 'ext_volunteer_stats'],
             compatibilityScore: 92,
             summaryHeadline: 'ความสัมพันธ์เชิงบวกระหว่างคุณธรรมภาพรวมกับความมั่นคงทางสังคมและเศรษฐกิจครัวเรือน',
@@ -128,7 +129,7 @@ export const DEFAULT_HIERARCHICAL_DOMAINS: HierarchicalDomainConfig[] = [
             dimensionId: 'discipline',
             targetPageId: 'policy-1-1',
             description: 'วิเคราะห์วินัยการใช้จ่ายและการชำระหนี้ตรงเวลากับอัตราหนี้เสีย NPLs ของคนวัยเริ่มทำงาน',
-            internalTableIds: ['mdc_moral_national_overview'],
+            internalTableIds: ['mdc_moral_regional_breakdown'],
             externalTableIds: ['ext_bot_financial_literacy'],
             compatibilityScore: 88,
             summaryHeadline: 'กลุ่มประชากรที่มีวินัยทางการเงินสูงมีประวัติการชำระหนี้ตรงเวลาและภาระหนี้บริโภคต่ำกว่า 2.4 เท่า',
@@ -176,7 +177,7 @@ export const DEFAULT_HIERARCHICAL_DOMAINS: HierarchicalDomainConfig[] = [
             dimensionId: 'sufficiency',
             targetPageId: 'policy-1-1',
             description: 'ศึกษาความสอดคล้องระหว่างดัชนีพอเพียงกับระดับ Financial Literacy และการจัดการหนี้สิน',
-            internalTableIds: ['mdc_moral_national_overview'],
+            internalTableIds: ['mdc_moral_regional_breakdown'],
             externalTableIds: ['ext_bot_financial_literacy'],
             compatibilityScore: 88,
             summaryHeadline: 'พฤติกรรมความพอเพียงช่วยลดอัตราการเป็นหนี้เสียในระดับครัวเรือนได้อย่างมีนัยสำคัญ',
@@ -395,7 +396,7 @@ export const DEFAULT_HIERARCHICAL_DOMAINS: HierarchicalDomainConfig[] = [
             dimensionId: 'overview',
             targetPageId: 'policy-1-2',
             description: 'บูรณาการข้อมูลทุนชีวิต 5 ด้านกับตัวชี้วัดความพร้อมในการดำเนินชีวิตของเด็กไทย',
-            internalTableIds: ['mdc_lifecapital_national_overview', 'mdc_lifecapital_regional_breakdown'],
+            internalTableIds: ['mdc_lifecapital_regional_breakdown', 'mdc_lifecapital_national_overview'],
             externalTableIds: ['ext_vulnerable_households', 'ext_elderly_health_depression'],
             compatibilityScore: 91,
             summaryHeadline: 'ทุนชีวิตทั้ง 5 พลังช่วยสร้างภูมิคุ้มกันทางใจและลดความเสี่ยงต่อการหลุดออกจากระบบ',
@@ -417,7 +418,7 @@ export const DEFAULT_HIERARCHICAL_DOMAINS: HierarchicalDomainConfig[] = [
             dimensionId: 'self',
             targetPageId: 'policy-1-2',
             description: 'วิเคราะห์ความเชื่อมั่นในคุณค่าตนเองกับความสามารถในการจัดการอารมณ์',
-            internalTableIds: ['mdc_lifecapital_national_overview', 'mdc_lifecapital_assets_breakdown'],
+            internalTableIds: ['mdc_lifecapital_regional_breakdown', 'mdc_lifecapital_assets_breakdown'],
             externalTableIds: ['ext_elderly_health_depression'],
             compatibilityScore: 84,
             summaryHeadline: 'เยาวชนที่มีพลังตัวตนระดับดีมีความยืดหยุ่นทางอารมณ์และรับมือกับความกดดันได้ดีกว่า',

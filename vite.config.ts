@@ -269,7 +269,122 @@ function createPilotSqlitePlugin(): Plugin {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS central_dataset_pool (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      category TEXT DEFAULT 'external_agency',
+      domain_id TEXT DEFAULT 'moral-index',
+      source_type TEXT DEFAULT 'CSV/Excel',
+      source_agency TEXT DEFAULT 'หน่วยงานภายนอก',
+      source_website TEXT DEFAULT '',
+      row_count INTEGER DEFAULT 0,
+      column_count INTEGER DEFAULT 0,
+      columns_json TEXT,
+      raw_data_json TEXT,
+      cleansed_data_json TEXT,
+      is_cleansed INTEGER DEFAULT 0,
+      is_ready_for_synergy INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS api_sync_schedules (
+      id TEXT PRIMARY KEY,
+      dataset_id TEXT NOT NULL,
+      dataset_name TEXT NOT NULL,
+      endpoint_url TEXT NOT NULL,
+      http_method TEXT DEFAULT 'GET',
+      headers_json TEXT,
+      schedule_type TEXT DEFAULT 'daily',
+      schedule_time TEXT DEFAULT '02:00',
+      schedule_days_json TEXT DEFAULT '["monday","thursday"]',
+      custom_dates_json TEXT DEFAULT '[]',
+      is_active INTEGER DEFAULT 1,
+      last_run_at TEXT,
+      last_status TEXT DEFAULT 'pending',
+      last_message TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS dataset_transformation_logs (
+      id TEXT PRIMARY KEY,
+      dataset_id TEXT NOT NULL,
+      dataset_name TEXT,
+      timestamp TEXT NOT NULL,
+      triggered_by TEXT DEFAULT 'manual_action',
+      province_normalization_count INTEGER DEFAULT 0,
+      year_alignment_info TEXT,
+      sanitized_values_count INTEGER DEFAULT 0,
+      deduplicated_rows_count INTEGER DEFAULT 0,
+      log_summary_json TEXT,
+      status TEXT DEFAULT 'completed'
+    );
+
+    CREATE TABLE IF NOT EXISTS synergy_initiatives_registry (
+      id TEXT PRIMARY KEY,
+      domain_id TEXT NOT NULL,
+      dimension_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      internal_table_id TEXT,
+      external_table_id TEXT,
+      compatibility_score REAL DEFAULT 0,
+      compatibility_dimensions_json TEXT,
+      is_published_to_main INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS admin_notification_settings (
+      id TEXT PRIMARY KEY,
+      line_notify_token TEXT,
+      email_recipients TEXT,
+      notify_on_api_success INTEGER DEFAULT 1,
+      notify_on_api_error INTEGER DEFAULT 1,
+      updated_at TEXT NOT NULL
+    );
   `);
+
+  try {
+    db.prepare("ALTER TABLE central_dataset_pool ADD COLUMN source_website TEXT DEFAULT '';").run();
+  } catch (e) {}
+
+  // Seed default external datasets from central_datasets_seed.json
+  try {
+    const centralSeedFile = path.resolve(process.cwd(), 'data/central_datasets_seed.json');
+    if (fs.existsSync(centralSeedFile)) {
+      const rawSeeds = JSON.parse(fs.readFileSync(centralSeedFile, 'utf8'));
+      const now = new Date().toISOString();
+      const insertStmt = db.prepare(`
+        INSERT OR REPLACE INTO central_dataset_pool
+        (id, name, category, domain_id, source_type, source_agency, source_website, row_count, column_count, columns_json, raw_data_json, cleansed_data_json, is_cleansed, is_ready_for_synergy, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const s of rawSeeds) {
+        insertStmt.run(
+          s.id,
+          s.name,
+          s.category,
+          s.domain_id || 'moral-index',
+          s.source_type,
+          s.source_agency,
+          s.source_website || '',
+          s.row_count,
+          s.column_count,
+          s.columns_json,
+          s.raw_data_json,
+          s.cleansed_data_json,
+          s.is_cleansed,
+          s.is_ready_for_synergy,
+          s.created_at || now,
+          s.updated_at || now
+        );
+      }
+    }
+  } catch (err) {
+    console.warn('Bootstrap central_dataset_pool in vite error:', err);
+  }
 
   // Bootstrap AI config from disk file data/ai_config.json if table is empty
   try {
@@ -425,8 +540,7 @@ function createPilotSqlitePlugin(): Plugin {
       server.middlewares.use(async (req, res, next) => {
         if (
           !req.url ||
-          (!req.url.startsWith('/api/activity') &&
-            !req.url.startsWith('/api/pilot-sqlite') &&
+          (!req.url.startsWith('/api/pilot-sqlite') &&
             !req.url.startsWith('/api/task-project') &&
             !req.url.startsWith('/api/pms-report') &&
             !req.url.startsWith('/api/duckdb'))
@@ -755,7 +869,7 @@ function createPilotSqlitePlugin(): Plugin {
           }
 
           // 1. GET /api/pilot-sqlite/state
-          if (req.method === 'GET' && (pathname === '/api/activity/state' || pathname === '/api/pilot-sqlite/state')) {
+          if (req.method === 'GET' && pathname === '/api/pilot-sqlite/state') {
             const province = urlObj.searchParams.get('province');
             const provList = province
               ? (province === 'อยุธยา' || province === 'พระนครศรีอยุธยา'
@@ -775,81 +889,21 @@ function createPilotSqlitePlugin(): Plugin {
                   .all(...provList)
               : db.prepare('SELECT * FROM pilot_lessons_and_policies ORDER BY updated_at DESC').all();
 
-            // Query coffee groups
-            const groupRows = db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all() as any[];
-            const coffeeGroups = groupRows.map((r) => ({
-              key: r.key,
-              name: r.name,
-              bgImage: r.bg_image,
-              themeColor: r.theme_color,
-              accentBg: r.accent_bg,
-              isCustom: Boolean(r.is_custom)
-            }));
-
-            // Query submitted projects (excluding precheck)
-            const includePrecheck = urlObj.searchParams.get('include_precheck') === 'true';
-            const precheckFilter = includePrecheck
-              ? ''
-              : "AND (is_precheck = 0 OR is_precheck IS NULL) AND id NOT LIKE 'precheck-%'";
-            let projRows: any[] = [];
-            if (provList) {
-              projRows = db.prepare(`SELECT * FROM pilot_hackathon_projects WHERE province IN (${provList.map(() => '?').join(',')}) ${precheckFilter} ORDER BY ai_score DESC, created_at DESC`).all(...provList) as any[];
-            } else {
-              const whereClause = includePrecheck
-                ? ''
-                : "WHERE (is_precheck = 0 OR is_precheck IS NULL) AND id NOT LIKE 'precheck-%'";
-              projRows = db.prepare(`SELECT * FROM pilot_hackathon_projects ${whereClause} ORDER BY ai_score DESC, created_at DESC`).all() as any[];
-            }
-
-            const submittedProjects = projRows.map((r) => ({
-              id: r.id,
-              province: r.province,
-              groupKey: r.group_key,
-              groupName: r.group_name,
-              projectName: r.project_name,
-              targetMoralVirtue: r.target_moral_virtue,
-              targetAudience: r.target_audience,
-              targetArea: r.target_area,
-              proposalDetails: r.proposal_details,
-              activityPlan: r.activity_plan,
-              behavioralKpi: r.behavioral_kpi,
-              proposerName: r.proposer_name,
-              proposerAgency: r.proposer_agency,
-              proposerPosition: r.proposer_position || '',
-              proposerLevel: r.proposer_level,
-              challengeTopic: r.challenge_topic,
-              evaluatedCriteriaVirtues: r.evaluated_criteria_virtues_json ? JSON.parse(r.evaluated_criteria_virtues_json) : [],
-              aiScore: Number(r.ai_score),
-              aiScoreBreakdown: r.ai_score_breakdown_json ? JSON.parse(r.ai_score_breakdown_json) : { alignment: 0, feasibility: 0, innovation: 0, participation: 0 },
-              aiRecommendations: r.ai_recommendations,
-              communityVotes: Number(r.community_votes || 0),
-              isPrecheck: Boolean(r.is_precheck),
-              createdAt: r.created_at
-            }));
-
-            const groupsRevision = coffeeGroups.map((g) => `${g.key}:${g.name}`).join('|');
-            const projectsRevision = submittedProjects.map((p) => `${p.id}:${p.aiScore}:${p.communityVotes}`).join('|');
-            const revisionHash = `${coffeeGroups.length}_${submittedProjects.length}_${Buffer.from(groupsRevision + '##' + projectsRevision).toString('base64').slice(0, 32)}`;
-
             res.statusCode = 200;
             res.end(
               JSON.stringify({
                 ok: true,
-                dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16',
+                dbPath: 'data/pilot_activities_4regions.sqlite',
                 recordsDir: 'data/pilot_records/',
                 agencies,
-                lessonsPolicies,
-                coffeeGroups,
-                submittedProjects,
-                revision: revisionHash,
-                syncTimestamp: new Date().toISOString()
+                lessonsPolicies
               })
             );
             return;
           }
 
           // 2. POST /api/pilot-sqlite/register-agency
-          if (req.method === 'POST' && (pathname === '/api/activity/register-agency' || pathname === '/api/pilot-sqlite/register-agency')) {
+          if (req.method === 'POST' && pathname === '/api/pilot-sqlite/register-agency') {
             const payload = await readJsonBody(req);
             const id = payload.id || `reg-${Date.now()}`;
             const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
@@ -918,14 +972,14 @@ function createPilotSqlitePlugin(): Plugin {
                 ok: true,
                 id,
                 savedFilePath: `data/pilot_records/agency_${safeId}.json`,
-                dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16'
+                dbPath: 'data/pilot_activities_4regions.sqlite'
               })
             );
             return;
           }
 
           // 3. POST /api/pilot-sqlite/save-lesson-policy
-          if (req.method === 'POST' && (pathname === '/api/activity/save-lesson-policy' || pathname === '/api/pilot-sqlite/save-lesson-policy')) {
+          if (req.method === 'POST' && pathname === '/api/pilot-sqlite/save-lesson-policy') {
             const payload = await readJsonBody(req);
             const id = payload.id || `lp-${Date.now()}`;
             const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
@@ -1011,14 +1065,14 @@ function createPilotSqlitePlugin(): Plugin {
                 id,
                 updated_at: nowStr,
                 savedFilePath: `${relFilePath} | ${relMdPath}`,
-                dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16'
+                dbPath: 'data/pilot_activities_4regions.sqlite'
               })
             );
             return;
           }
 
           // 4. DELETE /api/pilot-sqlite/agency
-          if (req.method === 'DELETE' && (pathname === '/api/activity/agency' || pathname === '/api/pilot-sqlite/agency')) {
+          if (req.method === 'DELETE' && pathname === '/api/pilot-sqlite/agency') {
             const id = urlObj.searchParams.get('id');
             if (id) {
               db.prepare('DELETE FROM pilot_agency_registrations WHERE id = ?').run(id);
@@ -1029,7 +1083,7 @@ function createPilotSqlitePlugin(): Plugin {
           }
 
           // 5. DELETE /api/pilot-sqlite/lesson-policy
-          if (req.method === 'DELETE' && (pathname === '/api/activity/lesson-policy' || pathname === '/api/pilot-sqlite/lesson-policy')) {
+          if (req.method === 'DELETE' && pathname === '/api/pilot-sqlite/lesson-policy') {
             const id = urlObj.searchParams.get('id');
             if (id) {
               db.prepare('DELETE FROM pilot_lessons_and_policies WHERE id = ?').run(id);
@@ -1040,7 +1094,7 @@ function createPilotSqlitePlugin(): Plugin {
           }
 
           // 5.1 GET /api/pilot-sqlite/hackathon-criteria
-          if (req.method === 'GET' && (pathname === '/api/activity/hackathon-criteria' || pathname === '/api/pilot-sqlite/hackathon-criteria')) {
+          if (req.method === 'GET' && pathname === '/api/pilot-sqlite/hackathon-criteria') {
             const province = urlObj.searchParams.get('province') || '';
             let row: any = null;
             if (province) {
@@ -1056,12 +1110,12 @@ function createPilotSqlitePlugin(): Plugin {
             res.statusCode = 200;
             res.setHeader('Content-Type', 'application/json');
             res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-            res.end(JSON.stringify({ ok: true, data: row || null, dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16' }));
+            res.end(JSON.stringify({ ok: true, data: row || null, dbPath: 'data/pilot_activities_4regions.sqlite' }));
             return;
           }
 
           // 5.2 POST /api/pilot-sqlite/hackathon-criteria
-          if (req.method === 'POST' && (pathname === '/api/activity/hackathon-criteria' || pathname === '/api/pilot-sqlite/hackathon-criteria')) {
+          if (req.method === 'POST' && pathname === '/api/pilot-sqlite/hackathon-criteria') {
             const body = await readJsonBody(req);
             const id = body.id || `crit-${Date.now()}`;
             const province = body.province || 'ส่วนกลาง';
@@ -1083,12 +1137,12 @@ function createPilotSqlitePlugin(): Plugin {
             `).run(id, province, body.createdAt || now, now, sourceFilesJson, aiAgentSkillText, rubricJson, promptSkill, promptRubric);
 
             res.statusCode = 200;
-            res.end(JSON.stringify({ ok: true, id, dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16', updatedAt: now }));
+            res.end(JSON.stringify({ ok: true, id, dbPath: 'data/pilot_activities_4regions.sqlite', updatedAt: now }));
             return;
           }
 
           // 5.2.1 GET /api/pilot-sqlite/criteria-virtues
-          if (req.method === 'GET' && (pathname === '/api/activity/criteria-virtues' || pathname === '/api/pilot-sqlite/criteria-virtues')) {
+          if (req.method === 'GET' && pathname === '/api/pilot-sqlite/criteria-virtues') {
             const province = urlObj.searchParams.get('province') || 'ส่วนกลาง';
             const defaultWeaknessMap: Record<string, string[]> = {
               'อยุธยา': ['พอเพียง'],
@@ -1117,7 +1171,7 @@ function createPilotSqlitePlugin(): Plugin {
           }
 
           // 5.2.2 POST /api/pilot-sqlite/criteria-virtues
-          if (req.method === 'POST' && (pathname === '/api/activity/criteria-virtues' || pathname === '/api/pilot-sqlite/criteria-virtues')) {
+          if (req.method === 'POST' && pathname === '/api/pilot-sqlite/criteria-virtues') {
             const body = await readJsonBody(req);
             const province = body.province || 'ส่วนกลาง';
             const defaultWeaknessMap: Record<string, string[]> = {
@@ -1146,7 +1200,7 @@ function createPilotSqlitePlugin(): Plugin {
           }
 
           // 5.2.3 GET /api/pilot-sqlite/ai-config
-          if (req.method === 'GET' && (pathname === '/api/activity/ai-config' || pathname === '/api/pilot-sqlite/ai-config')) {
+          if (req.method === 'GET' && pathname === '/api/pilot-sqlite/ai-config') {
             try {
               let row = db.prepare('SELECT * FROM pilot_ai_config WHERE id = ?').get('default') as any;
               if (!row && fs.existsSync(aiConfigFile)) {
@@ -1208,7 +1262,7 @@ function createPilotSqlitePlugin(): Plugin {
           }
 
           // 5.2.4 POST /api/pilot-sqlite/ai-config
-          if (req.method === 'POST' && (pathname === '/api/activity/ai-config' || pathname === '/api/pilot-sqlite/ai-config')) {
+          if (req.method === 'POST' && pathname === '/api/pilot-sqlite/ai-config') {
             try {
               const body = await readJsonBody(req);
               const apiKey = (body.apiKey || '').trim().replace(/^["']|["']$/g, '');
@@ -1257,7 +1311,7 @@ function createPilotSqlitePlugin(): Plugin {
           }
 
           // 5.2.5 GET /api/pilot-sqlite/coffee-groups
-          if (req.method === 'GET' && (pathname === '/api/activity/coffee-groups' || pathname === '/api/pilot-sqlite/coffee-groups')) {
+          if (req.method === 'GET' && pathname === '/api/pilot-sqlite/coffee-groups') {
             try {
               const rows = db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all() as any[];
               const groups = rows.map((r) => ({
@@ -1281,7 +1335,7 @@ function createPilotSqlitePlugin(): Plugin {
           }
 
           // 5.2.6 POST /api/pilot-sqlite/coffee-groups
-          if (req.method === 'POST' && (pathname === '/api/activity/coffee-groups' || pathname === '/api/pilot-sqlite/coffee-groups')) {
+          if (req.method === 'POST' && pathname === '/api/pilot-sqlite/coffee-groups') {
             try {
               const body = await readJsonBody(req);
               const now = new Date().toISOString();
@@ -1358,7 +1412,7 @@ function createPilotSqlitePlugin(): Plugin {
           }
 
           // 5.2.7 DELETE /api/pilot-sqlite/coffee-groups
-          if (req.method === 'DELETE' && (pathname === '/api/activity/coffee-groups' || pathname === '/api/pilot-sqlite/coffee-groups')) {
+          if (req.method === 'DELETE' && pathname === '/api/pilot-sqlite/coffee-groups') {
             try {
               const key = urlObj.searchParams.get('key');
               if (!key) {
@@ -1404,7 +1458,7 @@ function createPilotSqlitePlugin(): Plugin {
           }
 
           // 5.3 GET /api/pilot-sqlite/hackathon-projects
-          if (req.method === 'GET' && (pathname === '/api/activity/hackathon-projects' || pathname === '/api/pilot-sqlite/hackathon-projects')) {
+          if (req.method === 'GET' && pathname === '/api/pilot-sqlite/hackathon-projects') {
             const rawProvince = (urlObj.searchParams.get('province') || '').trim();
             const includePrecheck = urlObj.searchParams.get('include_precheck') === 'true';
             let rows: any[] = [];
@@ -1458,12 +1512,12 @@ function createPilotSqlitePlugin(): Plugin {
             }));
 
             res.statusCode = 200;
-            res.end(JSON.stringify({ ok: true, data: projects, total: projects.length, dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16' }));
+            res.end(JSON.stringify({ ok: true, data: projects, total: projects.length, dbPath: 'data/pilot_activities_4regions.sqlite' }));
             return;
           }
 
           // 5.4 POST /api/pilot-sqlite/hackathon-projects
-          if (req.method === 'POST' && (pathname === '/api/activity/hackathon-projects' || pathname === '/api/pilot-sqlite/hackathon-projects')) {
+          if (req.method === 'POST' && pathname === '/api/pilot-sqlite/hackathon-projects') {
             const body = await readJsonBody(req);
             const id = body.id || `proj-${body.groupKey || 'group'}-${Date.now()}`;
             const province = body.province || 'ส่วนกลาง';
@@ -1515,12 +1569,12 @@ function createPilotSqlitePlugin(): Plugin {
             );
 
             res.statusCode = 200;
-            res.end(JSON.stringify({ ok: true, id, dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16', aiScore, isPrecheck, updatedAt: now }));
+            res.end(JSON.stringify({ ok: true, id, dbPath: 'data/pilot_activities_4regions.sqlite', aiScore, isPrecheck, updatedAt: now }));
             return;
           }
 
           // 5.4.1 POST /api/pilot-sqlite/hackathon-vote (อัปเดตคะแนนโหวตโครงการใน SQLite)
-          if (req.method === 'POST' && (pathname === '/api/activity/hackathon-vote' || pathname === '/api/pilot-sqlite/hackathon-vote')) {
+          if (req.method === 'POST' && pathname === '/api/pilot-sqlite/hackathon-vote') {
             const body = await readJsonBody(req);
             const projectId = body.projectId;
             const newVotes = typeof body.newVoteCount === 'number' ? body.newVoteCount : 1;
@@ -1534,7 +1588,7 @@ function createPilotSqlitePlugin(): Plugin {
           }
 
           // 5.5 POST /api/pilot-sqlite/hackathon-reset
-          if (req.method === 'POST' && (pathname === '/api/activity/hackathon-reset' || pathname === '/api/pilot-sqlite/hackathon-reset')) {
+          if (req.method === 'POST' && pathname === '/api/pilot-sqlite/hackathon-reset') {
             const body = await readJsonBody(req);
             const province = body.province || '';
             let deletedCount = 0;
@@ -1551,13 +1605,13 @@ function createPilotSqlitePlugin(): Plugin {
               ok: true,
               message: `รีเซ็ตฐานข้อมูลโครงการ Hackathon เรียบร้อยแล้ว (ลบ ${deletedCount} โครงการใน SQLite)`,
               deletedCount,
-              dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16'
+              dbPath: 'data/pilot_activities_4regions.sqlite'
             }));
             return;
           }
 
           // 5.5.0 POST /api/pilot-sqlite/project-delete (Admin ลบโครงการเดี่ยว)
-          if (req.method === 'POST' && (pathname === '/api/activity/project-delete' || pathname === '/api/pilot-sqlite/project-delete')) {
+          if (req.method === 'POST' && pathname === '/api/pilot-sqlite/project-delete') {
             const body = await readJsonBody(req);
             const projectId = body.id || body.projectId || '';
             if (!projectId) {
@@ -1573,13 +1627,13 @@ function createPilotSqlitePlugin(): Plugin {
               message: `ลบโครงการรหัส ${projectId} เรียบร้อยแล้ว (${deletedCount} แถวใน SQLite)`,
               deletedCount,
               id: projectId,
-              dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16'
+              dbPath: 'data/pilot_activities_4regions.sqlite'
             }));
             return;
           }
 
           // 5.5.1 POST /api/pilot-sqlite/clear-activity-vote-system (Clear all 4 tables in activity & vote system)
-          if (req.method === 'POST' && (pathname === '/api/activity/clear-activity-vote-system' || pathname === '/api/pilot-sqlite/clear-activity-vote-system')) {
+          if (req.method === 'POST' && pathname === '/api/pilot-sqlite/clear-activity-vote-system') {
             try {
               const delProj = Number(db.prepare('DELETE FROM pilot_hackathon_projects').run().changes);
               const delCrit = Number(db.prepare('DELETE FROM pilot_hackathon_criteria').run().changes);
@@ -1599,7 +1653,7 @@ function createPilotSqlitePlugin(): Plugin {
                   pilot_agency_registrations: delAgency,
                   pilot_lessons_and_policies: delLesson
                 },
-                dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16'
+                dbPath: 'data/pilot_activities_4regions.sqlite'
               }));
               return;
             } catch (err: any) {
@@ -1610,7 +1664,7 @@ function createPilotSqlitePlugin(): Plugin {
           }
 
           // 5.5.2 POST /api/pilot-sqlite/reset-registrations (Reset/Delete registrations from pilot_agency_registrations)
-          if (req.method === 'POST' && (pathname === '/api/activity/reset-registrations' || pathname === '/api/pilot-sqlite/reset-registrations')) {
+          if (req.method === 'POST' && pathname === '/api/pilot-sqlite/reset-registrations') {
             try {
               const province = urlObj.searchParams.get('province');
               let deletedCount = 0;
@@ -1629,7 +1683,7 @@ function createPilotSqlitePlugin(): Plugin {
                   : `ลบข้อมูลผู้ลงทะเบียนทั้งหมดเรียบร้อยแล้ว (ลบ ${deletedCount} แถว)`,
                 deletedCount,
                 province: province || 'ALL',
-                dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16'
+                dbPath: 'data/pilot_activities_4regions.sqlite'
               }));
               return;
             } catch (err: any) {
@@ -1640,7 +1694,7 @@ function createPilotSqlitePlugin(): Plugin {
           }
 
           // 5.6 GET /api/pilot-sqlite/tables (List all tables in SQLite)
-          if (req.method === 'GET' && (pathname === '/api/activity/tables' || pathname === '/api/pilot-sqlite/tables')) {
+          if (req.method === 'GET' && pathname === '/api/pilot-sqlite/tables') {
             try {
               const tableRows = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name ASC").all() as Array<{ name: string }>;
               const tables = tableRows.map(t => {
@@ -1667,7 +1721,7 @@ function createPilotSqlitePlugin(): Plugin {
                 ok: true,
                 totalTables: tables.length,
                 tables,
-                dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16'
+                dbPath: 'data/pilot_activities_4regions.sqlite'
               }));
             } catch (err: any) {
               res.statusCode = 500;
@@ -1677,7 +1731,7 @@ function createPilotSqlitePlugin(): Plugin {
           }
 
           // 5.7 GET /api/pilot-sqlite/table-data?table=... (Retrieve rows and schema for a specific table)
-          if (req.method === 'GET' && (pathname === '/api/activity/table-data' || pathname === '/api/pilot-sqlite/table-data')) {
+          if (req.method === 'GET' && pathname === '/api/pilot-sqlite/table-data') {
             const tableName = urlObj.searchParams.get('table') || '';
             if (!tableName || !/^[a-zA-Z0-9_]+$/.test(tableName)) {
               res.statusCode = 400;
@@ -1705,7 +1759,7 @@ function createPilotSqlitePlugin(): Plugin {
                 rowCount: rows.length,
                 columns,
                 rows,
-                dbPath: 'PostgreSQL 16 (DB-MDC)', database: 'DB-MDC', engine: 'PostgreSQL 16'
+                dbPath: 'data/pilot_activities_4regions.sqlite'
               }));
             } catch (err: any) {
               res.statusCode = 500;
@@ -1748,6 +1802,407 @@ function createPilotSqlitePlugin(): Plugin {
               res.end(fileContent);
               return;
             }
+          }
+
+          // 8. GET & POST & DELETE /api/pilot-sqlite/central-datasets
+          if (req.method === 'GET' && pathname === '/api/pilot-sqlite/central-datasets') {
+            try {
+              const dbRows = db.prepare('SELECT * FROM central_dataset_pool ORDER BY updated_at DESC').all() as any[];
+              const rows = dbRows.map(r => ({
+                id: r.id,
+                name: r.name,
+                category: r.category,
+                domainId: r.domain_id,
+                sourceType: r.source_type,
+                sourceAgency: r.source_agency,
+                sourceWebsite: r.source_website || '',
+                rowCount: r.row_count,
+                columnCount: r.column_count,
+                columns: r.columns_json ? JSON.parse(r.columns_json) : [],
+                rawDataSnippet: r.raw_data_json ? JSON.parse(r.raw_data_json).slice(0, 100) : [],
+                cleansedDataSnippet: r.cleansed_data_json ? JSON.parse(r.cleansed_data_json).slice(0, 100) : [],
+                isCleansed: Boolean(r.is_cleansed),
+                isReadyForSynergy: Boolean(r.is_ready_for_synergy),
+                createdAt: r.created_at,
+                updatedAt: r.updated_at
+              }));
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: true, datasets: rows }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: false, error: err.message }));
+            }
+            return;
+          }
+
+          if (req.method === 'POST' && pathname === '/api/pilot-sqlite/central-datasets') {
+            try {
+              const b = await readJsonBody(req);
+              const now = new Date().toISOString();
+              const id = b.id || `ds_${Date.now()}`;
+              const name = b.name || 'ชุดข้อมูลนำเข้า';
+              const category = b.category || 'external_agency';
+              const domainId = b.domainId || b.domain_id || 'moral-index';
+              const sourceType = b.sourceType || b.source_type || 'CSV/Excel';
+              const sourceAgency = b.sourceAgency || b.source_agency || 'หน่วยงานภายนอก';
+              const sourceWebsite = b.sourceWebsite || b.source_website || '';
+              const rowCount = typeof b.rowCount === 'number' ? b.rowCount : (Array.isArray(b.rawData) ? b.rawData.length : 0);
+              const columnCount = typeof b.columnCount === 'number' ? b.columnCount : (Array.isArray(b.columns) ? b.columns.length : 0);
+              const columnsJson = b.columns ? JSON.stringify(b.columns) : '[]';
+              const rawDataJson = b.rawData ? JSON.stringify(b.rawData) : (b.raw_data_json || '[]');
+              const cleansedDataJson = b.cleansedData ? JSON.stringify(b.cleansedData) : (b.cleansed_data_json || '[]');
+              const isCleansed = b.isCleansed ? 1 : 0;
+              const isReadyForSynergy = b.isReadyForSynergy ? 1 : 0;
+
+              db.prepare(`
+                INSERT OR REPLACE INTO central_dataset_pool 
+                (id, name, category, domain_id, source_type, source_agency, source_website, row_count, column_count, columns_json, raw_data_json, cleansed_data_json, is_cleansed, is_ready_for_synergy, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM central_dataset_pool WHERE id = ?), ?), ?)
+              `).run(id, name, category, domainId, sourceType, sourceAgency, sourceWebsite, rowCount, columnCount, columnsJson, rawDataJson, cleansedDataJson, isCleansed, isReadyForSynergy, id, now, now);
+
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: true, id, message: 'บันทึกข้อมูลเข้าคลังข้อมูลกลางเรียบร้อยแล้ว' }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: false, error: err.message }));
+            }
+            return;
+          }
+
+          if (req.method === 'DELETE' && pathname === '/api/pilot-sqlite/central-datasets') {
+            try {
+              const id = urlObj.searchParams.get('id');
+              if (id) {
+                db.prepare('DELETE FROM central_dataset_pool WHERE id = ?').run(id);
+              }
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: true, id, message: 'ลบชุดข้อมูลออกจากคลังกลางแล้ว' }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: false, error: err.message }));
+            }
+            return;
+          }
+
+          // 9. GET & POST & DELETE /api/pilot-sqlite/api-schedules
+          if (req.method === 'GET' && pathname === '/api/pilot-sqlite/api-schedules') {
+            try {
+              const dbRows = db.prepare('SELECT * FROM api_sync_schedules ORDER BY created_at DESC').all() as any[];
+              const rows = dbRows.map(r => ({
+                id: r.id,
+                datasetId: r.dataset_id,
+                datasetName: r.dataset_name,
+                endpointUrl: r.endpoint_url,
+                httpMethod: r.http_method,
+                headers: r.headers_json ? JSON.parse(r.headers_json) : {},
+                scheduleType: r.schedule_type,
+                scheduleTime: r.schedule_time,
+                scheduleDays: r.schedule_days_json ? JSON.parse(r.schedule_days_json) : [],
+                customDates: r.custom_dates_json ? JSON.parse(r.custom_dates_json) : [],
+                isActive: Boolean(r.is_active),
+                lastRunAt: r.last_run_at,
+                lastStatus: r.last_status,
+                lastMessage: r.last_message,
+                createdAt: r.created_at,
+                updatedAt: r.updated_at
+              }));
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: true, schedules: rows }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: false, error: err.message }));
+            }
+            return;
+          }
+
+          if (req.method === 'POST' && pathname === '/api/pilot-sqlite/api-schedules') {
+            try {
+              const b = await readJsonBody(req);
+              const now = new Date().toISOString();
+              const id = b.id || `sched_${Date.now()}`;
+              const datasetId = b.datasetId || b.dataset_id || `ds_${Date.now()}`;
+              const datasetName = b.datasetName || b.dataset_name || 'ชุดข้อมูล API';
+              const endpointUrl = b.endpointUrl || b.endpoint_url || '';
+              const httpMethod = b.httpMethod || b.http_method || 'GET';
+              const headersJson = b.headers ? JSON.stringify(b.headers) : '{}';
+              const scheduleType = b.scheduleType || b.schedule_type || 'daily';
+              const scheduleTime = b.scheduleTime || b.schedule_time || '02:00';
+              const scheduleDaysJson = b.scheduleDays ? JSON.stringify(b.scheduleDays) : '["monday","thursday"]';
+              const customDatesJson = b.customDates ? JSON.stringify(b.customDates) : '[]';
+              const isActive = b.isActive !== undefined ? (b.isActive ? 1 : 0) : 1;
+              const lastStatus = b.lastStatus || 'pending';
+              const lastMessage = b.lastMessage || 'รอรอบการทำงาน';
+
+              db.prepare(`
+                INSERT OR REPLACE INTO api_sync_schedules 
+                (id, dataset_id, dataset_name, endpoint_url, http_method, headers_json, schedule_type, schedule_time, schedule_days_json, custom_dates_json, is_active, last_run_at, last_status, last_message, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM api_sync_schedules WHERE id = ?), ?), ?)
+              `).run(id, datasetId, datasetName, endpointUrl, httpMethod, headersJson, scheduleType, scheduleTime, scheduleDaysJson, customDatesJson, isActive, b.lastRunAt || null, lastStatus, lastMessage, id, now, now);
+
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: true, id, message: 'บันทึกการตั้งค่ารอบเวลา API สำเร็จ' }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: false, error: err.message }));
+            }
+            return;
+          }
+
+          if (req.method === 'DELETE' && pathname === '/api/pilot-sqlite/api-schedules') {
+            try {
+              const id = urlObj.searchParams.get('id');
+              if (id) {
+                db.prepare('DELETE FROM api_sync_schedules WHERE id = ?').run(id);
+              }
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: true, id, message: 'ลบรอบเวลา API เรียบร้อยแล้ว' }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: false, error: err.message }));
+            }
+            return;
+          }
+
+          // 10. POST /api/pilot-sqlite/api-schedules/trigger-sync
+          if (req.method === 'POST' && pathname === '/api/pilot-sqlite/api-schedules/trigger-sync') {
+            try {
+              const b = await readJsonBody(req);
+              const scheduleId = b.scheduleId || b.id || urlObj.searchParams.get('id');
+              const sched = db.prepare('SELECT * FROM api_sync_schedules WHERE id = ?').get(scheduleId) as any;
+              if (!sched) {
+                res.statusCode = 404;
+                res.setHeader('Content-Type', 'application/json; charset=utf-8');
+                res.end(JSON.stringify({ ok: false, error: 'Schedule not found' }));
+                return;
+              }
+
+              const now = new Date().toISOString();
+              db.prepare('UPDATE api_sync_schedules SET last_run_at = ?, last_status = ?, last_message = ? WHERE id = ?')
+                .run(now, 'success', 'ดึงข้อมูลจำลองสำเร็จ', scheduleId);
+
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: true, message: 'Sync triggered successfully' }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: false, error: err.message }));
+            }
+            return;
+          }
+
+          // 11. GET & POST /api/pilot-sqlite/transformation-logs
+          if (req.method === 'GET' && pathname === '/api/pilot-sqlite/transformation-logs') {
+            try {
+              const datasetId = urlObj.searchParams.get('datasetId');
+              const rows = datasetId
+                ? db.prepare('SELECT * FROM dataset_transformation_logs WHERE dataset_id = ? ORDER BY timestamp DESC').all(datasetId) as any[]
+                : db.prepare('SELECT * FROM dataset_transformation_logs ORDER BY timestamp DESC LIMIT 200').all() as any[];
+
+              const formatted = rows.map(r => ({
+                id: r.id,
+                datasetId: r.dataset_id,
+                datasetName: r.dataset_name,
+                timestamp: r.timestamp,
+                triggeredBy: r.triggered_by,
+                provinceNormalizationCount: r.province_normalization_count,
+                yearAlignmentInfo: r.year_alignment_info,
+                sanitizedValuesCount: r.sanitized_values_count,
+                deduplicatedRowsCount: r.deduplicated_rows_count,
+                logSummary: r.log_summary_json ? JSON.parse(r.log_summary_json) : [],
+                status: r.status
+              }));
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: true, logs: formatted }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: false, error: err.message }));
+            }
+            return;
+          }
+
+          if (req.method === 'POST' && pathname === '/api/pilot-sqlite/transformation-logs') {
+            try {
+              const b = await readJsonBody(req);
+              const id = b.id || `log_${Date.now()}`;
+              const datasetId = b.datasetId || b.dataset_id || 'unknown';
+              const datasetName = b.datasetName || b.dataset_name || 'ชุดข้อมูล';
+              const timestamp = b.timestamp || new Date().toISOString();
+              const triggeredBy = b.triggeredBy || b.triggered_by || 'manual_cleansing';
+              const provinceNormCount = Number(b.provinceNormalizationCount || 0);
+              const yearAlignInfo = b.yearAlignmentInfo || '2567';
+              const sanitizedCount = Number(b.sanitizedValuesCount || 0);
+              const dedupCount = Number(b.deduplicatedRowsCount || 0);
+              const logSummaryJson = b.logSummary ? JSON.stringify(b.logSummary) : '[]';
+              const status = b.status || 'completed';
+
+              db.prepare(`
+                INSERT OR REPLACE INTO dataset_transformation_logs 
+                (id, dataset_id, dataset_name, timestamp, triggered_by, province_normalization_count, year_alignment_info, sanitized_values_count, deduplicated_rows_count, log_summary_json, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `).run(id, datasetId, datasetName, timestamp, triggeredBy, provinceNormCount, yearAlignInfo, sanitizedCount, dedupCount, logSummaryJson, status);
+
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: true, id, message: 'บันทึก Transformation Log เรียบร้อย' }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: false, error: err.message }));
+            }
+            return;
+          }
+
+          // 12. GET & POST /api/pilot-sqlite/notification-settings
+          if (req.method === 'GET' && pathname === '/api/pilot-sqlite/notification-settings') {
+            try {
+              const row = db.prepare("SELECT * FROM admin_notification_settings WHERE id = 'default'").get() as any;
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({
+                ok: true,
+                settings: {
+                  lineNotifyToken: row?.line_notify_token || '',
+                  emailRecipients: row?.email_recipients || '',
+                  notifyOnApiSuccess: row ? Boolean(row.notify_on_api_success) : true,
+                  notifyOnApiError: row ? Boolean(row.notify_on_api_error) : true
+                }
+              }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: false, error: err.message }));
+            }
+            return;
+          }
+
+          if (req.method === 'POST' && pathname === '/api/pilot-sqlite/notification-settings') {
+            try {
+              const b = await readJsonBody(req);
+              const now = new Date().toISOString();
+              const lineToken = b.lineNotifyToken || b.line_notify_token || '';
+              const emailRecipients = b.emailRecipients || b.email_recipients || '';
+              const notifySuccess = b.notifyOnApiSuccess !== undefined ? (b.notifyOnApiSuccess ? 1 : 0) : 1;
+              const notifyError = b.notifyOnApiError !== undefined ? (b.notifyOnApiError ? 1 : 0) : 1;
+
+              db.prepare(`
+                INSERT OR REPLACE INTO admin_notification_settings (id, line_notify_token, email_recipients, notify_on_api_success, notify_on_api_error, updated_at)
+                VALUES ('default', ?, ?, ?, ?, ?)
+              `).run(lineToken, emailRecipients, notifySuccess, notifyError, now);
+
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: true, message: 'บันทึกการตั้งค่าแจ้งเตือนสำเร็จ' }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: false, error: err.message }));
+            }
+            return;
+          }
+
+          // 13. POST /api/pilot-sqlite/send-alert
+          if (req.method === 'POST' && pathname === '/api/pilot-sqlite/send-alert') {
+            try {
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: true, message: 'Alert simulated successfully' }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: false, error: err.message }));
+            }
+            return;
+          }
+
+          // 14. GET & POST & DELETE /api/pilot-sqlite/synergy-initiatives
+          if (req.method === 'GET' && pathname === '/api/pilot-sqlite/synergy-initiatives') {
+            try {
+              const rows = db.prepare('SELECT * FROM synergy_initiatives_registry ORDER BY updated_at DESC').all() as any[];
+              const formatted = rows.map(r => ({
+                id: r.id,
+                domainId: r.domain_id,
+                dimensionId: r.dimension_id,
+                title: r.title,
+                internalTableId: r.internal_table_id,
+                externalTableId: r.external_table_id,
+                compatibilityScore: r.compatibility_score,
+                compatibilityDimensions: r.compatibility_dimensions_json ? JSON.parse(r.compatibility_dimensions_json) : null,
+                isPublishedToMain: Boolean(r.is_published_to_main),
+                createdAt: r.created_at,
+                updatedAt: r.updated_at
+              }));
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: true, initiatives: formatted }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: false, error: err.message }));
+            }
+            return;
+          }
+
+          if (req.method === 'POST' && pathname === '/api/pilot-sqlite/synergy-initiatives') {
+            try {
+              const b = await readJsonBody(req);
+              const now = new Date().toISOString();
+              const id = b.id || `syn_${Date.now()}`;
+              const domainId = b.domainId || b.domain_id || 'moral-index';
+              const dimensionId = b.dimensionId || b.dimension_id || 'overview';
+              const title = b.title || 'Synergy หัวข้อใหม่';
+              const internalTableId = b.internalTableId || b.internal_table_id || '';
+              const externalTableId = b.externalTableId || b.external_table_id || '';
+              const score = Number(b.compatibilityScore || 0);
+              const compatJson = b.compatibilityDimensions ? JSON.stringify(b.compatibilityDimensions) : null;
+              const isPublished = b.isPublishedToMain ? 1 : 0;
+
+              db.prepare(`
+                INSERT OR REPLACE INTO synergy_initiatives_registry 
+                (id, domain_id, dimension_id, title, internal_table_id, external_table_id, compatibility_score, compatibility_dimensions_json, is_published_to_main, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `).run(id, domainId, dimensionId, title, internalTableId, externalTableId, score, compatJson, isPublished, now, now);
+
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: true, id, message: 'บันทึก Synergy Initiative สำเร็จ' }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: false, error: err.message }));
+            }
+            return;
+          }
+
+          if (req.method === 'DELETE' && pathname === '/api/pilot-sqlite/synergy-initiatives') {
+            try {
+              const id = urlObj.searchParams.get('id');
+              if (id) {
+                db.prepare('DELETE FROM synergy_initiatives_registry WHERE id = ?').run(id);
+              }
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: true, id, message: 'ลบ Synergy Initiative สำเร็จ' }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: false, error: err.message }));
+            }
+            return;
           }
 
           res.statusCode = 404;
