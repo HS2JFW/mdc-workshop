@@ -103,6 +103,47 @@ async function ensurePostgresDatabase(pgModule, targetDbName) {
   }
 }
 
+const PILOT_DEFAULT_PROVINCES = ['พระนครศรีอยุธยา', 'อุดรธานี', 'ลำปาง', 'สุราษฎร์ธานี'];
+
+const DEFAULT_COFFEE_GROUPS = [
+  { key: 'mocha', name: 'กลุ่มมอคค่า', bg_image: '/theme/coffee_mocha_bg.jpg', theme_color: '#78350f', accent_bg: '#fef3c7', is_custom: 0, order_index: 1 },
+  { key: 'cappuccino', name: 'กลุ่มคาปูชิโน', bg_image: '/theme/coffee_cappuccino_bg.jpg', theme_color: '#92400e', accent_bg: '#ffedd5', is_custom: 0, order_index: 2 },
+  { key: 'americano', name: 'กลุ่มอเมริกาโน', bg_image: '/theme/coffee_americano_bg.jpg', theme_color: '#1c1917', accent_bg: '#f5f5f4', is_custom: 0, order_index: 3 },
+  { key: 'espresso', name: 'กลุ่มเอสเพรสโซ', bg_image: '/theme/coffee_preset_05_espresso.jpg', theme_color: '#451a03', accent_bg: '#fef2f2', is_custom: 0, order_index: 4 },
+  { key: 'latte', name: 'กลุ่มลาเต้', bg_image: '/theme/coffee_preset_06_latte.jpg', theme_color: '#b45309', accent_bg: '#fffbeb', is_custom: 0, order_index: 5 }
+];
+
+function normalizeActivityProvince(raw) {
+  const p = String(raw || '').trim();
+  if (!p) return '';
+  if (p === 'อยุธยา' || p === 'พระนครศรีอยุธยา') return 'พระนครศรีอยุธยา';
+  return p;
+}
+
+function getProvinceMatchList(raw) {
+  const p = String(raw || '').trim();
+  if (!p) return [];
+  if (p === 'อยุธยา' || p === 'พระนครศรีอยุธยา') return ['อยุธยา', 'พระนครศรีอยุธยา'];
+  return [p];
+}
+
+async function ensureCoffeeGroupsForProvincePg(pool, rawProvince) {
+  const normProv = normalizeActivityProvince(rawProvince) || 'พระนครศรีอยุธยา';
+  const countRes = await pool.query('SELECT COUNT(*) as cnt FROM pilot_coffee_groups WHERE province = $1', [normProv]);
+  if (Number(countRes.rows[0]?.cnt || 0) === 0) {
+    const now = new Date().toISOString();
+    for (const g of DEFAULT_COFFEE_GROUPS) {
+      await pool.query(
+        `INSERT INTO pilot_coffee_groups (province, key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT (province, key) DO NOTHING`,
+        [normProv, g.key, g.name, g.bg_image, g.theme_color, g.accent_bg, g.is_custom, g.order_index, now, now]
+      );
+    }
+  }
+  return normProv;
+}
+
 async function initMdcTables(pool) {
   console.log('[PostgreSQL] Initializing activity tables in "DB-MDC"...');
   await pool.query(`
@@ -211,7 +252,8 @@ async function initMdcTables(pool) {
     );
 
     CREATE TABLE IF NOT EXISTS pilot_coffee_groups (
-      key TEXT PRIMARY KEY,
+      province TEXT NOT NULL DEFAULT 'พระนครศรีอยุธยา',
+      key TEXT NOT NULL,
       name TEXT NOT NULL,
       bg_image TEXT,
       theme_color TEXT,
@@ -219,8 +261,10 @@ async function initMdcTables(pool) {
       is_custom INTEGER DEFAULT 0,
       order_index INTEGER DEFAULT 0,
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (province, key)
     );
+    CREATE INDEX IF NOT EXISTS idx_pilot_coffee_groups_prov ON pilot_coffee_groups (province);
 
     CREATE TABLE IF NOT EXISTS central_dataset_pool (
       id TEXT PRIMARY KEY,
@@ -299,46 +343,36 @@ async function initMdcTables(pool) {
   `);
   console.log('[PostgreSQL] Tables in "DB-MDC" are ready!');
 
-  // Seed coffee groups if table is empty
-  const grpCountRes = await pool.query('SELECT COUNT(*) as cnt FROM pilot_coffee_groups');
-  if (Number(grpCountRes.rows[0]?.cnt || 0) === 0) {
-    console.log('[PostgreSQL] Seeding default coffee groups into DB-MDC...');
-    let seedGroups = [
-      { key: 'mocha', name: 'กลุ่มมอคค่า', bg_image: '/theme/coffee_mocha_bg.jpg', theme_color: '#78350f', accent_bg: '#fef3c7', is_custom: 0, order_index: 1 },
-      { key: 'cappuccino', name: 'กลุ่มคาปูชิโน', bg_image: '/theme/coffee_cappuccino_bg.jpg', theme_color: '#92400e', accent_bg: '#ffedd5', is_custom: 0, order_index: 2 },
-      { key: 'americano', name: 'กลุ่มอเมริกาโน', bg_image: '/theme/coffee_americano_bg.jpg', theme_color: '#1c1917', accent_bg: '#f5f5f4', is_custom: 0, order_index: 3 },
-      { key: 'espresso', name: 'กลุ่มเอสเพรสโซ', bg_image: '/theme/coffee_preset_05_espresso.jpg', theme_color: '#451a03', accent_bg: '#fef2f2', is_custom: 0, order_index: 4 },
-      { key: 'latte', name: 'กลุ่มลาเต้', bg_image: '/theme/coffee_preset_06_latte.jpg', theme_color: '#b45309', accent_bg: '#fffbeb', is_custom: 0, order_index: 5 }
-    ];
-
-    if (fs.existsSync(coffeeGroupsFile)) {
-      try {
-        const fileContent = JSON.parse(fs.readFileSync(coffeeGroupsFile, 'utf8'));
-        if (Array.isArray(fileContent) && fileContent.length > 0) {
-          seedGroups = fileContent.map((g, idx) => ({
-            key: g.key,
-            name: g.name,
-            bg_image: g.bgImage || g.bg_image || '/theme/coffee_preset_01_beans.jpg',
-            theme_color: g.themeColor || g.theme_color || '#78350f',
-            accent_bg: g.accentBg || g.accent_bg || '#fef3c7',
-            is_custom: g.isCustom ? 1 : 0,
-            order_index: typeof g.orderIndex === 'number' ? g.orderIndex : idx + 1
-          }));
-        }
-      } catch (e) {
-        console.warn('[PostgreSQL] Failed parsing coffeeGroupsFile for seed:', e.message);
-      }
+  // Migrate pilot_coffee_groups to composite PRIMARY KEY (province, key) if legacy single-column PK exists
+  await pool.query(`ALTER TABLE pilot_coffee_groups ADD COLUMN IF NOT EXISTS province TEXT NOT NULL DEFAULT 'พระนครศรีอยุธยา';`);
+  try {
+    const pkInfo = await pool.query(`
+      SELECT tc.constraint_name, array_agg(kcu.column_name ORDER BY kcu.ordinal_position) AS cols
+      FROM information_schema.table_constraints tc
+      JOIN information_schema.key_column_usage kcu
+        ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+      WHERE tc.table_schema = 'public'
+        AND tc.table_name = 'pilot_coffee_groups'
+        AND tc.constraint_type = 'PRIMARY KEY'
+      GROUP BY tc.constraint_name
+    `);
+    const currentPk = pkInfo.rows[0];
+    if (currentPk && (!Array.isArray(currentPk.cols) || currentPk.cols.length !== 2 || currentPk.cols[0] !== 'province' || currentPk.cols[1] !== 'key')) {
+      const safeConstraint = currentPk.constraint_name.replace(/"/g, '""');
+      await pool.query(`ALTER TABLE pilot_coffee_groups DROP CONSTRAINT "${safeConstraint}"`);
+      await pool.query(`ALTER TABLE pilot_coffee_groups ADD PRIMARY KEY (province, key)`);
+      console.log('[PostgreSQL] Migrated pilot_coffee_groups PRIMARY KEY to (province, key).');
+    } else if (!currentPk) {
+      await pool.query(`ALTER TABLE pilot_coffee_groups ADD PRIMARY KEY (province, key)`);
     }
+  } catch (pkErr) {
+    console.warn('[PostgreSQL] pilot_coffee_groups PK check warning:', pkErr.message);
+  }
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_pilot_coffee_groups_prov ON pilot_coffee_groups (province);`);
 
-    const now = new Date().toISOString();
-    for (const g of seedGroups) {
-      await pool.query(
-        `INSERT INTO pilot_coffee_groups (key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-         ON CONFLICT (key) DO NOTHING`,
-        [g.key, g.name, g.bg_image, g.theme_color, g.accent_bg, g.is_custom, g.order_index, now, now]
-      );
-    }
+  // Ensure each of the 4 pilot provinces has default coffee groups seeded in DB-MDC
+  for (const pilotProv of PILOT_DEFAULT_PROVINCES) {
+    await ensureCoffeeGroupsForProvincePg(pool, pilotProv);
   }
 
   // Seed AI config if table is empty
@@ -1273,9 +1307,27 @@ const MIME_TYPES = {
   '.pdf': 'application/pdf'
 };
 
-async function handleApiRequest(req, res, urlObj) {
-  const pathname = urlObj.pathname;
+function requirePostgres(res) {
+  if (pgMdcPool) return true;
+  res.statusCode = 503;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.end(JSON.stringify({
+    ok: false,
+    error: 'PostgreSQL (DB-MDC) is not connected. Local SQLite fallback is disabled for 5-step activity data.'
+  }));
+  return false;
+}
+
+async function handleApiRequest(req, res, urlObj) {
+  const rawPathname = decodeURIComponent(urlObj.pathname);
+  const pathname = rawPathname.startsWith('/api/activity/')
+    ? rawPathname.replace('/api/activity/', '/api/pilot-postgres/')
+    : rawPathname;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
 
   // ==========================================
   // TASK PROJECT SQLITE ENDPOINTS (/api/task-project)
@@ -1578,155 +1630,64 @@ async function handleApiRequest(req, res, urlObj) {
     }
   }
 
-  // 0. GET /api/pilot-sqlite/sync-status (and /api/pilot-postgres/sync-status)
-  // Lightweight background sync endpoint for multi-user real-time updates (Step 2 Groups & Step 5 Projects & Step 1 Registrations)
+  // 0. GET /api/activity/sync-status (and /api/pilot-sqlite/sync-status, /api/pilot-postgres/sync-status)
+  // Lightweight background sync endpoint strictly backed by PostgreSQL (DB-MDC) with 1:1 province isolation
   if (req.method === 'GET' && (pathname === '/api/pilot-sqlite/sync-status' || pathname === '/api/pilot-postgres/sync-status')) {
+    if (!requirePostgres(res)) return;
     const rawProvince = (urlObj.searchParams.get('province') || '').trim();
     const clientProjVer = urlObj.searchParams.get('proj_ver') || '';
     const clientGroupVer = urlObj.searchParams.get('group_ver') || '';
     const clientRegVer = urlObj.searchParams.get('reg_ver') || '';
 
-    let matchProvs = rawProvince ? [rawProvince] : [];
-    if (rawProvince === 'อยุธยา' || rawProvince === 'พระนครศรีอยุธยา') {
-      matchProvs = ['อยุธยา', 'พระนครศรีอยุธยา'];
-    } else if (rawProvince === 'อุดรธานี' || rawProvince === 'กาฬสินธุ์') {
-      matchProvs = ['อุดรธานี', 'กาฬสินธุ์'];
-    } else if (rawProvince === 'ลำปาง' || rawProvince === 'น่าน') {
-      matchProvs = ['ลำปาง', 'น่าน'];
-    } else if (rawProvince === 'สุราษฎร์ธานี' || rawProvince === 'พังงา') {
-      matchProvs = ['สุราษฎร์ธานี', 'พังงา'];
-    }
+    const matchProvs = getProvinceMatchList(rawProvince);
+    const normCoffeeProv = normalizeActivityProvince(rawProvince);
 
     try {
-      if (pgMdcPool) {
-        // 1. Projects check
-        let projQuery = "SELECT COUNT(*) AS count, COALESCE(MAX(COALESCE(updated_at, created_at, '')), '') AS max_ts, COALESCE(SUM(community_votes), 0) AS total_votes FROM pilot_hackathon_projects WHERE (is_precheck = 0 OR is_precheck IS NULL) AND id NOT LIKE 'precheck-%'";
-        const projParams = [];
-        if (matchProvs.length > 0) {
-          const pHolders = matchProvs.map((p, i) => `$${i + 1}`).join(', ');
-          projQuery += ` AND province IN (${pHolders})`;
-          projParams.push(...matchProvs);
-        }
-        const projVerRes = await pgMdcPool.query(projQuery, projParams);
-        const pRow = projVerRes.rows[0] || { count: 0, max_ts: '', total_votes: 0 };
-        const serverProjVer = `${pRow.count}_${pRow.max_ts}_${pRow.total_votes}`;
+      // 1. Projects check (strict 1:1 province)
+      let projQuery = "SELECT COUNT(*) AS count, COALESCE(MAX(COALESCE(updated_at, created_at, '')), '') AS max_ts, COALESCE(SUM(community_votes), 0) AS total_votes FROM pilot_hackathon_projects WHERE (is_precheck = 0 OR is_precheck IS NULL) AND id NOT LIKE 'precheck-%'";
+      const projParams = [];
+      if (matchProvs.length > 0) {
+        const pHolders = matchProvs.map((_, i) => `$${i + 1}`).join(', ');
+        projQuery += ` AND province IN (${pHolders})`;
+        projParams.push(...matchProvs);
+      }
+      const projVerRes = await pgMdcPool.query(projQuery, projParams);
+      const pRow = projVerRes.rows[0] || { count: 0, max_ts: '', total_votes: 0 };
+      const serverProjVer = `${pRow.count}_${pRow.max_ts}_${pRow.total_votes}`;
 
-        // 2. Coffee groups check
-        const groupVerRes = await pgMdcPool.query("SELECT COUNT(*) AS count, COALESCE(MAX(COALESCE(updated_at, created_at, '')), '') AS max_ts FROM pilot_coffee_groups");
-        const gRow = groupVerRes.rows[0] || { count: 0, max_ts: '' };
-        const serverGroupVer = `${gRow.count}_${gRow.max_ts}`;
+      // 2. Coffee groups check (strict 1:1 province)
+      let grpQuery = "SELECT COUNT(*) AS count, COALESCE(MAX(COALESCE(updated_at, created_at, '')), '') AS max_ts, COALESCE(MD5(COALESCE(STRING_AGG(key || ':' || name, '|' ORDER BY order_index, key), '')), '') AS digest FROM pilot_coffee_groups";
+      const grpParams = [];
+      if (normCoffeeProv) {
+        await ensureCoffeeGroupsForProvincePg(pgMdcPool, normCoffeeProv);
+        grpQuery += ' WHERE province = $1';
+        grpParams.push(normCoffeeProv);
+      }
+      const groupVerRes = await pgMdcPool.query(grpQuery, grpParams);
+      const gRow = groupVerRes.rows[0] || { count: 0, max_ts: '', digest: '' };
+      const serverGroupVer = `${gRow.count}_${gRow.max_ts}_${gRow.digest}`;
 
-        // 3. Registrations check
-        let regQuery = "SELECT COUNT(*) AS count, COALESCE(MAX(created_at), '') AS max_ts FROM pilot_agency_registrations";
-        const regParams = [];
-        if (matchProvs.length > 0) {
-          const rHolders = matchProvs.map((p, i) => `$${i + 1}`).join(', ');
-          regQuery += ` WHERE province IN (${rHolders})`;
-          regParams.push(...matchProvs);
-        }
-        const regVerRes = await pgMdcPool.query(regQuery, regParams);
-        const rRow = regVerRes.rows[0] || { count: 0, max_ts: '' };
-        const serverRegVer = `${rRow.count}_${rRow.max_ts}`;
+      // 3. Registrations check (tracks count, latest created_at, and coffee_group assignments via digest)
+      let regQuery = "SELECT COUNT(*) AS count, COALESCE(MAX(created_at), '') AS max_ts, COALESCE(MD5(COALESCE(STRING_AGG(id || ':' || COALESCE(coffee_group, ''), '|' ORDER BY id), '')), '') AS digest FROM pilot_agency_registrations";
+      const regParams = [];
+      if (matchProvs.length > 0) {
+        const rHolders = matchProvs.map((_, i) => `$${i + 1}`).join(', ');
+        regQuery += ` WHERE province IN (${rHolders})`;
+        regParams.push(...matchProvs);
+      }
+      const regVerRes = await pgMdcPool.query(regQuery, regParams);
+      const rRow = regVerRes.rows[0] || { count: 0, max_ts: '', digest: '' };
+      const serverRegVer = `${rRow.count}_${rRow.max_ts}_${rRow.digest}`;
 
-        const isProjModified = !clientProjVer || clientProjVer !== serverProjVer;
-        const isGroupModified = !clientGroupVer || clientGroupVer !== serverGroupVer;
-        const isRegModified = !clientRegVer || clientRegVer !== serverRegVer;
+      const isProjModified = !clientProjVer || clientProjVer !== serverProjVer;
+      const isGroupModified = !clientGroupVer || clientGroupVer !== serverGroupVer;
+      const isRegModified = !clientRegVer || clientRegVer !== serverRegVer;
 
-        if (!isProjModified && !isGroupModified && !isRegModified) {
-          res.statusCode = 200;
-          res.setHeader('Content-Type', 'application/json; charset=utf-8');
-          res.end(JSON.stringify({
-            ok: true,
-            modified: false,
-            serverTime: new Date().toISOString(),
-            projVer: serverProjVer,
-            groupVer: serverGroupVer,
-            regVer: serverRegVer,
-            dbType: 'postgres',
-            dbName: 'DB-MDC'
-          }));
-          return;
-        }
-
-        const changed = [];
-        let projectsData = null;
-        let groupsData = null;
-        let agenciesData = null;
-
-        if (isProjModified) {
-          changed.push('projects');
-          let fullPQuery = "SELECT * FROM pilot_hackathon_projects WHERE (is_precheck = 0 OR is_precheck IS NULL) AND id NOT LIKE 'precheck-%'";
-          const fullPParams = [];
-          if (matchProvs.length > 0) {
-            const pHolders = matchProvs.map((p, i) => `$${i + 1}`).join(', ');
-            fullPQuery += ` AND province IN (${pHolders})`;
-            fullPParams.push(...matchProvs);
-          }
-          fullPQuery += ' ORDER BY created_at DESC';
-          const pFullRes = await pgMdcPool.query(fullPQuery, fullPParams);
-          projectsData = pFullRes.rows.map((r) => ({
-            id: r.id,
-            province: r.province,
-            groupKey: r.group_key,
-            groupName: r.group_name,
-            projectName: r.project_name,
-            targetMoralVirtue: r.target_moral_virtue,
-            targetAudience: r.target_audience,
-            targetArea: r.target_area,
-            proposalDetails: r.proposal_details,
-            activityPlan: r.activity_plan,
-            behavioralKpi: r.behavioral_kpi,
-            proposerName: r.proposer_name,
-            proposerAgency: r.proposer_agency,
-            proposerPosition: r.proposer_position || '',
-            proposerLevel: r.proposer_level,
-            challengeTopic: r.challenge_topic,
-            evaluatedCriteriaVirtues: r.evaluated_criteria_virtues_json ? JSON.parse(r.evaluated_criteria_virtues_json) : [],
-            aiScore: Number(r.ai_score),
-            aiScoreBreakdown: r.ai_score_breakdown_json ? JSON.parse(r.ai_score_breakdown_json) : { alignment: 0, feasibility: 0, innovation: 0, participation: 0 },
-            aiRecommendations: r.ai_recommendations,
-            communityVotes: Number(r.community_votes || 0),
-            isPrecheck: Boolean(r.is_precheck),
-            createdAt: r.created_at
-          }));
-        }
-
-        if (isGroupModified) {
-          changed.push('coffee_groups');
-          const gRowsRes = await pgMdcPool.query('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC');
-          groupsData = gRowsRes.rows.map((r) => ({
-            key: r.key,
-            name: r.name,
-            bgImage: r.bg_image,
-            themeColor: r.theme_color,
-            accentBg: r.accent_bg,
-            isCustom: Boolean(r.is_custom)
-          }));
-        }
-
-        if (isRegModified) {
-          changed.push('registrations');
-          let fullRQuery = 'SELECT * FROM pilot_agency_registrations';
-          const fullRParams = [];
-          if (matchProvs.length > 0) {
-            const rHolders = matchProvs.map((p, i) => `$${i + 1}`).join(', ');
-            fullRQuery += ` WHERE province IN (${rHolders})`;
-            fullRParams.push(...matchProvs);
-          }
-          fullRQuery += ' ORDER BY created_at DESC';
-          const rFullRes = await pgMdcPool.query(fullRQuery, fullRParams);
-          agenciesData = rFullRes.rows;
-        }
-
+      if (!isProjModified && !isGroupModified && !isRegModified) {
         res.statusCode = 200;
-        res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.end(JSON.stringify({
           ok: true,
-          modified: true,
-          changed,
-          projects: projectsData,
-          groups: groupsData,
-          agencies: agenciesData,
+          modified: false,
           serverTime: new Date().toISOString(),
           projVer: serverProjVer,
           groupVer: serverGroupVer,
@@ -1737,69 +1698,23 @@ async function handleApiRequest(req, res, urlObj) {
         return;
       }
 
-      // SQLite fallback
-      // 1. Projects check
-      let sProjQ = "SELECT COUNT(*) AS count, COALESCE(MAX(created_at), '') AS max_ts, COALESCE(SUM(community_votes), 0) AS total_votes FROM pilot_hackathon_projects WHERE (is_precheck = 0 OR is_precheck IS NULL) AND id NOT LIKE 'precheck-%'";
-      const sProjParams = [];
-      if (matchProvs.length > 0) {
-        sProjQ += ` AND province IN (${matchProvs.map(() => '?').join(',')})`;
-        sProjParams.push(...matchProvs);
-      }
-      const sPRow = db.prepare(sProjQ).get(...sProjParams) || { count: 0, max_ts: '', total_votes: 0 };
-      const sServerProjVer = `${sPRow.count}_${sPRow.max_ts}_${sPRow.total_votes}`;
+      const changed = [];
+      let projectsData = null;
+      let groupsData = null;
+      let agenciesData = null;
 
-      // 2. Coffee groups check
-      let sGRow = { count: 5, max_ts: '' };
-      try {
-        sGRow = db.prepare("SELECT COUNT(*) AS count, COALESCE(MAX(created_at), '') AS max_ts FROM pilot_coffee_groups").get() || sGRow;
-      } catch {}
-      const sServerGroupVer = `${sGRow.count}_${sGRow.max_ts}`;
-
-      // 3. Registrations check
-      let sRegQ = "SELECT COUNT(*) AS count, COALESCE(MAX(created_at), '') AS max_ts FROM pilot_agency_registrations";
-      const sRegParams = [];
-      if (matchProvs.length > 0) {
-        sRegQ += ` WHERE province IN (${matchProvs.map(() => '?').join(',')})`;
-        sRegParams.push(...matchProvs);
-      }
-      const sRRow = db.prepare(sRegQ).get(...sRegParams) || { count: 0, max_ts: '' };
-      const sServerRegVer = `${sRRow.count}_${sRRow.max_ts}`;
-
-      const isSProjMod = !clientProjVer || clientProjVer !== sServerProjVer;
-      const isSGroupMod = !clientGroupVer || clientGroupVer !== sServerGroupVer;
-      const isSRegMod = !clientRegVer || clientRegVer !== sServerRegVer;
-
-      if (!isSProjMod && !isSGroupMod && !isSRegMod) {
-        res.statusCode = 200;
-        res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        res.end(JSON.stringify({
-          ok: true,
-          modified: false,
-          serverTime: new Date().toISOString(),
-          projVer: sServerProjVer,
-          groupVer: sServerGroupVer,
-          regVer: sServerRegVer,
-          dbType: 'sqlite'
-        }));
-        return;
-      }
-
-      const sChanged = [];
-      let sProjectsData = null;
-      let sGroupsData = null;
-      let sAgenciesData = null;
-
-      if (isSProjMod) {
-        sChanged.push('projects');
-        let fullSPQuery = "SELECT * FROM pilot_hackathon_projects WHERE (is_precheck = 0 OR is_precheck IS NULL) AND id NOT LIKE 'precheck-%'";
-        const fullSPParams = [];
+      if (isProjModified) {
+        changed.push('projects');
+        let fullPQuery = "SELECT * FROM pilot_hackathon_projects WHERE (is_precheck = 0 OR is_precheck IS NULL) AND id NOT LIKE 'precheck-%'";
+        const fullPParams = [];
         if (matchProvs.length > 0) {
-          fullSPQuery += ` AND province IN (${matchProvs.map(() => '?').join(',')})`;
-          fullSPParams.push(...matchProvs);
+          const pHolders = matchProvs.map((_, i) => `$${i + 1}`).join(', ');
+          fullPQuery += ` AND province IN (${pHolders})`;
+          fullPParams.push(...matchProvs);
         }
-        fullSPQuery += ' ORDER BY created_at DESC';
-        const sPRows = db.prepare(fullSPQuery).all(...fullSPParams);
-        sProjectsData = sPRows.map((r) => ({
+        fullPQuery += ' ORDER BY created_at DESC';
+        const pFullRes = await pgMdcPool.query(fullPQuery, fullPParams);
+        projectsData = pFullRes.rows.map((r) => ({
           id: r.id,
           province: r.province,
           groupKey: r.group_key,
@@ -1826,124 +1741,170 @@ async function handleApiRequest(req, res, urlObj) {
         }));
       }
 
-      if (isSGroupMod) {
-        sChanged.push('coffee_groups');
-        try {
-          const gRows = db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all();
-          sGroupsData = gRows.map((r) => ({
-            key: r.key,
-            name: r.name,
-            bgImage: r.bg_image,
-            themeColor: r.theme_color,
-            accentBg: r.accent_bg,
-            isCustom: Boolean(r.is_custom)
-          }));
-        } catch {}
+      if (isGroupModified) {
+        changed.push('coffee_groups');
+        let gFullQuery = 'SELECT * FROM pilot_coffee_groups';
+        const gFullParams = [];
+        if (normCoffeeProv) {
+          gFullQuery += ' WHERE province = $1';
+          gFullParams.push(normCoffeeProv);
+        }
+        gFullQuery += ' ORDER BY order_index ASC, created_at ASC';
+        const gRowsRes = await pgMdcPool.query(gFullQuery, gFullParams);
+        groupsData = gRowsRes.rows.map((r) => ({
+          province: r.province,
+          key: r.key,
+          name: r.name,
+          bgImage: r.bg_image,
+          themeColor: r.theme_color,
+          accentBg: r.accent_bg,
+          isCustom: Boolean(r.is_custom),
+          orderIndex: r.order_index
+        }));
       }
 
-      if (isSRegMod) {
-        sChanged.push('registrations');
-        let fullSRQuery = 'SELECT * FROM pilot_agency_registrations';
-        const fullSRParams = [];
+      if (isRegModified) {
+        changed.push('registrations');
+        let fullRQuery = 'SELECT * FROM pilot_agency_registrations';
+        const fullRParams = [];
         if (matchProvs.length > 0) {
-          fullSRQuery += ` WHERE province IN (${matchProvs.map(() => '?').join(',')})`;
-          fullSRParams.push(...matchProvs);
+          const rHolders = matchProvs.map((_, i) => `$${i + 1}`).join(', ');
+          fullRQuery += ` WHERE province IN (${rHolders})`;
+          fullRParams.push(...matchProvs);
         }
-        fullSRQuery += ' ORDER BY created_at DESC';
-        sAgenciesData = db.prepare(fullSRQuery).all(...fullSRParams);
+        fullRQuery += ' ORDER BY created_at DESC';
+        const rFullRes = await pgMdcPool.query(fullRQuery, fullRParams);
+        agenciesData = rFullRes.rows;
       }
 
       res.statusCode = 200;
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.end(JSON.stringify({
         ok: true,
         modified: true,
-        changed: sChanged,
-        projects: sProjectsData,
-        groups: sGroupsData,
-        agencies: sAgenciesData,
+        changed,
+        projects: projectsData,
+        groups: groupsData,
+        agencies: agenciesData,
         serverTime: new Date().toISOString(),
-        projVer: sServerProjVer,
-        groupVer: sServerGroupVer,
-        regVer: sServerRegVer,
-        dbType: 'sqlite'
+        projVer: serverProjVer,
+        groupVer: serverGroupVer,
+        regVer: serverRegVer,
+        dbType: 'postgres',
+        dbName: 'DB-MDC'
       }));
       return;
     } catch (err) {
+      console.error('[Sync Status Error]:', err);
       res.statusCode = 500;
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.end(JSON.stringify({ ok: false, error: err?.message || 'Sync status check failed' }));
       return;
     }
   }
 
-  // 1. GET /api/pilot-sqlite/state
+  // 1. GET /api/activity/state (and /api/pilot-sqlite/state, /api/pilot-postgres/state)
   if (req.method === 'GET' && (pathname === '/api/pilot-sqlite/state' || pathname === '/api/pilot-postgres/state')) {
-    const province = urlObj.searchParams.get('province');
-    const provList = province
-      ? (province === 'อยุธยา' || province === 'พระนครศรีอยุธยา'
-          ? ['อยุธยา', 'พระนครศรีอยุธยา']
-          : [province])
-      : null;
+    if (!requirePostgres(res)) return;
+    const rawProvince = (urlObj.searchParams.get('province') || '').trim();
+    const provList = rawProvince ? getProvinceMatchList(rawProvince) : null;
+    const normProv = normalizeActivityProvince(rawProvince) || 'พระนครศรีอยุธยา';
 
-    if (pgMdcPool) {
-      let agencies = [];
-      let lessonsPolicies = [];
-      if (provList) {
-        const pList = provList.map((_, i) => `$${i + 1}`).join(', ');
-        const agRes = await pgMdcPool.query(`SELECT * FROM pilot_agency_registrations WHERE province IN (${pList}) ORDER BY created_at DESC`, provList);
-        const lpRes = await pgMdcPool.query(`SELECT * FROM pilot_lessons_and_policies WHERE province IN (${pList}) ORDER BY updated_at DESC`, provList);
-        agencies = agRes.rows;
-        lessonsPolicies = lpRes.rows;
-      } else {
-        const agRes = await pgMdcPool.query('SELECT * FROM pilot_agency_registrations ORDER BY created_at DESC');
-        const lpRes = await pgMdcPool.query('SELECT * FROM pilot_lessons_and_policies ORDER BY updated_at DESC');
-        agencies = agRes.rows;
-        lessonsPolicies = lpRes.rows;
-      }
+    let agencies = [];
+    let lessonsPolicies = [];
+    let coffeeGroupsRows = [];
+    let projectRows = [];
 
-      res.statusCode = 200;
-      res.end(
-        JSON.stringify({
-          ok: true,
-          dbType: 'postgres',
-          dbName: 'DB-MDC',
-          dbPath: 'PostgreSQL: DB-MDC',
-          recordsDir: 'data/pilot_records/',
-          agencies,
-          lessonsPolicies
-        })
-      );
-      return;
+    await ensureCoffeeGroupsForProvincePg(pgMdcPool, normProv);
+
+    if (provList && provList.length > 0) {
+      const pList = provList.map((_, i) => `$${i + 1}`).join(', ');
+      const [agRes, lpRes, cgRes, prRes] = await Promise.all([
+        pgMdcPool.query(`SELECT * FROM pilot_agency_registrations WHERE province IN (${pList}) ORDER BY created_at DESC`, provList),
+        pgMdcPool.query(`SELECT * FROM pilot_lessons_and_policies WHERE province IN (${pList}) ORDER BY updated_at DESC`, provList),
+        pgMdcPool.query(`SELECT * FROM pilot_coffee_groups WHERE province = $1 ORDER BY order_index ASC, created_at ASC`, [normProv]),
+        pgMdcPool.query(`SELECT * FROM pilot_hackathon_projects WHERE province IN (${pList}) AND (is_precheck = 0 OR is_precheck IS NULL) AND id NOT LIKE 'precheck-%' ORDER BY created_at DESC`, provList)
+      ]);
+      agencies = agRes.rows;
+      lessonsPolicies = lpRes.rows;
+      coffeeGroupsRows = cgRes.rows;
+      projectRows = prRes.rows;
+    } else {
+      const [agRes, lpRes, cgRes, prRes] = await Promise.all([
+        pgMdcPool.query('SELECT * FROM pilot_agency_registrations ORDER BY created_at DESC'),
+        pgMdcPool.query('SELECT * FROM pilot_lessons_and_policies ORDER BY updated_at DESC'),
+        pgMdcPool.query('SELECT * FROM pilot_coffee_groups ORDER BY province ASC, order_index ASC, created_at ASC'),
+        pgMdcPool.query("SELECT * FROM pilot_hackathon_projects WHERE (is_precheck = 0 OR is_precheck IS NULL) AND id NOT LIKE 'precheck-%' ORDER BY created_at DESC")
+      ]);
+      agencies = agRes.rows;
+      lessonsPolicies = lpRes.rows;
+      coffeeGroupsRows = cgRes.rows;
+      projectRows = prRes.rows;
     }
 
-    const agencies = provList
-      ? db
-          .prepare(`SELECT * FROM pilot_agency_registrations WHERE province IN (${provList.map(() => '?').join(',')}) ORDER BY created_at DESC`)
-          .all(...provList)
-      : db.prepare('SELECT * FROM pilot_agency_registrations ORDER BY created_at DESC').all();
+    const coffeeGroups = coffeeGroupsRows.map((r) => ({
+      province: r.province,
+      key: r.key,
+      name: r.name,
+      bgImage: r.bg_image,
+      themeColor: r.theme_color,
+      accentBg: r.accent_bg,
+      isCustom: Boolean(r.is_custom),
+      orderIndex: r.order_index
+    }));
 
-    const lessonsPolicies = provList
-      ? db
-          .prepare(`SELECT * FROM pilot_lessons_and_policies WHERE province IN (${provList.map(() => '?').join(',')}) ORDER BY updated_at DESC`)
-          .all(...provList)
-      : db.prepare('SELECT * FROM pilot_lessons_and_policies ORDER BY updated_at DESC').all();
+    const submittedProjects = projectRows.map((r) => ({
+      id: r.id,
+      province: r.province,
+      groupKey: r.group_key,
+      groupName: r.group_name,
+      projectName: r.project_name,
+      targetMoralVirtue: r.target_moral_virtue,
+      targetAudience: r.target_audience,
+      targetArea: r.target_area,
+      proposalDetails: r.proposal_details,
+      activityPlan: r.activity_plan,
+      behavioralKpi: r.behavioral_kpi,
+      proposerName: r.proposer_name,
+      proposerAgency: r.proposer_agency,
+      proposerPosition: r.proposer_position || '',
+      proposerLevel: r.proposer_level,
+      challengeTopic: r.challenge_topic,
+      evaluatedCriteriaVirtues: r.evaluated_criteria_virtues_json ? JSON.parse(r.evaluated_criteria_virtues_json) : [],
+      aiScore: Number(r.ai_score),
+      aiScoreBreakdown: r.ai_score_breakdown_json ? JSON.parse(r.ai_score_breakdown_json) : { alignment: 0, feasibility: 0, innovation: 0, participation: 0 },
+      aiRecommendations: r.ai_recommendations,
+      communityVotes: Number(r.community_votes || 0),
+      isPrecheck: Boolean(r.is_precheck),
+      createdAt: r.created_at
+    }));
+
+    const agDigest = agencies.map((a) => `${a.id}:${a.coffee_group || ''}`).join(',');
+    const cgDigest = coffeeGroupsRows.map((g) => `${g.key}:${g.name}:${g.updated_at || ''}`).join(',');
+    const prDigest = projectRows.map((p) => `${p.id}:${p.updated_at || p.created_at || ''}:${p.community_votes || 0}`).join(',');
+    const revision = `${agencies.length}|${coffeeGroups.length}|${submittedProjects.length}|${agDigest.slice(0, 120)}|${cgDigest.slice(0, 120)}|${prDigest.slice(0, 120)}`;
+    const syncTimestamp = new Date().toISOString();
 
     res.statusCode = 200;
     res.end(
       JSON.stringify({
         ok: true,
-        dbPath: 'data/pilot_activities_4regions.sqlite',
+        dbType: 'postgres',
+        dbName: 'DB-MDC',
+        dbPath: 'PostgreSQL 16 (DB-MDC)',
         recordsDir: 'data/pilot_records/',
+        revision,
+        syncTimestamp,
         agencies,
-        lessonsPolicies
+        lessonsPolicies,
+        coffeeGroups,
+        submittedProjects
       })
     );
     return;
   }
 
-  // 2. POST /api/pilot-sqlite/register-agency
+  // 2. POST /api/activity/register-agency (PostgreSQL DB-MDC only)
   if (req.method === 'POST' && (pathname === '/api/pilot-sqlite/register-agency' || pathname === '/api/pilot-postgres/register-agency')) {
+    if (!requirePostgres(res)) return;
     const payload = await readJsonBody(req);
     const id = payload.id || `reg-${Date.now()}`;
     const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
@@ -1958,10 +1919,11 @@ async function handleApiRequest(req, res, urlObj) {
     const coordName = payload.coordinator_name || [firstName, lastName].filter(Boolean).join(' ');
     const roleStr = payload.participant_role || `${pos} (${level === 'policy' ? 'ระดับนโยบาย' : level === 'practitioner' ? 'ระดับผู้ปฏิบัติการ' : 'ระดับประชาชน'})`;
     const contactStr = payload.contact_info || [phone, email].filter(Boolean).join(' / ');
+    const normProv = normalizeActivityProvince(payload.province) || 'พระนครศรีอยุธยา';
 
     const params = [
       id,
-      payload.province || 'อยุธยา',
+      normProv,
       payload.region || 'ภาคกลาง',
       payload.agency_name || '',
       payload.agency_type || 'ภาครัฐ',
@@ -1986,86 +1948,50 @@ async function handleApiRequest(req, res, urlObj) {
       payload.created_at || nowStr
     ];
 
-    if (pgMdcPool) {
-      await pgMdcPool.query(`
-        INSERT INTO pilot_agency_registrations (
-          id, province, region, agency_name, agency_type,
-          first_name, last_name, position, participant_level,
-          coordinator_name, participant_role, district, subdistrict,
-          phone, email, contact_info, coffee_group,
-          trial_project_name, trial_project_summary, activity_date, synergy_topic,
-          uploaded_files_json, extracted_data_preview, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
-        ON CONFLICT (id) DO UPDATE SET
-          province = EXCLUDED.province,
-          region = EXCLUDED.region,
-          agency_name = EXCLUDED.agency_name,
-          agency_type = EXCLUDED.agency_type,
-          first_name = EXCLUDED.first_name,
-          last_name = EXCLUDED.last_name,
-          position = EXCLUDED.position,
-          participant_level = EXCLUDED.participant_level,
-          coordinator_name = EXCLUDED.coordinator_name,
-          participant_role = EXCLUDED.participant_role,
-          district = EXCLUDED.district,
-          subdistrict = EXCLUDED.subdistrict,
-          phone = EXCLUDED.phone,
-          email = EXCLUDED.email,
-          contact_info = EXCLUDED.contact_info,
-          coffee_group = EXCLUDED.coffee_group,
-          trial_project_name = EXCLUDED.trial_project_name,
-          trial_project_summary = EXCLUDED.trial_project_summary,
-          activity_date = EXCLUDED.activity_date,
-          synergy_topic = EXCLUDED.synergy_topic,
-          uploaded_files_json = EXCLUDED.uploaded_files_json,
-          extracted_data_preview = EXCLUDED.extracted_data_preview,
-          created_at = EXCLUDED.created_at
-      `, params);
-
-      const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '_');
-      const agencyFilePath = path.resolve(recordsDir, `agency_${safeId}.json`);
-      try {
-        fs.writeFileSync(
-          agencyFilePath,
-          JSON.stringify({ id, ...payload, savedAt: nowStr, db: 'DB-MDC' }, null, 2),
-          'utf8'
-        );
-      } catch {}
-
-      res.statusCode = 200;
-      res.end(
-        JSON.stringify({
-          ok: true,
-          id,
-          savedFilePath: `data/pilot_records/agency_${safeId}.json`,
-          dbType: 'postgres',
-          dbName: 'DB-MDC',
-          dbPath: 'PostgreSQL: DB-MDC'
-        })
-      );
-      return;
-    }
-
-    const stmt = db.prepare(`
-      INSERT OR REPLACE INTO pilot_agency_registrations (
+    await pgMdcPool.query(`
+      INSERT INTO pilot_agency_registrations (
         id, province, region, agency_name, agency_type,
         first_name, last_name, position, participant_level,
         coordinator_name, participant_role, district, subdistrict,
         phone, email, contact_info, coffee_group,
         trial_project_name, trial_project_summary, activity_date, synergy_topic,
         uploaded_files_json, extracted_data_preview, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(...params);
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+      ON CONFLICT (id) DO UPDATE SET
+        province = EXCLUDED.province,
+        region = EXCLUDED.region,
+        agency_name = EXCLUDED.agency_name,
+        agency_type = EXCLUDED.agency_type,
+        first_name = EXCLUDED.first_name,
+        last_name = EXCLUDED.last_name,
+        position = EXCLUDED.position,
+        participant_level = EXCLUDED.participant_level,
+        coordinator_name = EXCLUDED.coordinator_name,
+        participant_role = EXCLUDED.participant_role,
+        district = EXCLUDED.district,
+        subdistrict = EXCLUDED.subdistrict,
+        phone = EXCLUDED.phone,
+        email = EXCLUDED.email,
+        contact_info = EXCLUDED.contact_info,
+        coffee_group = EXCLUDED.coffee_group,
+        trial_project_name = EXCLUDED.trial_project_name,
+        trial_project_summary = EXCLUDED.trial_project_summary,
+        activity_date = EXCLUDED.activity_date,
+        synergy_topic = EXCLUDED.synergy_topic,
+        uploaded_files_json = EXCLUDED.uploaded_files_json,
+        extracted_data_preview = EXCLUDED.extracted_data_preview,
+        created_at = EXCLUDED.created_at
+    `, params);
 
     const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '_');
     const agencyFilePath = path.resolve(recordsDir, `agency_${safeId}.json`);
-    fs.writeFileSync(
-      agencyFilePath,
-      JSON.stringify({ id, ...payload, savedAt: nowStr, sqliteDb: 'data/pilot_activities_4regions.sqlite' }, null, 2),
-      'utf8'
-    );
+    try {
+      fs.writeFileSync(
+        agencyFilePath,
+        JSON.stringify({ id, ...payload, province: normProv, savedAt: nowStr, db: 'DB-MDC' }, null, 2),
+        'utf8'
+      );
+    } catch {}
 
     res.statusCode = 200;
     res.end(
@@ -2073,10 +1999,91 @@ async function handleApiRequest(req, res, urlObj) {
         ok: true,
         id,
         savedFilePath: `data/pilot_records/agency_${safeId}.json`,
-        dbPath: 'data/pilot_activities_4regions.sqlite'
+        dbType: 'postgres',
+        dbName: 'DB-MDC',
+        dbPath: 'PostgreSQL 16 (DB-MDC)'
       })
     );
     return;
+  }
+
+  // 2.1 POST /api/activity/update-registration-group (Persist Step 2 coffee group selection to PostgreSQL DB-MDC)
+  if (req.method === 'POST' && (pathname === '/api/pilot-sqlite/update-registration-group' || pathname === '/api/pilot-postgres/update-registration-group')) {
+    if (!requirePostgres(res)) return;
+    try {
+      const payload = await readJsonBody(req);
+      const id = String(payload.id || '').trim();
+      const coffeeGroup = String(payload.coffeeGroup || payload.coffee_group || '').trim();
+      const rawProvince = String(payload.province || '').trim();
+      const fullName = String(payload.fullName || payload.coordinator_name || '').trim();
+      const synergyTopic = payload.synergyTopic !== undefined
+        ? String(payload.synergyTopic)
+        : `กิจกรรม Hackathon คุณธรรม 4 ภาค (กลุ่มกาแฟ: ${coffeeGroup})`;
+
+      if (!coffeeGroup) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ ok: false, error: 'Missing coffeeGroup' }));
+        return;
+      }
+
+      const matchProvs = getProvinceMatchList(rawProvince);
+      let updatedId = null;
+
+      if (id) {
+        const upRes = await pgMdcPool.query(
+          `UPDATE pilot_agency_registrations
+           SET coffee_group = $1, synergy_topic = $2
+           WHERE id = $3
+           RETURNING id`,
+          [coffeeGroup, synergyTopic, id]
+        );
+        updatedId = upRes.rows[0]?.id || null;
+      }
+
+      if (!updatedId && fullName && matchProvs.length > 0) {
+        const pList = matchProvs.map((_, i) => `$${i + 2}`).join(', ');
+        const findRes = await pgMdcPool.query(
+          `SELECT id FROM pilot_agency_registrations
+           WHERE province IN (${pList})
+             AND LOWER(TRIM(COALESCE(coordinator_name, ''))) = LOWER(TRIM($1))
+           ORDER BY created_at DESC LIMIT 1`,
+          [fullName, ...matchProvs]
+        );
+        const foundId = findRes.rows[0]?.id;
+        if (foundId) {
+          await pgMdcPool.query(
+            `UPDATE pilot_agency_registrations SET coffee_group = $1, synergy_topic = $2 WHERE id = $3`,
+            [coffeeGroup, synergyTopic, foundId]
+          );
+          updatedId = foundId;
+        }
+      }
+
+      let agencies = [];
+      if (matchProvs.length > 0) {
+        const pList = matchProvs.map((_, i) => `$${i + 1}`).join(', ');
+        agencies = (await pgMdcPool.query(
+          `SELECT * FROM pilot_agency_registrations WHERE province IN (${pList}) ORDER BY created_at DESC`,
+          matchProvs
+        )).rows;
+      }
+
+      res.statusCode = 200;
+      res.end(JSON.stringify({
+        ok: true,
+        updatedId,
+        coffeeGroup,
+        agencies,
+        dbType: 'postgres',
+        dbName: 'DB-MDC',
+        dbPath: 'PostgreSQL 16 (DB-MDC)'
+      }));
+      return;
+    } catch (err) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ ok: false, error: err?.message || 'Failed to update coffee group for participant' }));
+      return;
+    }
   }
 
   // 3. POST /api/pilot-sqlite/save-lesson-policy
@@ -2090,9 +2097,10 @@ async function handleApiRequest(req, res, urlObj) {
     const absJsonPath = path.resolve(recordsDir, `pilot_lesson_policy_${safeId}.json`);
     const absMdPath = path.resolve(recordsDir, `pilot_lesson_policy_${safeId}.md`);
 
+    const normProv = normalizeActivityProvince(payload.province) || 'พระนครศรีอยุธยา';
     const params = [
       id,
-      payload.province || 'อยุธยา',
+      normProv,
       payload.region || '',
       payload.activity_date || nowStr.slice(0, 10),
       JSON.stringify(payload.selected_project_ids || []),
@@ -2108,138 +2116,73 @@ async function handleApiRequest(req, res, urlObj) {
       nowStr
     ];
 
-    if (pgMdcPool) {
-      await pgMdcPool.query(`
-        INSERT INTO pilot_lessons_and_policies (
-          id, province, region, activity_date, selected_project_ids_json, selected_project_names_json,
-          summary_file_name, raw_activity_summary, lesson_learned_text, lesson_structured_json,
-          policy_prompt, generated_policy_text, policy_structured_json, saved_file_path, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-        ON CONFLICT (id) DO UPDATE SET
-          province = EXCLUDED.province,
-          region = EXCLUDED.region,
-          activity_date = EXCLUDED.activity_date,
-          selected_project_ids_json = EXCLUDED.selected_project_ids_json,
-          selected_project_names_json = EXCLUDED.selected_project_names_json,
-          summary_file_name = EXCLUDED.summary_file_name,
-          raw_activity_summary = EXCLUDED.raw_activity_summary,
-          lesson_learned_text = EXCLUDED.lesson_learned_text,
-          lesson_structured_json = EXCLUDED.lesson_structured_json,
-          policy_prompt = EXCLUDED.policy_prompt,
-          generated_policy_text = EXCLUDED.generated_policy_text,
-          policy_structured_json = EXCLUDED.policy_structured_json,
-          saved_file_path = EXCLUDED.saved_file_path,
-          updated_at = EXCLUDED.updated_at
-      `, params);
+    if (!requirePostgres(res)) return;
 
-      try {
-        const fileRecord = {
-          id,
-          province: payload.province,
-          region: payload.region,
-          activity_date: payload.activity_date,
-          selected_project_names: payload.selected_project_names || [],
-          summary_file_name: payload.summary_file_name || '',
-          lesson_learned_text: payload.lesson_learned_text || '',
-          lesson_structured: payload.lesson_structured || {},
-          policy_prompt: payload.policy_prompt || '',
-          generated_policy_text: payload.generated_policy_text || '',
-          policy_structured: payload.policy_structured || {},
-          db: 'DB-MDC',
-          updated_at: nowStr
-        };
-        fs.writeFileSync(absJsonPath, JSON.stringify(fileRecord, null, 2), 'utf8');
-
-        const mdContent = [
-          `# รายงานการถอดบทเรียนและข้อเสนอนโยบาย: กิจกรรมนำร่องจังหวัด${payload.province || ''}`,
-          `- **รหัสรายการ:** ${id}`,
-          `- **จังหวัดนำร่อง:** ${payload.province || ''} (${payload.region || ''})`,
-          `- **วันที่จัดกิจกรรม:** ${payload.activity_date || nowStr.slice(0, 10)}`,
-          `- **โครงการที่ทดลองสร้างในกิจกรรม:** ${(payload.selected_project_names || []).join(', ') || '-'}`,
-          `- **ไฟล์สรุปกิจกรรม:** ${payload.summary_file_name || '-'}`,
-          `- **บันทึกเมื่อ:** ${nowStr}`,
-          ``,
-          `---`,
-          ``,
-          `## 1. ผลการถอดบทเรียน (Lesson Learned)`,
-          payload.lesson_learned_text || '-',
-          ``,
-          `---`,
-          ``,
-          `## 2. Prompt สำหรับสร้างนโยบาย (Policy Generation Prompt)`,
-          payload.policy_prompt || '-',
-          ``,
-          `## 3. ข้อเสนอนโยบายจาก AI (Generated Policy Recommendations)`,
-          payload.generated_policy_text || '- (ยังไม่ได้กด Generate นโยบาย)'
-        ].join('\n');
-        fs.writeFileSync(absMdPath, mdContent, 'utf8');
-      } catch {}
-
-      res.statusCode = 200;
-      res.end(
-        JSON.stringify({
-          ok: true,
-          id,
-          updated_at: nowStr,
-          savedFilePath: `${relFilePath} | ${relMdPath}`,
-          dbType: 'postgres',
-          dbName: 'DB-MDC',
-          dbPath: 'PostgreSQL: DB-MDC'
-        })
-      );
-      return;
-    }
-
-    const stmt = db.prepare(`
-      INSERT OR REPLACE INTO pilot_lessons_and_policies (
+    await pgMdcPool.query(`
+      INSERT INTO pilot_lessons_and_policies (
         id, province, region, activity_date, selected_project_ids_json, selected_project_names_json,
         summary_file_name, raw_activity_summary, lesson_learned_text, lesson_structured_json,
         policy_prompt, generated_policy_text, policy_structured_json, saved_file_path, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      ON CONFLICT (id) DO UPDATE SET
+        province = EXCLUDED.province,
+        region = EXCLUDED.region,
+        activity_date = EXCLUDED.activity_date,
+        selected_project_ids_json = EXCLUDED.selected_project_ids_json,
+        selected_project_names_json = EXCLUDED.selected_project_names_json,
+        summary_file_name = EXCLUDED.summary_file_name,
+        raw_activity_summary = EXCLUDED.raw_activity_summary,
+        lesson_learned_text = EXCLUDED.lesson_learned_text,
+        lesson_structured_json = EXCLUDED.lesson_structured_json,
+        policy_prompt = EXCLUDED.policy_prompt,
+        generated_policy_text = EXCLUDED.generated_policy_text,
+        policy_structured_json = EXCLUDED.policy_structured_json,
+        saved_file_path = EXCLUDED.saved_file_path,
+        updated_at = EXCLUDED.updated_at
+    `, params);
 
-    stmt.run(...params);
+    try {
+      const fileRecord = {
+        id,
+        province: normProv,
+        region: payload.region,
+        activity_date: payload.activity_date,
+        selected_project_names: payload.selected_project_names || [],
+        summary_file_name: payload.summary_file_name || '',
+        lesson_learned_text: payload.lesson_learned_text || '',
+        lesson_structured: payload.lesson_structured || {},
+        policy_prompt: payload.policy_prompt || '',
+        generated_policy_text: payload.generated_policy_text || '',
+        policy_structured: payload.policy_structured || {},
+        db: 'DB-MDC',
+        updated_at: nowStr
+      };
+      fs.writeFileSync(absJsonPath, JSON.stringify(fileRecord, null, 2), 'utf8');
 
-    const fileRecord = {
-      id,
-      province: payload.province,
-      region: payload.region,
-      activity_date: payload.activity_date,
-      selected_project_names: payload.selected_project_names || [],
-      summary_file_name: payload.summary_file_name || '',
-      lesson_learned_text: payload.lesson_learned_text || '',
-      lesson_structured: payload.lesson_structured || {},
-      policy_prompt: payload.policy_prompt || '',
-      generated_policy_text: payload.generated_policy_text || '',
-      policy_structured: payload.policy_structured || {},
-      sqlite_db: 'data/pilot_activities_4regions.sqlite',
-      updated_at: nowStr
-    };
-    fs.writeFileSync(absJsonPath, JSON.stringify(fileRecord, null, 2), 'utf8');
-
-    const mdContent = [
-      `# รายงานการถอดบทเรียนและข้อเสนอนโยบาย: กิจกรรมนำร่องจังหวัด${payload.province || ''}`,
-      `- **รหัสรายการ:** ${id}`,
-      `- **จังหวัดนำร่อง:** ${payload.province || ''} (${payload.region || ''})`,
-      `- **วันที่จัดกิจกรรม:** ${payload.activity_date || nowStr.slice(0, 10)}`,
-      `- **โครงการที่ทดลองสร้างในกิจกรรม:** ${(payload.selected_project_names || []).join(', ') || '-'}`,
-      `- **ไฟล์สรุปกิจกรรม:** ${payload.summary_file_name || '-'}`,
-      `- **บันทึกเมื่อ:** ${nowStr}`,
-      ``,
-      `---`,
-      ``,
-      `## 1. ผลการถอดบทเรียน (Lesson Learned)`,
-      payload.lesson_learned_text || '-',
-      ``,
-      `---`,
-      ``,
-      `## 2. Prompt สำหรับสร้างนโยบาย (Policy Generation Prompt)`,
-      payload.policy_prompt || '-',
-      ``,
-      `## 3. ข้อเสนอนโยบายจาก AI (Generated Policy Recommendations)`,
-      payload.generated_policy_text || '- (ยังไม่ได้กด Generate นโยบาย)'
-    ].join('\n');
-    fs.writeFileSync(absMdPath, mdContent, 'utf8');
+      const mdContent = [
+        `# รายงานการถอดบทเรียนและข้อเสนอนโยบาย: กิจกรรมนำร่องจังหวัด${normProv || ''}`,
+        `- **รหัสรายการ:** ${id}`,
+        `- **จังหวัดนำร่อง:** ${normProv || ''} (${payload.region || ''})`,
+        `- **วันที่จัดกิจกรรม:** ${payload.activity_date || nowStr.slice(0, 10)}`,
+        `- **โครงการที่ทดลองสร้างในกิจกรรม:** ${(payload.selected_project_names || []).join(', ') || '-'}`,
+        `- **ไฟล์สรุปกิจกรรม:** ${payload.summary_file_name || '-'}`,
+        `- **บันทึกเมื่อ:** ${nowStr}`,
+        ``,
+        `---`,
+        ``,
+        `## 1. ผลการถอดบทเรียน (Lesson Learned)`,
+        payload.lesson_learned_text || '-',
+        ``,
+        `---`,
+        ``,
+        `## 2. Prompt สำหรับสร้างนโยบาย (Policy Generation Prompt)`,
+        payload.policy_prompt || '-',
+        ``,
+        `## 3. ข้อเสนอนโยบายจาก AI (Generated Policy Recommendations)`,
+        payload.generated_policy_text || '- (ยังไม่ได้กด Generate นโยบาย)'
+      ].join('\n');
+      fs.writeFileSync(absMdPath, mdContent, 'utf8');
+    } catch {}
 
     res.statusCode = 200;
     res.end(
@@ -2248,90 +2191,69 @@ async function handleApiRequest(req, res, urlObj) {
         id,
         updated_at: nowStr,
         savedFilePath: `${relFilePath} | ${relMdPath}`,
-        dbPath: 'data/pilot_activities_4regions.sqlite'
+        dbType: 'postgres',
+        dbName: 'DB-MDC',
+        dbPath: 'PostgreSQL 16 (DB-MDC)'
       })
     );
     return;
   }
 
-  // 4. DELETE /api/pilot-sqlite/agency
+  // 4. DELETE /api/activity/agency (PostgreSQL DB-MDC only)
   if (req.method === 'DELETE' && (pathname === '/api/pilot-sqlite/agency' || pathname === '/api/pilot-postgres/agency')) {
+    if (!requirePostgres(res)) return;
     const id = urlObj.searchParams.get('id');
     if (id) {
-      if (pgMdcPool) {
-        await pgMdcPool.query('DELETE FROM pilot_agency_registrations WHERE id = $1', [id]);
-      } else {
-        db.prepare('DELETE FROM pilot_agency_registrations WHERE id = ?').run(id);
-      }
+      await pgMdcPool.query('DELETE FROM pilot_agency_registrations WHERE id = $1', [id]);
     }
     res.statusCode = 200;
-    res.end(JSON.stringify({ ok: true, dbType: pgMdcPool ? 'postgres' : 'sqlite', dbName: 'DB-MDC' }));
+    res.end(JSON.stringify({ ok: true, dbType: 'postgres', dbName: 'DB-MDC' }));
     return;
   }
 
-  // 5. DELETE /api/pilot-sqlite/lesson-policy
+  // 5. DELETE /api/activity/lesson-policy (PostgreSQL DB-MDC only)
   if (req.method === 'DELETE' && (pathname === '/api/pilot-sqlite/lesson-policy' || pathname === '/api/pilot-postgres/lesson-policy')) {
+    if (!requirePostgres(res)) return;
     const id = urlObj.searchParams.get('id');
     if (id) {
-      if (pgMdcPool) {
-        await pgMdcPool.query('DELETE FROM pilot_lessons_and_policies WHERE id = $1', [id]);
-      } else {
-        db.prepare('DELETE FROM pilot_lessons_and_policies WHERE id = ?').run(id);
-      }
+      await pgMdcPool.query('DELETE FROM pilot_lessons_and_policies WHERE id = $1', [id]);
     }
     res.statusCode = 200;
-    res.end(JSON.stringify({ ok: true, dbType: pgMdcPool ? 'postgres' : 'sqlite', dbName: 'DB-MDC' }));
+    res.end(JSON.stringify({ ok: true, dbType: 'postgres', dbName: 'DB-MDC' }));
     return;
   }
 
-  // 5.1 GET /api/pilot-sqlite/hackathon-criteria
+  // 5.1 GET /api/activity/hackathon-criteria (PostgreSQL DB-MDC only)
   if (req.method === 'GET' && (pathname === '/api/pilot-sqlite/hackathon-criteria' || pathname === '/api/pilot-postgres/hackathon-criteria')) {
-    const province = urlObj.searchParams.get('province') || '';
-    if (pgMdcPool) {
-      let row = null;
-      if (province) {
-        const qRes = await pgMdcPool.query(
-          `SELECT * FROM pilot_hackathon_criteria 
-           WHERE is_active = 1 AND (province = $1 OR province = 'ส่วนกลาง') 
-           ORDER BY CASE WHEN province = $1 THEN 0 ELSE 1 END, updated_at DESC LIMIT 1`,
-          [province]
-        );
-        row = qRes.rows[0] || null;
-      }
-      if (!row) {
-        const qRes2 = await pgMdcPool.query('SELECT * FROM pilot_hackathon_criteria WHERE is_active = 1 ORDER BY updated_at DESC LIMIT 1');
-        row = qRes2.rows[0] || null;
-      }
-      res.statusCode = 200;
-      res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.end(JSON.stringify({ ok: true, data: row || null, dbType: 'postgres', dbName: 'DB-MDC', dbPath: 'PostgreSQL: DB-MDC' }));
-      return;
-    }
-
+    if (!requirePostgres(res)) return;
+    const rawProv = (urlObj.searchParams.get('province') || '').trim();
+    const matchProvs = rawProv ? getProvinceMatchList(rawProv) : [];
     let row = null;
-    if (province) {
-      row = db.prepare(
+    if (matchProvs.length > 0) {
+      const pList = matchProvs.map((_, i) => `$${i + 1}`).join(', ');
+      const qRes = await pgMdcPool.query(
         `SELECT * FROM pilot_hackathon_criteria 
-         WHERE is_active = 1 AND (province = ? OR province = 'ส่วนกลาง') 
-         ORDER BY CASE WHEN province = ? THEN 0 ELSE 1 END, updated_at DESC LIMIT 1`
-      ).get(province, province);
+         WHERE is_active = 1 AND (province IN (${pList}) OR province = 'ส่วนกลาง') 
+         ORDER BY CASE WHEN province IN (${pList}) THEN 0 ELSE 1 END, updated_at DESC LIMIT 1`,
+        matchProvs
+      );
+      row = qRes.rows[0] || null;
     }
     if (!row) {
-      row = db.prepare('SELECT * FROM pilot_hackathon_criteria WHERE is_active = 1 ORDER BY updated_at DESC LIMIT 1').get();
+      const qRes2 = await pgMdcPool.query('SELECT * FROM pilot_hackathon_criteria WHERE is_active = 1 ORDER BY updated_at DESC LIMIT 1');
+      row = qRes2.rows[0] || null;
     }
     res.statusCode = 200;
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.end(JSON.stringify({ ok: true, data: row || null, dbPath: 'data/pilot_activities_4regions.sqlite' }));
+    res.end(JSON.stringify({ ok: true, data: row || null, dbType: 'postgres', dbName: 'DB-MDC', dbPath: 'PostgreSQL 16 (DB-MDC)' }));
     return;
   }
 
-  // 5.2 POST /api/pilot-sqlite/hackathon-criteria
+  // 5.2 POST /api/activity/hackathon-criteria (PostgreSQL DB-MDC only)
   if (req.method === 'POST' && (pathname === '/api/pilot-sqlite/hackathon-criteria' || pathname === '/api/pilot-postgres/hackathon-criteria')) {
+    if (!requirePostgres(res)) return;
     const body = await readJsonBody(req);
     const id = body.id || `crit-${Date.now()}`;
-    const province = body.province || 'ส่วนกลาง';
+    const province = normalizeActivityProvince(body.province) || 'ส่วนกลาง';
     const now = new Date().toISOString();
     const sourceFilesJson = typeof body.sourceFilesJson === 'string' ? body.sourceFilesJson : JSON.stringify(body.sourceFiles || []);
     const aiAgentSkillText = body.aiAgentSkillText || '';
@@ -2339,52 +2261,42 @@ async function handleApiRequest(req, res, urlObj) {
     const promptSkill = body.promptSkill || '';
     const promptRubric = body.promptRubric || '';
 
-    if (pgMdcPool) {
-      if (body.setLatestActive !== false) {
-        await pgMdcPool.query('UPDATE pilot_hackathon_criteria SET is_active = 0 WHERE province = $1', [province]);
-      }
-      await pgMdcPool.query(`
-        INSERT INTO pilot_hackathon_criteria 
-        (id, province, created_at, updated_at, source_files_json, ai_agent_skill_text, rubric_json, prompt_skill, prompt_rubric, is_active)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1)
-        ON CONFLICT (id) DO UPDATE SET
-          province = EXCLUDED.province,
-          updated_at = EXCLUDED.updated_at,
-          source_files_json = EXCLUDED.source_files_json,
-          ai_agent_skill_text = EXCLUDED.ai_agent_skill_text,
-          rubric_json = EXCLUDED.rubric_json,
-          prompt_skill = EXCLUDED.prompt_skill,
-          prompt_rubric = EXCLUDED.prompt_rubric,
-          is_active = 1
-      `, [id, province, body.createdAt || now, now, sourceFilesJson, aiAgentSkillText, rubricJson, promptSkill, promptRubric]);
-
-      res.statusCode = 200;
-      res.end(JSON.stringify({ ok: true, id, dbType: 'postgres', dbName: 'DB-MDC', dbPath: 'PostgreSQL: DB-MDC', updatedAt: now }));
-      return;
-    }
-
     if (body.setLatestActive !== false) {
-      db.prepare('UPDATE pilot_hackathon_criteria SET is_active = 0 WHERE province = ?').run(province);
+      const matchProvs = getProvinceMatchList(province);
+      const pList = matchProvs.map((_, i) => `$${i + 1}`).join(', ');
+      await pgMdcPool.query(`UPDATE pilot_hackathon_criteria SET is_active = 0 WHERE province IN (${pList})`, matchProvs);
     }
-
-    db.prepare(`
-      INSERT OR REPLACE INTO pilot_hackathon_criteria 
+    await pgMdcPool.query(`
+      INSERT INTO pilot_hackathon_criteria 
       (id, province, created_at, updated_at, source_files_json, ai_agent_skill_text, rubric_json, prompt_skill, prompt_rubric, is_active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-    `).run(id, province, body.createdAt || now, now, sourceFilesJson, aiAgentSkillText, rubricJson, promptSkill, promptRubric);
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1)
+      ON CONFLICT (id) DO UPDATE SET
+        province = EXCLUDED.province,
+        updated_at = EXCLUDED.updated_at,
+        source_files_json = EXCLUDED.source_files_json,
+        ai_agent_skill_text = EXCLUDED.ai_agent_skill_text,
+        rubric_json = EXCLUDED.rubric_json,
+        prompt_skill = EXCLUDED.prompt_skill,
+        prompt_rubric = EXCLUDED.prompt_rubric,
+        is_active = 1
+    `, [id, province, body.createdAt || now, now, sourceFilesJson, aiAgentSkillText, rubricJson, promptSkill, promptRubric]);
 
     res.statusCode = 200;
-    res.end(JSON.stringify({ ok: true, id, dbPath: 'data/pilot_activities_4regions.sqlite', updatedAt: now }));
+    res.end(JSON.stringify({ ok: true, id, dbType: 'postgres', dbName: 'DB-MDC', dbPath: 'PostgreSQL 16 (DB-MDC)', updatedAt: now }));
     return;
   }
 
-  // 5.2.1 GET /api/pilot-sqlite/criteria-virtues
+  // 5.2.1 GET /api/activity/criteria-virtues (PostgreSQL DB-MDC only)
   if (req.method === 'GET' && (pathname === '/api/pilot-sqlite/criteria-virtues' || pathname === '/api/pilot-postgres/criteria-virtues')) {
-    const province = urlObj.searchParams.get('province') || 'ส่วนกลาง';
+    if (!requirePostgres(res)) return;
+    const rawProv = urlObj.searchParams.get('province') || 'ส่วนกลาง';
+    const province = normalizeActivityProvince(rawProv) || 'ส่วนกลาง';
     const defaultWeaknessMap = {
+      'พระนครศรีอยุธยา': ['พอเพียง'],
       'อยุธยา': ['พอเพียง'],
       'ระยอง': ['พอเพียง'],
       'กาฬสินธุ์': ['สุจริต'],
+      'อุดรธานี': ['สุจริต'],
       'หนองคาย': ['สุจริต'],
       'น่าน': ['กตัญญู'],
       'ลำปาง': ['กตัญญู'],
@@ -2392,28 +2304,13 @@ async function handleApiRequest(req, res, urlObj) {
       'พังงา': ['จิตอาสา']
     };
 
-    if (pgMdcPool) {
-      let rowRes = await pgMdcPool.query('SELECT * FROM pilot_criteria_selected_virtues WHERE province = $1', [province]);
-      let row = rowRes.rows[0];
-      if (!row) {
-        let fallbackRes = await pgMdcPool.query('SELECT * FROM pilot_criteria_selected_virtues WHERE province = $1', ['ส่วนกลาง']);
-        row = fallbackRes.rows[0];
-      }
-      let virtues = defaultWeaknessMap[province] || ['พอเพียง'];
-      if (row && row.selected_virtues_json) {
-        try {
-          const parsed = JSON.parse(row.selected_virtues_json);
-          if (Array.isArray(parsed) && parsed.length > 0) virtues = parsed;
-        } catch {}
-      }
-      res.statusCode = 200;
-      res.end(JSON.stringify({ ok: true, province, virtues, dbType: 'postgres', dbName: 'DB-MDC', updatedAt: row?.updated_at || null }));
-      return;
-    }
-
-    let row = db.prepare('SELECT * FROM pilot_criteria_selected_virtues WHERE province = ?').get(province);
+    const matchProvs = getProvinceMatchList(rawProv);
+    const pList = matchProvs.map((_, i) => `$${i + 1}`).join(', ');
+    let rowRes = await pgMdcPool.query(`SELECT * FROM pilot_criteria_selected_virtues WHERE province IN (${pList}) ORDER BY updated_at DESC LIMIT 1`, matchProvs);
+    let row = rowRes.rows[0];
     if (!row) {
-      row = db.prepare('SELECT * FROM pilot_criteria_selected_virtues WHERE province = ?').get('ส่วนกลาง');
+      let fallbackRes = await pgMdcPool.query('SELECT * FROM pilot_criteria_selected_virtues WHERE province = $1', ['ส่วนกลาง']);
+      row = fallbackRes.rows[0];
     }
     let virtues = defaultWeaknessMap[province] || ['พอเพียง'];
     if (row && row.selected_virtues_json) {
@@ -2423,18 +2320,21 @@ async function handleApiRequest(req, res, urlObj) {
       } catch {}
     }
     res.statusCode = 200;
-    res.end(JSON.stringify({ ok: true, province, virtues, updatedAt: row?.updated_at || null }));
+    res.end(JSON.stringify({ ok: true, province, virtues, dbType: 'postgres', dbName: 'DB-MDC', updatedAt: row?.updated_at || null }));
     return;
   }
 
-  // 5.2.2 POST /api/pilot-sqlite/criteria-virtues
+  // 5.2.2 POST /api/activity/criteria-virtues (PostgreSQL DB-MDC only)
   if (req.method === 'POST' && (pathname === '/api/pilot-sqlite/criteria-virtues' || pathname === '/api/pilot-postgres/criteria-virtues')) {
+    if (!requirePostgres(res)) return;
     const body = await readJsonBody(req);
-    const province = body.province || 'ส่วนกลาง';
+    const province = normalizeActivityProvince(body.province) || 'ส่วนกลาง';
     const defaultWeaknessMap = {
+      'พระนครศรีอยุธยา': ['พอเพียง'],
       'อยุธยา': ['พอเพียง'],
       'ระยอง': ['พอเพียง'],
       'กาฬสินธุ์': ['สุจริต'],
+      'อุดรธานี': ['สุจริต'],
       'หนองคาย': ['สุจริต'],
       'น่าน': ['กตัญญู'],
       'ลำปาง': ['กตัญญู'],
@@ -2447,27 +2347,16 @@ async function handleApiRequest(req, res, urlObj) {
       : defaultFallback;
     const now = new Date().toISOString();
 
-    if (pgMdcPool) {
-      await pgMdcPool.query(`
-        INSERT INTO pilot_criteria_selected_virtues (province, selected_virtues_json, updated_at)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (province) DO UPDATE SET
-          selected_virtues_json = EXCLUDED.selected_virtues_json,
-          updated_at = EXCLUDED.updated_at
-      `, [province, JSON.stringify(virtues), now]);
-
-      res.statusCode = 200;
-      res.end(JSON.stringify({ ok: true, province, virtues, dbType: 'postgres', dbName: 'DB-MDC', updatedAt: now }));
-      return;
-    }
-
-    db.prepare(`
-      INSERT OR REPLACE INTO pilot_criteria_selected_virtues (province, selected_virtues_json, updated_at)
-      VALUES (?, ?, ?)
-    `).run(province, JSON.stringify(virtues), now);
+    await pgMdcPool.query(`
+      INSERT INTO pilot_criteria_selected_virtues (province, selected_virtues_json, updated_at)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (province) DO UPDATE SET
+        selected_virtues_json = EXCLUDED.selected_virtues_json,
+        updated_at = EXCLUDED.updated_at
+    `, [province, JSON.stringify(virtues), now]);
 
     res.statusCode = 200;
-    res.end(JSON.stringify({ ok: true, province, virtues, updatedAt: now }));
+    res.end(JSON.stringify({ ok: true, province, virtues, dbType: 'postgres', dbName: 'DB-MDC', updatedAt: now }));
     return;
   }
 
@@ -2680,155 +2569,80 @@ async function handleApiRequest(req, res, urlObj) {
     }
   }
 
-  // 5.2.5 GET /api/pilot-sqlite/coffee-groups
+  // 5.2.5 GET /api/activity/coffee-groups (PostgreSQL DB-MDC only, strict 1:1 per province)
   if (req.method === 'GET' && (pathname === '/api/pilot-sqlite/coffee-groups' || pathname === '/api/pilot-postgres/coffee-groups')) {
+    if (!requirePostgres(res)) return;
     try {
-      if (pgMdcPool) {
-        const rowsRes = await pgMdcPool.query('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC');
-        const groups = rowsRes.rows.map((r) => ({
-          key: r.key,
-          name: r.name,
-          bgImage: r.bg_image,
-          themeColor: r.theme_color,
-          accentBg: r.accent_bg,
-          isCustom: Boolean(r.is_custom)
-        }));
-        res.statusCode = 200;
-        res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        res.end(JSON.stringify({ ok: true, groups, dbType: 'postgres', dbName: 'DB-MDC' }));
-        return;
-      }
-
-      const rows = db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all();
-      const groups = rows.map((r) => ({
+      const rawProv = urlObj.searchParams.get('province') || '';
+      const normProv = await ensureCoffeeGroupsForProvincePg(pgMdcPool, rawProv);
+      const rowsRes = await pgMdcPool.query(
+        'SELECT * FROM pilot_coffee_groups WHERE province = $1 ORDER BY order_index ASC, created_at ASC',
+        [normProv]
+      );
+      const groups = rowsRes.rows.map((r) => ({
+        province: r.province,
         key: r.key,
         name: r.name,
         bgImage: r.bg_image,
         themeColor: r.theme_color,
         accentBg: r.accent_bg,
-        isCustom: Boolean(r.is_custom)
+        isCustom: Boolean(r.is_custom),
+        orderIndex: r.order_index
       }));
       res.statusCode = 200;
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      res.end(JSON.stringify({ ok: true, groups }));
+      res.end(JSON.stringify({ ok: true, province: normProv, groups, dbType: 'postgres', dbName: 'DB-MDC' }));
       return;
     } catch (err) {
       res.statusCode = 500;
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.end(JSON.stringify({ ok: false, error: err?.message || 'Failed to fetch coffee groups' }));
       return;
     }
   }
 
-  // 5.2.6 POST /api/pilot-sqlite/coffee-groups
+  // 5.2.6 POST /api/activity/coffee-groups (PostgreSQL DB-MDC only, strict 1:1 per province)
   if (req.method === 'POST' && (pathname === '/api/pilot-sqlite/coffee-groups' || pathname === '/api/pilot-postgres/coffee-groups')) {
+    if (!requirePostgres(res)) return;
     try {
       const body = await readJsonBody(req);
       const now = new Date().toISOString();
-
-      if (pgMdcPool) {
-        if (body.action === 'reset') {
-          await pgMdcPool.query('DELETE FROM pilot_coffee_groups');
-          const defaultGroups = [
-            { key: 'mocha', name: 'กลุ่มมอคค่า', bg_image: '/theme/coffee_mocha_bg.jpg', theme_color: '#78350f', accent_bg: '#fef3c7', is_custom: 0, order_index: 1 },
-            { key: 'cappuccino', name: 'กลุ่มคาปูชิโน', bg_image: '/theme/coffee_cappuccino_bg.jpg', theme_color: '#92400e', accent_bg: '#ffedd5', is_custom: 0, order_index: 2 },
-            { key: 'americano', name: 'กลุ่มอเมริกาโน', bg_image: '/theme/coffee_americano_bg.jpg', theme_color: '#1c1917', accent_bg: '#f5f5f4', is_custom: 0, order_index: 3 },
-            { key: 'espresso', name: 'กลุ่มเอสเพรสโซ', bg_image: '/theme/coffee_preset_05_espresso.jpg', theme_color: '#451a03', accent_bg: '#fef2f2', is_custom: 0, order_index: 4 },
-            { key: 'latte', name: 'กลุ่มลาเต้', bg_image: '/theme/coffee_preset_06_latte.jpg', theme_color: '#b45309', accent_bg: '#fffbeb', is_custom: 0, order_index: 5 }
-          ];
-          for (const g of defaultGroups) {
-            await pgMdcPool.query(
-              `INSERT INTO pilot_coffee_groups (key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-              [g.key, g.name, g.bg_image, g.theme_color, g.accent_bg, g.is_custom, g.order_index, now, now]
-            );
-          }
-        } else {
-          const grp = body.group || body;
-          const currentRows = (await pgMdcPool.query('SELECT key FROM pilot_coffee_groups')).rows;
-          const rawKey = (grp.key || `group_${Date.now()}`).toLowerCase().replace(/[^a-z0-9]/g, '_');
-          const key = currentRows.some((r) => r.key === rawKey && (!body.isEdit || body.originalKey !== r.key))
-            ? (body.isEdit ? rawKey : `${rawKey}_${Date.now()}`)
-            : rawKey;
-
-          const maxOrderRes = await pgMdcPool.query('SELECT MAX(order_index) as m FROM pilot_coffee_groups');
-          const maxOrder = maxOrderRes.rows[0]?.m || 0;
-          const orderIndex = typeof grp.orderIndex === 'number' ? grp.orderIndex : maxOrder + 1;
-
-          await pgMdcPool.query(`
-            INSERT INTO pilot_coffee_groups (key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            ON CONFLICT (key) DO UPDATE SET
-              name = EXCLUDED.name,
-              bg_image = EXCLUDED.bg_image,
-              theme_color = EXCLUDED.theme_color,
-              accent_bg = EXCLUDED.accent_bg,
-              is_custom = EXCLUDED.is_custom,
-              order_index = EXCLUDED.order_index,
-              updated_at = EXCLUDED.updated_at
-          `, [
-            key,
-            grp.name || 'กลุ่มกาแฟสร้างสรรค์คุณธรรม',
-            grp.bgImage || grp.bg_image || '/theme/coffee_preset_01_beans.jpg',
-            grp.themeColor || grp.theme_color || '#78350f',
-            grp.accentBg || grp.accent_bg || '#fef3c7',
-            grp.isCustom !== undefined ? (grp.isCustom ? 1 : 0) : 1,
-            orderIndex,
-            now,
-            now
-          ]);
-        }
-
-        const rowsRes = await pgMdcPool.query('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC');
-        const groups = rowsRes.rows.map((r) => ({
-          key: r.key,
-          name: r.name,
-          bgImage: r.bg_image,
-          themeColor: r.theme_color,
-          accentBg: r.accent_bg,
-          isCustom: Boolean(r.is_custom)
-        }));
-
-        try { fs.writeFileSync(coffeeGroupsFile, JSON.stringify(groups, null, 2), 'utf8'); } catch {}
-
-        res.statusCode = 200;
-        res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        res.end(JSON.stringify({ ok: true, groups, dbType: 'postgres', dbName: 'DB-MDC', message: 'บันทึกกลุ่มกาแฟลง PostgreSQL (DB-MDC) เรียบร้อยแล้ว' }));
-        return;
-      }
+      const grp = body.group || body;
+      const rawProv = body.province || grp.province || urlObj.searchParams.get('province') || '';
+      const normProv = normalizeActivityProvince(rawProv) || 'พระนครศรีอยุธยา';
 
       if (body.action === 'reset') {
-        db.prepare('DELETE FROM pilot_coffee_groups').run();
-        const defaultGroups = [
-          { key: 'mocha', name: 'กลุ่มมอคค่า', bg_image: '/theme/coffee_mocha_bg.jpg', theme_color: '#78350f', accent_bg: '#fef3c7', is_custom: 0, order_index: 1 },
-          { key: 'cappuccino', name: 'กลุ่มคาปูชิโน', bg_image: '/theme/coffee_cappuccino_bg.jpg', theme_color: '#92400e', accent_bg: '#ffedd5', is_custom: 0, order_index: 2 },
-          { key: 'americano', name: 'กลุ่มอเมริกาโน', bg_image: '/theme/coffee_americano_bg.jpg', theme_color: '#1c1917', accent_bg: '#f5f5f4', is_custom: 0, order_index: 3 },
-          { key: 'espresso', name: 'กลุ่มเอสเพรสโซ', bg_image: '/theme/coffee_preset_05_espresso.jpg', theme_color: '#451a03', accent_bg: '#fef2f2', is_custom: 0, order_index: 4 },
-          { key: 'latte', name: 'กลุ่มลาเต้', bg_image: '/theme/coffee_preset_06_latte.jpg', theme_color: '#b45309', accent_bg: '#fffbeb', is_custom: 0, order_index: 5 }
-        ];
-        const insertStmt = db.prepare(`
-          INSERT INTO pilot_coffee_groups (key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        for (const g of defaultGroups) {
-          insertStmt.run(g.key, g.name, g.bg_image, g.theme_color, g.accent_bg, g.is_custom, g.order_index, now, now);
-        }
+        await pgMdcPool.query('DELETE FROM pilot_coffee_groups WHERE province = $1', [normProv]);
+        await ensureCoffeeGroupsForProvincePg(pgMdcPool, normProv);
       } else {
-        const grp = body.group || body;
-        const currentRows = db.prepare('SELECT * FROM pilot_coffee_groups').all();
-        const rawKey = (grp.key || `group_${Date.now()}`).toLowerCase().replace(/[^a-z0-9]/g, '_');
-        const key = currentRows.some((r) => r.key === rawKey && (!body.isEdit || body.originalKey !== r.key))
+        await ensureCoffeeGroupsForProvincePg(pgMdcPool, normProv);
+        const currentRows = (await pgMdcPool.query('SELECT key FROM pilot_coffee_groups WHERE province = $1', [normProv])).rows;
+        const rawKey = (grp.key || `group_${Date.now()}`).toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        const originalKey = body.originalKey ? String(body.originalKey) : '';
+
+        if (body.isEdit && originalKey && originalKey !== rawKey) {
+          await pgMdcPool.query('DELETE FROM pilot_coffee_groups WHERE province = $1 AND key = $2', [normProv, originalKey]);
+        }
+
+        const key = currentRows.some((r) => r.key === rawKey && (!body.isEdit || (originalKey || rawKey) !== r.key))
           ? (body.isEdit ? rawKey : `${rawKey}_${Date.now()}`)
           : rawKey;
 
-        const maxOrder = db.prepare('SELECT MAX(order_index) as m FROM pilot_coffee_groups').get()?.m || 0;
+        const maxOrderRes = await pgMdcPool.query('SELECT MAX(order_index) as m FROM pilot_coffee_groups WHERE province = $1', [normProv]);
+        const maxOrder = maxOrderRes.rows[0]?.m || 0;
         const orderIndex = typeof grp.orderIndex === 'number' ? grp.orderIndex : maxOrder + 1;
 
-        db.prepare(`
-          INSERT OR REPLACE INTO pilot_coffee_groups 
-          (key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM pilot_coffee_groups WHERE key = ?), ?), ?)
-        `).run(
+        await pgMdcPool.query(`
+          INSERT INTO pilot_coffee_groups (province, key, name, bg_image, theme_color, accent_bg, is_custom, order_index, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          ON CONFLICT (province, key) DO UPDATE SET
+            name = EXCLUDED.name,
+            bg_image = EXCLUDED.bg_image,
+            theme_color = EXCLUDED.theme_color,
+            accent_bg = EXCLUDED.accent_bg,
+            is_custom = EXCLUDED.is_custom,
+            order_index = EXCLUDED.order_index,
+            updated_at = EXCLUDED.updated_at
+        `, [
+          normProv,
           key,
           grp.name || 'กลุ่มกาแฟสร้างสรรค์คุณธรรม',
           grp.bgImage || grp.bg_image || '/theme/coffee_preset_01_beans.jpg',
@@ -2836,207 +2650,114 @@ async function handleApiRequest(req, res, urlObj) {
           grp.accentBg || grp.accent_bg || '#fef3c7',
           grp.isCustom !== undefined ? (grp.isCustom ? 1 : 0) : 1,
           orderIndex,
-          key,
           now,
           now
-        );
+        ]);
       }
 
-      const rows = db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all();
-      const groups = rows.map((r) => ({
+      const rowsRes = await pgMdcPool.query(
+        'SELECT * FROM pilot_coffee_groups WHERE province = $1 ORDER BY order_index ASC, created_at ASC',
+        [normProv]
+      );
+      const groups = rowsRes.rows.map((r) => ({
+        province: r.province,
         key: r.key,
         name: r.name,
         bgImage: r.bg_image,
         themeColor: r.theme_color,
         accentBg: r.accent_bg,
-        isCustom: Boolean(r.is_custom)
+        isCustom: Boolean(r.is_custom),
+        orderIndex: r.order_index
       }));
 
-      try {
-        fs.writeFileSync(coffeeGroupsFile, JSON.stringify(groups, null, 2), 'utf8');
-      } catch {}
-
       res.statusCode = 200;
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      res.end(JSON.stringify({ ok: true, groups, message: 'บันทึกกลุ่มกาแฟลง SQLite เรียบร้อยแล้ว' }));
+      res.end(JSON.stringify({ ok: true, province: normProv, groups, dbType: 'postgres', dbName: 'DB-MDC', message: 'บันทึกกลุ่มกาแฟลง PostgreSQL (DB-MDC) เรียบร้อยแล้ว' }));
       return;
     } catch (err) {
       res.statusCode = 500;
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.end(JSON.stringify({ ok: false, error: err?.message || 'Failed to save coffee group' }));
       return;
     }
   }
 
-  // 5.2.7 DELETE /api/pilot-sqlite/coffee-groups
+  // 5.2.7 DELETE /api/activity/coffee-groups (PostgreSQL DB-MDC only, strict 1:1 per province)
   if (req.method === 'DELETE' && (pathname === '/api/pilot-sqlite/coffee-groups' || pathname === '/api/pilot-postgres/coffee-groups')) {
+    if (!requirePostgres(res)) return;
     try {
       const key = urlObj.searchParams.get('key');
+      const rawProv = urlObj.searchParams.get('province') || '';
+      const normProv = normalizeActivityProvince(rawProv) || 'พระนครศรีอยุธยา';
       if (!key) {
         res.statusCode = 400;
-        res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.end(JSON.stringify({ ok: false, error: 'Missing key parameter' }));
         return;
       }
 
-      if (pgMdcPool) {
-        const cRes = await pgMdcPool.query('SELECT COUNT(*) as cnt FROM pilot_coffee_groups');
-        const count = Number(cRes.rows[0]?.cnt || 0);
-        if (count <= 1) {
-          res.statusCode = 400;
-          res.end(JSON.stringify({ ok: false, error: 'ไม่สามารถลบกลุ่มทั้งหมดได้ ต้องมีอย่างน้อย 1 กลุ่ม' }));
-          return;
-        }
-
-        await pgMdcPool.query('DELETE FROM pilot_coffee_groups WHERE key = $1', [key]);
-
-        const rowsRes = await pgMdcPool.query('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC');
-        const groups = rowsRes.rows.map((r) => ({
-          key: r.key,
-          name: r.name,
-          bgImage: r.bg_image,
-          themeColor: r.theme_color,
-          accentBg: r.accent_bg,
-          isCustom: Boolean(r.is_custom)
-        }));
-
-        try { fs.writeFileSync(coffeeGroupsFile, JSON.stringify(groups, null, 2), 'utf8'); } catch {}
-
-        res.statusCode = 200;
-        res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        res.end(JSON.stringify({ ok: true, groups, dbType: 'postgres', dbName: 'DB-MDC', message: 'ลบกลุ่มกาแฟจาก PostgreSQL (DB-MDC) เรียบร้อยแล้ว' }));
-        return;
-      }
-
-      const count = db.prepare('SELECT COUNT(*) as cnt FROM pilot_coffee_groups').get()?.cnt || 0;
+      const cRes = await pgMdcPool.query('SELECT COUNT(*) as cnt FROM pilot_coffee_groups WHERE province = $1', [normProv]);
+      const count = Number(cRes.rows[0]?.cnt || 0);
       if (count <= 1) {
         res.statusCode = 400;
-        res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.end(JSON.stringify({ ok: false, error: 'ไม่สามารถลบกลุ่มทั้งหมดได้ ต้องมีอย่างน้อย 1 กลุ่ม' }));
         return;
       }
 
-      db.prepare('DELETE FROM pilot_coffee_groups WHERE key = ?').run(key);
+      await pgMdcPool.query('DELETE FROM pilot_coffee_groups WHERE province = $1 AND key = $2', [normProv, key]);
 
-      const rows = db.prepare('SELECT * FROM pilot_coffee_groups ORDER BY order_index ASC, created_at ASC').all();
-      const groups = rows.map((r) => ({
+      const rowsRes = await pgMdcPool.query(
+        'SELECT * FROM pilot_coffee_groups WHERE province = $1 ORDER BY order_index ASC, created_at ASC',
+        [normProv]
+      );
+      const groups = rowsRes.rows.map((r) => ({
+        province: r.province,
         key: r.key,
         name: r.name,
         bgImage: r.bg_image,
         themeColor: r.theme_color,
         accentBg: r.accent_bg,
-        isCustom: Boolean(r.is_custom)
+        isCustom: Boolean(r.is_custom),
+        orderIndex: r.order_index
       }));
 
-      try {
-        fs.writeFileSync(coffeeGroupsFile, JSON.stringify(groups, null, 2), 'utf8');
-      } catch {}
-
       res.statusCode = 200;
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      res.end(JSON.stringify({ ok: true, groups, message: 'ลบกลุ่มกาแฟจาก SQLite เรียบร้อยแล้ว' }));
+      res.end(JSON.stringify({ ok: true, province: normProv, groups, dbType: 'postgres', dbName: 'DB-MDC', message: 'ลบกลุ่มกาแฟจาก PostgreSQL (DB-MDC) เรียบร้อยแล้ว' }));
       return;
     } catch (err) {
       res.statusCode = 500;
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.end(JSON.stringify({ ok: false, error: err?.message || 'Failed to delete coffee group' }));
       return;
     }
   }
 
-  // 5.3 GET /api/pilot-sqlite/hackathon-projects
+  // 5.3 GET /api/activity/hackathon-projects (PostgreSQL DB-MDC only, strict 1:1 province)
   if (req.method === 'GET' && (pathname === '/api/pilot-sqlite/hackathon-projects' || pathname === '/api/pilot-postgres/hackathon-projects')) {
+    if (!requirePostgres(res)) return;
     const rawProvince = (urlObj.searchParams.get('province') || '').trim();
     const includePrecheck = urlObj.searchParams.get('include_precheck') === 'true';
 
-    if (pgMdcPool) {
-      let query = 'SELECT * FROM pilot_hackathon_projects';
-      const params = [];
-      const whereConditions = [];
+    let query = 'SELECT * FROM pilot_hackathon_projects';
+    const params = [];
+    const whereConditions = [];
 
-      if (!includePrecheck) {
-        whereConditions.push("(is_precheck = 0 OR is_precheck IS NULL) AND id NOT LIKE 'precheck-%'");
-      }
-
-      if (rawProvince) {
-        let matchProvs = [rawProvince];
-        if (rawProvince === 'อยุธยา' || rawProvince === 'พระนครศรีอยุธยา') {
-          matchProvs = ['อยุธยา', 'พระนครศรีอยุธยา'];
-        } else if (rawProvince === 'อุดรธานี' || rawProvince === 'กาฬสินธุ์') {
-          matchProvs = ['อุดรธานี', 'กาฬสินธุ์'];
-        } else if (rawProvince === 'ลำปาง' || rawProvince === 'น่าน') {
-          matchProvs = ['ลำปาง', 'น่าน'];
-        } else if (rawProvince === 'สุราษฎร์ธานี' || rawProvince === 'พังงา') {
-          matchProvs = ['สุราษฎร์ธานี', 'พังงา'];
-        }
-        const pHolders = matchProvs.map((p) => {
-          params.push(p);
-          return `$${params.length}`;
-        }).join(', ');
-        whereConditions.push(`province IN (${pHolders})`);
-      }
-
-      if (whereConditions.length > 0) {
-        query += ` WHERE ${whereConditions.join(' AND ')}`;
-      }
-      query += ' ORDER BY created_at DESC';
-
-      const pRes = await pgMdcPool.query(query, params);
-      const projects = pRes.rows.map((r) => ({
-        id: r.id,
-        province: r.province,
-        groupKey: r.group_key,
-        groupName: r.group_name,
-        projectName: r.project_name,
-        targetMoralVirtue: r.target_moral_virtue,
-        targetAudience: r.target_audience,
-        targetArea: r.target_area,
-        proposalDetails: r.proposal_details,
-        activityPlan: r.activity_plan,
-        behavioralKpi: r.behavioral_kpi,
-        proposerName: r.proposer_name,
-        proposerAgency: r.proposer_agency,
-        proposerPosition: r.proposer_position || '',
-        proposerLevel: r.proposer_level,
-        challengeTopic: r.challenge_topic,
-        evaluatedCriteriaVirtues: r.evaluated_criteria_virtues_json ? JSON.parse(r.evaluated_criteria_virtues_json) : [],
-        aiScore: Number(r.ai_score),
-        aiScoreBreakdown: r.ai_score_breakdown_json ? JSON.parse(r.ai_score_breakdown_json) : { alignment: 0, feasibility: 0, innovation: 0, participation: 0 },
-        aiRecommendations: r.ai_recommendations,
-        communityVotes: Number(r.community_votes || 0),
-        isPrecheck: Boolean(r.is_precheck),
-        createdAt: r.created_at
-      }));
-
-      res.statusCode = 200;
-      res.end(JSON.stringify({ ok: true, data: projects, total: projects.length, dbType: 'postgres', dbName: 'DB-MDC', dbPath: 'PostgreSQL: DB-MDC' }));
-      return;
+    if (!includePrecheck) {
+      whereConditions.push("(is_precheck = 0 OR is_precheck IS NULL) AND id NOT LIKE 'precheck-%'");
     }
 
-    let rows = [];
-    const precheckFilter = includePrecheck
-      ? ''
-      : "AND (is_precheck = 0 OR is_precheck IS NULL) AND id NOT LIKE 'precheck-%'";
     if (rawProvince) {
-      let matchProvs = [rawProvince];
-      if (rawProvince === 'อยุธยา' || rawProvince === 'พระนครศรีอยุธยา') {
-        matchProvs = ['อยุธยา', 'พระนครศรีอยุธยา'];
-      } else if (rawProvince === 'อุดรธานี' || rawProvince === 'กาฬสินธุ์') {
-        matchProvs = ['อุดรธานี', 'กาฬสินธุ์'];
-      } else if (rawProvince === 'ลำปาง' || rawProvince === 'น่าน') {
-        matchProvs = ['ลำปาง', 'น่าน'];
-      } else if (rawProvince === 'สุราษฎร์ธานี' || rawProvince === 'พังงา') {
-        matchProvs = ['สุราษฎร์ธานี', 'พังงา'];
-      }
-      const placeholders = matchProvs.map(() => '?').join(', ');
-      rows = db.prepare(`SELECT * FROM pilot_hackathon_projects WHERE province IN (${placeholders}) ${precheckFilter} ORDER BY created_at DESC`).all(...matchProvs);
-    } else {
-      const whereClause = includePrecheck
-        ? ''
-        : "WHERE (is_precheck = 0 OR is_precheck IS NULL) AND id NOT LIKE 'precheck-%'";
-      rows = db.prepare(`SELECT * FROM pilot_hackathon_projects ${whereClause} ORDER BY created_at DESC`).all();
+      const matchProvs = getProvinceMatchList(rawProvince);
+      const pHolders = matchProvs.map((p) => {
+        params.push(p);
+        return `$${params.length}`;
+      }).join(', ');
+      whereConditions.push(`province IN (${pHolders})`);
     }
-    const projects = rows.map((r) => ({
+
+    if (whereConditions.length > 0) {
+      query += ` WHERE ${whereConditions.join(' AND ')}`;
+    }
+    query += ' ORDER BY created_at DESC';
+
+    const pRes = await pgMdcPool.query(query, params);
+    const projects = pRes.rows.map((r) => ({
       id: r.id,
       province: r.province,
       groupKey: r.group_key,
@@ -3063,15 +2784,16 @@ async function handleApiRequest(req, res, urlObj) {
     }));
 
     res.statusCode = 200;
-    res.end(JSON.stringify({ ok: true, data: projects, total: projects.length, dbPath: 'data/pilot_activities_4regions.sqlite' }));
+    res.end(JSON.stringify({ ok: true, data: projects, total: projects.length, dbType: 'postgres', dbName: 'DB-MDC', dbPath: 'PostgreSQL 16 (DB-MDC)' }));
     return;
   }
 
-  // 5.4 POST /api/pilot-sqlite/hackathon-projects
+  // 5.4 POST /api/activity/hackathon-projects (PostgreSQL DB-MDC only)
   if (req.method === 'POST' && (pathname === '/api/pilot-sqlite/hackathon-projects' || pathname === '/api/pilot-postgres/hackathon-projects')) {
+    if (!requirePostgres(res)) return;
     const body = await readJsonBody(req);
     const id = body.id || `proj-${body.groupKey || 'group'}-${Date.now()}`;
-    const province = body.province || 'ส่วนกลาง';
+    const province = normalizeActivityProvince(body.province) || 'ส่วนกลาง';
     const now = new Date().toISOString();
     const groupKey = body.groupKey || 'mocha';
     const groupName = body.groupName || 'กลุ่มสร้างสรรค์คุณธรรม';
@@ -3111,130 +2833,90 @@ async function handleApiRequest(req, res, urlObj) {
       communityVotes, isPrecheck, createdAt, now
     ];
 
-    if (pgMdcPool) {
-      await pgMdcPool.query(`
-        INSERT INTO pilot_hackathon_projects (
-          id, province, group_key, group_name, project_name, target_moral_virtue,
-          target_audience, target_area, proposal_details, activity_plan, behavioral_kpi,
-          proposer_name, proposer_agency, proposer_position, proposer_level, challenge_topic,
-          evaluated_criteria_virtues_json, ai_score, ai_score_breakdown_json, ai_recommendations,
-          community_votes, is_precheck, created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
-        ON CONFLICT (id) DO UPDATE SET
-          province = EXCLUDED.province,
-          group_key = EXCLUDED.group_key,
-          group_name = EXCLUDED.group_name,
-          project_name = EXCLUDED.project_name,
-          target_moral_virtue = EXCLUDED.target_moral_virtue,
-          target_audience = EXCLUDED.target_audience,
-          target_area = EXCLUDED.target_area,
-          proposal_details = EXCLUDED.proposal_details,
-          activity_plan = EXCLUDED.activity_plan,
-          behavioral_kpi = EXCLUDED.behavioral_kpi,
-          proposer_name = EXCLUDED.proposer_name,
-          proposer_agency = EXCLUDED.proposer_agency,
-          proposer_position = EXCLUDED.proposer_position,
-          proposer_level = EXCLUDED.proposer_level,
-          challenge_topic = EXCLUDED.challenge_topic,
-          evaluated_criteria_virtues_json = EXCLUDED.evaluated_criteria_virtues_json,
-          ai_score = EXCLUDED.ai_score,
-          ai_score_breakdown_json = EXCLUDED.ai_score_breakdown_json,
-          ai_recommendations = EXCLUDED.ai_recommendations,
-          community_votes = EXCLUDED.community_votes,
-          is_precheck = EXCLUDED.is_precheck,
-          updated_at = EXCLUDED.updated_at
-      `, params);
-
-      res.statusCode = 200;
-      res.end(JSON.stringify({ ok: true, id, dbType: 'postgres', dbName: 'DB-MDC', dbPath: 'PostgreSQL: DB-MDC', aiScore, isPrecheck, updatedAt: now }));
-      return;
-    }
-
-    db.prepare(`
-      INSERT OR REPLACE INTO pilot_hackathon_projects (
+    await pgMdcPool.query(`
+      INSERT INTO pilot_hackathon_projects (
         id, province, group_key, group_name, project_name, target_moral_virtue,
         target_audience, target_area, proposal_details, activity_plan, behavioral_kpi,
         proposer_name, proposer_agency, proposer_position, proposer_level, challenge_topic,
         evaluated_criteria_virtues_json, ai_score, ai_score_breakdown_json, ai_recommendations,
         community_votes, is_precheck, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(...params);
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+      ON CONFLICT (id) DO UPDATE SET
+        province = EXCLUDED.province,
+        group_key = EXCLUDED.group_key,
+        group_name = EXCLUDED.group_name,
+        project_name = EXCLUDED.project_name,
+        target_moral_virtue = EXCLUDED.target_moral_virtue,
+        target_audience = EXCLUDED.target_audience,
+        target_area = EXCLUDED.target_area,
+        proposal_details = EXCLUDED.proposal_details,
+        activity_plan = EXCLUDED.activity_plan,
+        behavioral_kpi = EXCLUDED.behavioral_kpi,
+        proposer_name = EXCLUDED.proposer_name,
+        proposer_agency = EXCLUDED.proposer_agency,
+        proposer_position = EXCLUDED.proposer_position,
+        proposer_level = EXCLUDED.proposer_level,
+        challenge_topic = EXCLUDED.challenge_topic,
+        evaluated_criteria_virtues_json = EXCLUDED.evaluated_criteria_virtues_json,
+        ai_score = EXCLUDED.ai_score,
+        ai_score_breakdown_json = EXCLUDED.ai_score_breakdown_json,
+        ai_recommendations = EXCLUDED.ai_recommendations,
+        community_votes = EXCLUDED.community_votes,
+        is_precheck = EXCLUDED.is_precheck,
+        updated_at = EXCLUDED.updated_at
+    `, params);
 
     res.statusCode = 200;
-    res.end(JSON.stringify({ ok: true, id, dbPath: 'data/pilot_activities_4regions.sqlite', aiScore, isPrecheck, updatedAt: now }));
+    res.end(JSON.stringify({ ok: true, id, dbType: 'postgres', dbName: 'DB-MDC', dbPath: 'PostgreSQL 16 (DB-MDC)', aiScore, isPrecheck, updatedAt: now }));
     return;
   }
 
-  // 5.4.1 POST /api/pilot-sqlite/hackathon-vote
+  // 5.4.1 POST /api/activity/hackathon-vote (PostgreSQL DB-MDC only)
   if (req.method === 'POST' && (pathname === '/api/pilot-sqlite/hackathon-vote' || pathname === '/api/pilot-postgres/hackathon-vote')) {
+    if (!requirePostgres(res)) return;
     const body = await readJsonBody(req);
     const projectId = body.projectId;
     const newVotes = typeof body.newVoteCount === 'number' ? body.newVoteCount : 1;
     const now = new Date().toISOString();
 
-    if (pgMdcPool) {
-      if (projectId) {
-        await pgMdcPool.query('UPDATE pilot_hackathon_projects SET community_votes = $1, updated_at = $2 WHERE id = $3', [newVotes, now, projectId]);
-      }
-      res.statusCode = 200;
-      res.end(JSON.stringify({ ok: true, projectId, newVotes, dbType: 'postgres', dbName: 'DB-MDC', updatedAt: now }));
-      return;
-    }
-
     if (projectId) {
-      db.prepare('UPDATE pilot_hackathon_projects SET community_votes = ?, updated_at = ? WHERE id = ?').run(newVotes, now, projectId);
+      await pgMdcPool.query('UPDATE pilot_hackathon_projects SET community_votes = $1, updated_at = $2 WHERE id = $3', [newVotes, now, projectId]);
     }
     res.statusCode = 200;
-    res.end(JSON.stringify({ ok: true, projectId, newVotes, updatedAt: now }));
+    res.end(JSON.stringify({ ok: true, projectId, newVotes, dbType: 'postgres', dbName: 'DB-MDC', updatedAt: now }));
     return;
   }
 
-  // 5.5 POST /api/pilot-sqlite/hackathon-reset
+  // 5.5 POST /api/activity/hackathon-reset (PostgreSQL DB-MDC only)
   if (req.method === 'POST' && (pathname === '/api/pilot-sqlite/hackathon-reset' || pathname === '/api/pilot-postgres/hackathon-reset')) {
+    if (!requirePostgres(res)) return;
     const body = await readJsonBody(req);
-    const province = body.province || '';
+    const province = (body.province || '').trim();
 
-    if (pgMdcPool) {
-      let delRes;
-      if (province) {
-        delRes = await pgMdcPool.query('DELETE FROM pilot_hackathon_projects WHERE province = $1', [province]);
-      } else {
-        delRes = await pgMdcPool.query('DELETE FROM pilot_hackathon_projects');
-      }
-      const deletedCount = delRes.rowCount || 0;
-      res.statusCode = 200;
-      res.end(JSON.stringify({
-        ok: true,
-        message: `รีเซ็ตฐานข้อมูลโครงการ Hackathon เรียบร้อยแล้ว (ลบ ${deletedCount} โครงการใน PostgreSQL: DB-MDC)`,
-        deletedCount,
-        dbType: 'postgres',
-        dbName: 'DB-MDC',
-        dbPath: 'PostgreSQL: DB-MDC'
-      }));
-      return;
-    }
-
-    let deletedCount = 0;
+    let delRes;
     if (province) {
-      const info = db.prepare('DELETE FROM pilot_hackathon_projects WHERE province = ?').run(province);
-      deletedCount = Number(info.changes);
+      const provList = getProvinceMatchList(province);
+      const placeholders = provList.map((_, i) => `$${i + 1}`).join(', ');
+      delRes = await pgMdcPool.query(`DELETE FROM pilot_hackathon_projects WHERE province IN (${placeholders})`, provList);
     } else {
-      const info = db.prepare('DELETE FROM pilot_hackathon_projects').run();
-      deletedCount = Number(info.changes);
+      delRes = await pgMdcPool.query('DELETE FROM pilot_hackathon_projects');
     }
-
+    const deletedCount = delRes.rowCount || 0;
     res.statusCode = 200;
     res.end(JSON.stringify({
       ok: true,
-      message: `รีเซ็ตฐานข้อมูลโครงการ Hackathon เรียบร้อยแล้ว (ลบ ${deletedCount} โครงการใน SQLite)`,
+      message: `รีเซ็ตฐานข้อมูลโครงการ Hackathon เรียบร้อยแล้ว (ลบ ${deletedCount} โครงการใน PostgreSQL: DB-MDC)`,
       deletedCount,
-      dbPath: 'data/pilot_activities_4regions.sqlite'
+      dbType: 'postgres',
+      dbName: 'DB-MDC',
+      dbPath: 'PostgreSQL 16 (DB-MDC)'
     }));
     return;
   }
 
-  // 5.5.0 POST /api/pilot-sqlite/project-delete
+  // 5.5.0 POST /api/activity/project-delete (PostgreSQL DB-MDC only)
   if (req.method === 'POST' && (pathname === '/api/pilot-sqlite/project-delete' || pathname === '/api/pilot-postgres/project-delete')) {
+    if (!requirePostgres(res)) return;
     const body = await readJsonBody(req);
     const projectId = body.id || body.projectId || '';
     if (!projectId) {
@@ -3243,77 +2925,39 @@ async function handleApiRequest(req, res, urlObj) {
       return;
     }
 
-    if (pgMdcPool) {
-      const delRes = await pgMdcPool.query('DELETE FROM pilot_hackathon_projects WHERE id = $1', [projectId]);
-      const deletedCount = delRes.rowCount || 0;
-      res.statusCode = 200;
-      res.end(JSON.stringify({
-        ok: true,
-        message: `ลบโครงการรหัส ${projectId} เรียบร้อยแล้ว (${deletedCount} แถวใน PostgreSQL: DB-MDC)`,
-        deletedCount,
-        id: projectId,
-        dbType: 'postgres',
-        dbName: 'DB-MDC',
-        dbPath: 'PostgreSQL: DB-MDC'
-      }));
-      return;
-    }
-
-    const info = db.prepare('DELETE FROM pilot_hackathon_projects WHERE id = ?').run(projectId);
-    const deletedCount = Number(info.changes);
+    const delRes = await pgMdcPool.query('DELETE FROM pilot_hackathon_projects WHERE id = $1', [projectId]);
+    const deletedCount = delRes.rowCount || 0;
     res.statusCode = 200;
     res.end(JSON.stringify({
       ok: true,
-      message: `ลบโครงการรหัส ${projectId} เรียบร้อยแล้ว (${deletedCount} แถวใน SQLite)`,
+      message: `ลบโครงการรหัส ${projectId} เรียบร้อยแล้ว (${deletedCount} แถวใน PostgreSQL: DB-MDC)`,
       deletedCount,
       id: projectId,
-      dbPath: 'data/pilot_activities_4regions.sqlite'
+      dbType: 'postgres',
+      dbName: 'DB-MDC',
+      dbPath: 'PostgreSQL 16 (DB-MDC)'
     }));
     return;
   }
 
-  // 5.5.1 POST /api/pilot-sqlite/clear-activity-vote-system
+  // 5.5.1 POST /api/activity/clear-activity-vote-system (PostgreSQL DB-MDC only)
   if (req.method === 'POST' && (pathname === '/api/pilot-sqlite/clear-activity-vote-system' || pathname === '/api/pilot-postgres/clear-activity-vote-system')) {
+    if (!requirePostgres(res)) return;
     try {
-      if (pgMdcPool) {
-        const r1 = await pgMdcPool.query('DELETE FROM pilot_hackathon_projects');
-        const r2 = await pgMdcPool.query('DELETE FROM pilot_hackathon_criteria');
-        const r3 = await pgMdcPool.query('DELETE FROM pilot_agency_registrations');
-        const r4 = await pgMdcPool.query('DELETE FROM pilot_lessons_and_policies');
-        const delProj = r1.rowCount || 0;
-        const delCrit = r2.rowCount || 0;
-        const delAgency = r3.rowCount || 0;
-        const delLesson = r4.rowCount || 0;
-        const totalDeleted = delProj + delCrit + delAgency + delLesson;
-
-        res.statusCode = 200;
-        res.end(JSON.stringify({
-          ok: true,
-          message: `ลบข้อมูลในตารางทั้งหมดของระบบกิจกรรมและการโหวตโครงการเรียบร้อยแล้ว (รวม ${totalDeleted} แถวใน PostgreSQL: DB-MDC)`,
-          totalDeleted,
-          deletedCounts: {
-            pilot_hackathon_projects: delProj,
-            pilot_hackathon_criteria: delCrit,
-            pilot_agency_registrations: delAgency,
-            pilot_lessons_and_policies: delLesson
-          },
-          dbType: 'postgres',
-          dbName: 'DB-MDC',
-          dbPath: 'PostgreSQL: DB-MDC'
-        }));
-        return;
-      }
-
-      const delProj = Number(db.prepare('DELETE FROM pilot_hackathon_projects').run().changes);
-      const delCrit = Number(db.prepare('DELETE FROM pilot_hackathon_criteria').run().changes);
-      const delAgency = Number(db.prepare('DELETE FROM pilot_agency_registrations').run().changes);
-      const delLesson = Number(db.prepare('DELETE FROM pilot_lessons_and_policies').run().changes);
+      const r1 = await pgMdcPool.query('DELETE FROM pilot_hackathon_projects');
+      const r2 = await pgMdcPool.query('DELETE FROM pilot_hackathon_criteria');
+      const r3 = await pgMdcPool.query('DELETE FROM pilot_agency_registrations');
+      const r4 = await pgMdcPool.query('DELETE FROM pilot_lessons_and_policies');
+      const delProj = r1.rowCount || 0;
+      const delCrit = r2.rowCount || 0;
+      const delAgency = r3.rowCount || 0;
+      const delLesson = r4.rowCount || 0;
       const totalDeleted = delProj + delCrit + delAgency + delLesson;
 
       res.statusCode = 200;
       res.end(JSON.stringify({
         ok: true,
-        message: `ลบข้อมูลในตารางทั้งหมดของระบบกิจกรรมและการโหวตโครงการเรียบร้อยแล้ว (รวม ${totalDeleted} แถวใน SQLite)`,
+        message: `ลบข้อมูลในตารางทั้งหมดของระบบกิจกรรมและการโหวตโครงการเรียบร้อยแล้ว (รวม ${totalDeleted} แถวใน PostgreSQL: DB-MDC)`,
         totalDeleted,
         deletedCounts: {
           pilot_hackathon_projects: delProj,
@@ -3321,7 +2965,9 @@ async function handleApiRequest(req, res, urlObj) {
           pilot_agency_registrations: delAgency,
           pilot_lessons_and_policies: delLesson
         },
-        dbPath: 'data/pilot_activities_4regions.sqlite'
+        dbType: 'postgres',
+        dbName: 'DB-MDC',
+        dbPath: 'PostgreSQL 16 (DB-MDC)'
       }));
       return;
     } catch (err) {
@@ -3331,55 +2977,33 @@ async function handleApiRequest(req, res, urlObj) {
     }
   }
 
-  // 5.5.2 POST /api/pilot-sqlite/reset-registrations
+  // 5.5.2 POST /api/activity/reset-registrations (PostgreSQL DB-MDC only)
   if (req.method === 'POST' && (pathname === '/api/pilot-sqlite/reset-registrations' || pathname === '/api/pilot-postgres/reset-registrations')) {
+    if (!requirePostgres(res)) return;
     try {
-      const province = urlObj.searchParams.get('province');
-
-      if (pgMdcPool) {
-        let deletedCount = 0;
-        if (province && province !== 'ALL') {
-          const provList = (province === 'อยุธยา' || province === 'พระนครศรีอยุธยา') ? ['อยุธยา', 'พระนครศรีอยุธยา'] : [province];
-          const placeholders = provList.map((_, i) => `$${i + 1}`).join(', ');
-          const delRes = await pgMdcPool.query(`DELETE FROM pilot_agency_registrations WHERE province IN (${placeholders})`, provList);
-          deletedCount = delRes.rowCount || 0;
-        } else {
-          const delRes = await pgMdcPool.query('DELETE FROM pilot_agency_registrations');
-          deletedCount = delRes.rowCount || 0;
-        }
-
-        res.statusCode = 200;
-        res.end(JSON.stringify({
-          ok: true,
-          message: province && province !== 'ALL'
-            ? `ลบข้อมูลผู้ลงทะเบียนจังหวัด ${province} เรียบร้อยแล้ว (ลบ ${deletedCount} แถว ใน PostgreSQL: DB-MDC)`
-            : `ลบข้อมูลผู้ลงทะเบียนทั้งหมดเรียบร้อยแล้ว (ลบ ${deletedCount} แถว ใน PostgreSQL: DB-MDC)`,
-          deletedCount,
-          province: province || 'ALL',
-          dbType: 'postgres',
-          dbName: 'DB-MDC',
-          dbPath: 'PostgreSQL: DB-MDC'
-        }));
-        return;
-      }
-
+      const province = (urlObj.searchParams.get('province') || '').trim();
       let deletedCount = 0;
       if (province && province !== 'ALL') {
-        const provList = (province === 'อยุธยา' || province === 'พระนครศรีอยุธยา') ? ['อยุธยา', 'พระนครศรีอยุธยา'] : [province];
-        deletedCount = Number(db.prepare(`DELETE FROM pilot_agency_registrations WHERE province IN (${provList.map(() => '?').join(',')})`).run(...provList).changes);
+        const provList = getProvinceMatchList(province);
+        const placeholders = provList.map((_, i) => `$${i + 1}`).join(', ');
+        const delRes = await pgMdcPool.query(`DELETE FROM pilot_agency_registrations WHERE province IN (${placeholders})`, provList);
+        deletedCount = delRes.rowCount || 0;
       } else {
-        deletedCount = Number(db.prepare('DELETE FROM pilot_agency_registrations').run().changes);
+        const delRes = await pgMdcPool.query('DELETE FROM pilot_agency_registrations');
+        deletedCount = delRes.rowCount || 0;
       }
 
       res.statusCode = 200;
       res.end(JSON.stringify({
         ok: true,
         message: province && province !== 'ALL'
-          ? `ลบข้อมูลผู้ลงทะเบียนจังหวัด ${province} เรียบร้อยแล้ว (ลบ ${deletedCount} แถว)`
-          : `ลบข้อมูลผู้ลงทะเบียนทั้งหมดเรียบร้อยแล้ว (ลบ ${deletedCount} แถว)`,
+          ? `ลบข้อมูลผู้ลงทะเบียนจังหวัด ${province} เรียบร้อยแล้ว (ลบ ${deletedCount} แถว ใน PostgreSQL: DB-MDC)`
+          : `ลบข้อมูลผู้ลงทะเบียนทั้งหมดเรียบร้อยแล้ว (ลบ ${deletedCount} แถว ใน PostgreSQL: DB-MDC)`,
         deletedCount,
         province: province || 'ALL',
-        dbPath: 'data/pilot_activities_4regions.sqlite'
+        dbType: 'postgres',
+        dbName: 'DB-MDC',
+        dbPath: 'PostgreSQL 16 (DB-MDC)'
       }));
       return;
     } catch (err) {
@@ -3389,88 +3013,60 @@ async function handleApiRequest(req, res, urlObj) {
     }
   }
 
-  // 5.6 GET /api/pilot-sqlite/tables
+  // 5.6 GET /api/activity/tables (PostgreSQL DB-MDC only)
   if (req.method === 'GET' && (pathname === '/api/pilot-sqlite/tables' || pathname === '/api/pilot-postgres/tables')) {
+    if (!requirePostgres(res)) return;
     try {
-      if (pgMdcPool) {
-        const tblRes = await pgMdcPool.query(`
-          SELECT table_name 
-          FROM information_schema.tables 
-          WHERE table_schema = 'public' 
-          ORDER BY table_name ASC
-        `);
-        const tables = [];
-        for (const t of tblRes.rows) {
-          const tName = t.table_name;
-          let rowCount = 0;
-          try {
-            const cRes = await pgMdcPool.query(`SELECT COUNT(*) as cnt FROM "${tName}"`);
-            rowCount = Number(cRes.rows[0]?.cnt || 0);
-          } catch {}
-          let columns = [];
-          try {
-            const colRes = await pgMdcPool.query(
-              `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 ORDER BY ordinal_position ASC`,
-              [tName]
-            );
-            columns = colRes.rows.map(r => r.column_name);
-          } catch {}
-          tables.push({
-            name: tName,
-            rowCount,
-            columnCount: columns.length,
-            columns
-          });
-        }
-
-        res.statusCode = 200;
-        res.end(JSON.stringify({
-          ok: true,
-          dbType: 'postgres',
-          dbName: 'DB-MDC',
-          totalTables: tables.length,
-          tables,
-          dbPath: 'PostgreSQL: DB-MDC'
-        }));
-        return;
-      }
-
-      const tableRows = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name ASC").all();
-      const tables = tableRows.map(t => {
+      const tblRes = await pgMdcPool.query(`
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        ORDER BY table_name ASC
+      `);
+      const tables = [];
+      for (const t of tblRes.rows) {
+        const tName = t.table_name;
         let rowCount = 0;
+        try {
+          const cRes = await pgMdcPool.query(`SELECT COUNT(*) as cnt FROM "${tName}"`);
+          rowCount = Number(cRes.rows[0]?.cnt || 0);
+        } catch {}
         let columns = [];
         try {
-          const c = db.prepare(`SELECT COUNT(*) as count FROM "${t.name}"`).get();
-          rowCount = c?.count ?? 0;
+          const colRes = await pgMdcPool.query(
+            `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 ORDER BY ordinal_position ASC`,
+            [tName]
+          );
+          columns = colRes.rows.map(r => r.column_name);
         } catch {}
-        try {
-          const colInfo = db.prepare(`PRAGMA table_info("${t.name}")`).all();
-          columns = colInfo.map(ci => ci.name);
-        } catch {}
-        return {
-          name: t.name,
+        tables.push({
+          name: tName,
           rowCount,
           columnCount: columns.length,
           columns
-        };
-      });
+        });
+      }
 
       res.statusCode = 200;
       res.end(JSON.stringify({
         ok: true,
+        dbType: 'postgres',
+        dbName: 'DB-MDC',
         totalTables: tables.length,
         tables,
-        dbPath: 'data/pilot_activities_4regions.sqlite'
+        dbPath: 'PostgreSQL 16 (DB-MDC)'
       }));
+      return;
     } catch (err) {
       res.statusCode = 500;
-      res.end(JSON.stringify({ ok: false, error: err?.message || 'Failed to list SQLite tables' }));
+      res.end(JSON.stringify({ ok: false, error: err?.message || 'Failed to list PostgreSQL tables' }));
+      return;
     }
-    return;
   }
 
-  // 5.7 GET /api/pilot-sqlite/table-data
+  // 5.7 GET /api/activity/table-data (PostgreSQL DB-MDC only)
   if (req.method === 'GET' && (pathname === '/api/pilot-sqlite/table-data' || pathname === '/api/pilot-postgres/table-data')) {
+    if (!requirePostgres(res)) return;
     const tableName = urlObj.searchParams.get('table') || '';
     if (!tableName || !/^[a-zA-Z0-9_]+$/.test(tableName)) {
       res.statusCode = 400;
@@ -3479,80 +3075,56 @@ async function handleApiRequest(req, res, urlObj) {
     }
 
     try {
-      if (pgMdcPool) {
-        const checkRes = await pgMdcPool.query(
-          `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1`,
-          [tableName]
-        );
-        if (checkRes.rows.length === 0) {
-          res.statusCode = 404;
-          res.end(JSON.stringify({ ok: false, error: `Table '${tableName}' not found in PostgreSQL DB-MDC` }));
-          return;
-        }
-
-        const colRes = await pgMdcPool.query(
-          `SELECT column_name, ordinal_position, data_type, is_nullable, column_default 
-           FROM information_schema.columns 
-           WHERE table_schema = 'public' AND table_name = $1 
-           ORDER BY ordinal_position ASC`,
-          [tableName]
-        );
-        const columns = colRes.rows.map(c => ({
-          cid: c.ordinal_position,
-          name: c.column_name,
-          type: c.data_type,
-          notnull: c.is_nullable === 'NO' ? 1 : 0,
-          dflt_value: c.column_default,
-          pk: c.column_name === 'id' || c.column_name === 'key' ? 1 : 0
-        }));
-
-        const hasCreatedAt = colRes.rows.some(c => c.column_name === 'created_at');
-        const orderClause = hasCreatedAt ? ' ORDER BY created_at DESC' : '';
-        const rowsRes = await pgMdcPool.query(`SELECT * FROM "${tableName}"${orderClause} LIMIT 1000`);
-        const countRes = await pgMdcPool.query(`SELECT COUNT(*) as count FROM "${tableName}"`);
-        const totalCount = Number(countRes.rows[0]?.count || 0);
-
-        res.statusCode = 200;
-        res.end(JSON.stringify({
-          ok: true,
-          tableName,
-          rowCount: totalCount,
-          returnedCount: rowsRes.rows.length,
-          columns,
-          rows: rowsRes.rows,
-          dbType: 'postgres',
-          dbName: 'DB-MDC',
-          dbPath: 'PostgreSQL: DB-MDC'
-        }));
-        return;
-      }
-
-      const check = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = ?").get(tableName);
-      if (!check) {
+      const checkRes = await pgMdcPool.query(
+        `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1`,
+        [tableName]
+      );
+      if (checkRes.rows.length === 0) {
         res.statusCode = 404;
-        res.end(JSON.stringify({ ok: false, error: `Table '${tableName}' not found in SQLite` }));
+        res.end(JSON.stringify({ ok: false, error: `Table '${tableName}' not found in PostgreSQL DB-MDC` }));
         return;
       }
 
-      const columns = db.prepare(`PRAGMA table_info("${tableName}")`).all();
-      const hasCreatedAt = columns.some(c => c.name === 'created_at');
+      const colRes = await pgMdcPool.query(
+        `SELECT column_name, ordinal_position, data_type, is_nullable, column_default 
+         FROM information_schema.columns 
+         WHERE table_schema = 'public' AND table_name = $1 
+         ORDER BY ordinal_position ASC`,
+        [tableName]
+      );
+      const columns = colRes.rows.map(c => ({
+        cid: c.ordinal_position,
+        name: c.column_name,
+        type: c.data_type,
+        notnull: c.is_nullable === 'NO' ? 1 : 0,
+        dflt_value: c.column_default,
+        pk: c.column_name === 'id' || c.column_name === 'key' ? 1 : 0
+      }));
+
+      const hasCreatedAt = colRes.rows.some(c => c.column_name === 'created_at');
       const orderClause = hasCreatedAt ? ' ORDER BY created_at DESC' : '';
-      const rows = db.prepare(`SELECT * FROM "${tableName}"${orderClause} LIMIT 1000`).all();
+      const rowsRes = await pgMdcPool.query(`SELECT * FROM "${tableName}"${orderClause} LIMIT 1000`);
+      const countRes = await pgMdcPool.query(`SELECT COUNT(*) as count FROM "${tableName}"`);
+      const totalCount = Number(countRes.rows[0]?.count || 0);
 
       res.statusCode = 200;
       res.end(JSON.stringify({
         ok: true,
         tableName,
-        rowCount: rows.length,
+        rowCount: totalCount,
+        returnedCount: rowsRes.rows.length,
         columns,
-        rows,
-        dbPath: 'data/pilot_activities_4regions.sqlite'
+        rows: rowsRes.rows,
+        dbType: 'postgres',
+        dbName: 'DB-MDC',
+        dbPath: 'PostgreSQL 16 (DB-MDC)'
       }));
+      return;
     } catch (err) {
       res.statusCode = 500;
       res.end(JSON.stringify({ ok: false, error: err?.message || `Failed to read table ${tableName}` }));
+      return;
     }
-    return;
   }
 
   // 6. GET /api/duckdb/table?name=...
@@ -4210,6 +3782,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (
+      pathname.startsWith('/api/activity') ||
       pathname.startsWith('/api/pilot-sqlite') ||
       pathname.startsWith('/api/pilot-postgres') ||
       pathname.startsWith('/api/task-project') ||

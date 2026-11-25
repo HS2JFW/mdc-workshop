@@ -191,14 +191,16 @@ function parseSafeJsonArray<T>(raw: any): T[] {
 }
 
 export async function fetchPilotSqliteState(province?: PilotProvinceName): Promise<{
+  ok?: boolean;
   dbPath: string;
   recordsDir: string;
   agencies: PilotAgencyRegistration[];
   lessonsPolicies: PilotLessonAndPolicyRecord[];
+  error?: string;
 }> {
   try {
     const query = province ? `?province=${encodeURIComponent(province)}` : '';
-    const res = await fetch(`/api/activity/state${query}`);
+    const res = await fetch(`/api/activity/state${query}`, { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
       const agencies: PilotAgencyRegistration[] = (data.agencies || []).map((row: any) => ({
@@ -244,40 +246,48 @@ export async function fetchPilotSqliteState(province?: PilotProvinceName): Promi
         updated_at: row.updated_at || ''
       }));
 
+      if (typeof window !== 'undefined') {
+        try {
+          if (!province) {
+            localStorage.setItem(LOCAL_AGENCIES_FALLBACK_KEY, JSON.stringify(agencies));
+            localStorage.setItem(LOCAL_LESSONS_FALLBACK_KEY, JSON.stringify(lessonsPolicies));
+          }
+        } catch {}
+      }
+
       return {
+        ok: true,
         dbPath: data.dbPath || 'PostgreSQL 16 (DB-MDC)',
         recordsDir: data.recordsDir || 'data/pilot_records/',
         agencies,
         lessonsPolicies
       };
     }
-  } catch (err) {
-    console.warn('SQLite API fetch fallback triggered:', err);
+    const errBody = await res.json().catch(() => ({}));
+    return {
+      ok: false,
+      dbPath: 'PostgreSQL 16 (DB-MDC)',
+      recordsDir: 'data/pilot_records/',
+      agencies: [],
+      lessonsPolicies: [],
+      error: errBody.error || `Server responded with status ${res.status}`
+    };
+  } catch (err: any) {
+    console.error('PostgreSQL (DB-MDC) state fetch failed:', err);
+    return {
+      ok: false,
+      dbPath: 'PostgreSQL 16 (DB-MDC)',
+      recordsDir: 'data/pilot_records/',
+      agencies: [],
+      lessonsPolicies: [],
+      error: err?.message || 'ไม่สามารถเชื่อมต่อฐานข้อมูล PostgreSQL (DB-MDC) ได้'
+    };
   }
-
-  // Fallback to localStorage mirror if needed
-  const rawAg = localStorage.getItem(LOCAL_AGENCIES_FALLBACK_KEY);
-  const rawLp = localStorage.getItem(LOCAL_LESSONS_FALLBACK_KEY);
-  const allAg = parseSafeJsonArray<PilotAgencyRegistration>(rawAg);
-  const allLp = parseSafeJsonArray<PilotLessonAndPolicyRecord>(rawLp);
-
-  return {
-    dbPath: 'PostgreSQL 16 (DB-MDC)',
-    recordsDir: 'data/pilot_records/',
-    agencies: province
-      ? allAg.filter((a) =>
-          (a.province as string) === (province as string) ||
-          (((province as string) === 'อยุธยา' || (province as string) === 'พระนครศรีอยุธยา') &&
-            ((a.province as string) === 'อยุธยา' || (a.province as string) === 'พระนครศรีอยุธยา'))
-        )
-      : allAg,
-    lessonsPolicies: province ? allLp.filter((l) => l.province === province) : allLp
-  };
 }
 
 export async function registerPilotAgencyInSqlite(
   payload: Omit<PilotAgencyRegistration, 'id' | 'created_at'> & { id?: string }
-): Promise<{ ok: boolean; id: string; savedFilePath: string; dbPath: string }> {
+): Promise<{ ok: boolean; id: string; savedFilePath: string; dbPath: string; error?: string }> {
   const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
   const id = payload.id || `ag-${Date.now()}`;
   const fullRecord: PilotAgencyRegistration = {
@@ -290,6 +300,7 @@ export async function registerPilotAgencyInSqlite(
     const res = await fetch('/api/activity/register-agency', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
       body: JSON.stringify(fullRecord)
     });
     if (res.ok) {
@@ -301,23 +312,61 @@ export async function registerPilotAgencyInSqlite(
         dbPath: data.dbPath || 'PostgreSQL 16 (DB-MDC)'
       };
     }
-  } catch (err) {
-    console.warn('SQLite register-agency fallback:', err);
+    const errData = await res.json().catch(() => ({}));
+    return {
+      ok: false,
+      id,
+      savedFilePath: '',
+      dbPath: 'PostgreSQL 16 (DB-MDC)',
+      error: errData.error || `Server responded with status ${res.status}`
+    };
+  } catch (err: any) {
+    console.error('PostgreSQL register-agency failed:', err);
+    return {
+      ok: false,
+      id,
+      savedFilePath: '',
+      dbPath: 'PostgreSQL 16 (DB-MDC)',
+      error: err?.message || 'ไม่สามารถบันทึกการลงทะเบียนลง PostgreSQL (DB-MDC) ได้'
+    };
   }
-
-  const existing = parseSafeJsonArray<PilotAgencyRegistration>(localStorage.getItem(LOCAL_AGENCIES_FALLBACK_KEY));
-  localStorage.setItem(LOCAL_AGENCIES_FALLBACK_KEY, JSON.stringify([fullRecord, ...existing]));
-  return {
-    ok: true,
-    id,
-    savedFilePath: `data/pilot_records/agency_${id}.json`,
-    dbPath: 'PostgreSQL 16 (DB-MDC)'
-  };
 }
+
+export async function updateParticipantCoffeeGroupInPostgres(params: {
+  id?: string;
+  province: PilotProvinceName | string;
+  fullName?: string;
+  coffeeGroup: string;
+  synergyTopic?: string;
+}): Promise<{ ok: boolean; updatedId?: string | null; agencies?: PilotAgencyRegistration[]; error?: string }> {
+  try {
+    const res = await fetch('/api/activity/update-registration-group', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+      body: JSON.stringify(params)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        ok: Boolean(data?.ok),
+        updatedId: data?.updatedId ?? null,
+        agencies: Array.isArray(data?.agencies) ? data.agencies : undefined
+      };
+    }
+    const errData = await res.json().catch(() => ({}));
+    return { ok: false, error: errData.error || `Server responded with status ${res.status}` };
+  } catch (err: any) {
+    console.warn('updateParticipantCoffeeGroupInPostgres failed:', err);
+    return { ok: false, error: err?.message || 'ไม่สามารถอัปเดตกลุ่มกาแฟใน PostgreSQL ได้' };
+  }
+}
+
+export const updateParticipantCoffeeGroupInSqlite = updateParticipantCoffeeGroupInPostgres;
 
 export async function deletePilotAgencyFromSqlite(id: string): Promise<void> {
   try {
-    await fetch(`/api/activity/agency?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    await fetch(`/api/activity/agency?id=${encodeURIComponent(id)}`, { method: 'DELETE', cache: 'no-store' });
   } catch {
     // ignore
   }
@@ -328,7 +377,7 @@ export async function savePilotLessonAndPolicyToSqlite(
     id?: string;
     saved_file_path?: string;
   }
-): Promise<{ ok: boolean; id: string; savedFilePath: string; dbPath: string; updatedAt: string }> {
+): Promise<{ ok: boolean; id: string; savedFilePath: string; dbPath: string; updatedAt: string; error?: string }> {
   const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
   const id = payload.id || `lp-${Date.now()}`;
 
@@ -336,6 +385,7 @@ export async function savePilotLessonAndPolicyToSqlite(
     const res = await fetch('/api/activity/save-lesson-policy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
       body: JSON.stringify({ ...payload, id })
     });
     if (res.ok) {
@@ -348,27 +398,26 @@ export async function savePilotLessonAndPolicyToSqlite(
         updatedAt: data.updated_at || nowStr
       };
     }
-  } catch (err) {
-    console.warn('SQLite save-lesson-policy fallback:', err);
+    const errData = await res.json().catch(() => ({}));
+    return {
+      ok: false,
+      id,
+      savedFilePath: '',
+      dbPath: 'PostgreSQL 16 (DB-MDC)',
+      updatedAt: nowStr,
+      error: errData.error || `Server responded with status ${res.status}`
+    };
+  } catch (err: any) {
+    console.error('PostgreSQL save-lesson-policy failed:', err);
+    return {
+      ok: false,
+      id,
+      savedFilePath: '',
+      dbPath: 'PostgreSQL 16 (DB-MDC)',
+      updatedAt: nowStr,
+      error: err?.message || 'ไม่สามารถบันทึกข้อมูลถอดบทเรียนลง PostgreSQL (DB-MDC) ได้'
+    };
   }
-
-  const existing = parseSafeJsonArray<PilotLessonAndPolicyRecord>(localStorage.getItem(LOCAL_LESSONS_FALLBACK_KEY));
-  const fullRecord: PilotLessonAndPolicyRecord = {
-    ...payload,
-    id,
-    saved_file_path: `data/pilot_records/pilot_lesson_policy_${id}.json`,
-    updated_at: nowStr
-  };
-  const filtered = existing.filter((x) => x.id !== id);
-  localStorage.setItem(LOCAL_LESSONS_FALLBACK_KEY, JSON.stringify([fullRecord, ...filtered]));
-
-  return {
-    ok: true,
-    id,
-    savedFilePath: fullRecord.saved_file_path,
-    dbPath: 'PostgreSQL 16 (DB-MDC)',
-    updatedAt: nowStr
-  };
 }
 
 export async function deletePilotLessonAndPolicyFromSqlite(id: string): Promise<void> {

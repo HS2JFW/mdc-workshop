@@ -63,7 +63,8 @@ import {
   type PilotProvinceName,
   type PilotAgencyRegistration,
   fetchPilotSqliteState,
-  registerPilotAgencyInSqlite
+  registerPilotAgencyInSqlite,
+  updateParticipantCoffeeGroupInPostgres
 } from '../data/pilotActivitiesSqliteService';
 import {
   type CoffeeGroupKey,
@@ -74,6 +75,7 @@ import {
   COFFEE_GROUPS,
   getHackathonProjects,
   saveHackathonProject,
+  saveHackathonProjectAsync,
   saveParticipantRegistration,
   setActiveVoterByName,
   clearActiveVoter,
@@ -387,8 +389,9 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
   const [isSavingStep1, setIsSavingStep1] = useState<boolean>(false);
   const [step1SaveToast, setStep1SaveToast] = useState<string | null>(null);
   const [step1ClearToast, setStep1ClearToast] = useState<string | null>(null);
+  const [currentRegistrationId, setCurrentRegistrationId] = useState<string>('');
 
-  // Registered participants list from SQLite (Step 1 & Step 2 live synchronization)
+  // Registered participants list from PostgreSQL (DB-MDC) (Step 1 & Step 2 live synchronization)
   const [registeredParticipantsList, setRegisteredParticipantsList] = useState<PilotAgencyRegistration[]>([]);
   const [isLoadingParticipants, setIsLoadingParticipants] = useState<boolean>(false);
 
@@ -424,6 +427,23 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     return { policy, practitioner, citizen, total: registeredParticipantsList.length };
   }, [registeredParticipantsList]);
 
+  const groupLevelCountsByKey = useMemo(() => {
+    const map: Record<string, { policy: number; practitioner: number; citizen: number; total: number }> = {};
+    for (const p of registeredParticipantsList) {
+      const gKey = p.coffee_group || 'mocha';
+      if (!map[gKey]) {
+        map[gKey] = { policy: 0, practitioner: 0, citizen: 0, total: 0 };
+      }
+      const lvl = (p.participant_level || '').toLowerCase();
+      const role = (p.participant_role || '').toLowerCase();
+      if (lvl === 'policy' || role.includes('นโยบาย')) map[gKey].policy++;
+      else if (lvl === 'citizen' || role.includes('ประชาชน')) map[gKey].citizen++;
+      else map[gKey].practitioner++;
+      map[gKey].total++;
+    }
+    return map;
+  }, [registeredParticipantsList]);
+
   // Update province when user changes province in dropdown (keep district textbox clear for user input)
   const handleRegProvinceChange = (newProv: string) => {
     setRegProvince(newProv);
@@ -442,15 +462,17 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     setRegTambon('');
     setRegPhone('');
     setRegEmail('');
+    setCurrentRegistrationId('');
     try {
       localStorage.removeItem('mdc_hackathon_participant_reg_v2');
+      sessionStorage.removeItem(`mdc_current_reg_id_${getOfficialProvince(province)}`);
       clearActiveVoter();
     } catch {}
     setStep1ClearToast('ลบข้อมูลในฟิลด์ทั้งหมด และปรับเป็นค่าเริ่มต้น (Default) เรียบร้อยแล้ว');
     setTimeout(() => setStep1ClearToast(null), 3500);
   };
 
-  // Step 2: Dynamic Coffee Groups State & CRUD (Synced with PostgreSQL / SQLite Server per Province)
+  // Step 2: Dynamic Coffee Groups State & CRUD (Synced with PostgreSQL DB-MDC per Province)
   const [coffeeGroups, setCoffeeGroups] = useState<CoffeeGroupMeta[]>(() => getStoredCoffeeGroups(province));
   const [selectedGroup, setSelectedGroup] = useState<CoffeeGroupKey>(() => {
     const stored = getStoredCoffeeGroups(province);
@@ -486,7 +508,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     };
   }, [province]);
 
-  // Re-fetch latest groups whenever user enters Step 2 (Group selection)
+  // Re-fetch latest groups & participants from PostgreSQL whenever user enters Step 2
   useEffect(() => {
     if (currentStep === 2) {
       fetchCoffeeGroupsFromDb(province).then((groups) => {
@@ -494,8 +516,9 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
           setCoffeeGroups(groups);
         }
       });
+      reloadParticipants();
     }
-  }, [currentStep, province]);
+  }, [currentStep, province, reloadParticipants]);
 
   // Modal State for Add / Edit Coffee Group
   const [isGroupModalOpen, setIsGroupModalOpen] = useState<boolean>(false);
@@ -1573,10 +1596,10 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     };
   }, []);
 
-  // Fetch projects and benchmark anchors from SQLite DB on province change
+  // Fetch projects and benchmark anchors from PostgreSQL (DB-MDC) on province change
   useEffect(() => {
     fetchHackathonProjectsFromDb(province).then((dbProjs) => {
-      if (dbProjs && Array.isArray(dbProjs) && dbProjs.length > 0) {
+      if (Array.isArray(dbProjs)) {
         setAllProjects(dbProjs);
       } else {
         setAllProjects(getUserSubmittedProjects(province));
@@ -1636,6 +1659,11 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
               const stillExists = res.coffeeGroups!.some((g) => g.key === curr);
               return stillExists ? curr : (res.coffeeGroups![0]?.key || 'mocha');
             });
+          }
+
+          // Update Registered Participants List (live across devices for Step 1 & Step 2 counts)
+          if (res.agencies && Array.isArray(res.agencies)) {
+            setRegisteredParticipantsList(res.agencies);
           }
 
           // Update Projects & Highlight new entries
@@ -1713,6 +1741,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     setRegEmail('');
     setRegProvince(getOfficialProvince(province));
     setRegLevel('practitioner');
+    setCurrentRegistrationId('');
     try {
       localStorage.removeItem('mdc_hackathon_participant_reg_v2');
       clearActiveVoter();
@@ -1724,7 +1753,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     setDashboardTabGroup(selectedGroup);
   }, [selectedGroup]);
 
-  // Handle Step 1 Submit: Validate and save participant registration into system (SQLite DB & local storage)
+  // Handle Step 1 Submit: Validate and save participant registration into PostgreSQL (DB-MDC)
   const handleStep1Next = async () => {
     const trimmedName = regFullName.trim();
     if (!trimmedName) {
@@ -1733,7 +1762,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     }
 
     setIsSavingStep1(true);
-    const regId = `reg-${Date.now()}`;
+    const regId = currentRegistrationId || `reg-${Date.now()}`;
     const registrationRecord: ParticipantRegistration = {
       id: regId,
       firstName: regFirstName.trim() || trimmedName.split(/\s+/)[0] || '',
@@ -1751,13 +1780,17 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
       registeredAt: new Date().toISOString()
     };
 
-    // 1. Save to local storage for instant reactivity across all steps & bind voter identity
+    // 1. Save to local storage for instant reactivity across steps & bind voter identity
     saveParticipantRegistration(registrationRecord);
     setActiveVoterByName(trimmedName);
-
-    // 2. Save directly into SQLite Database table (pilot_agency_registrations)
+    setCurrentRegistrationId(regId);
     try {
-      await registerPilotAgencyInSqlite({
+      sessionStorage.setItem(`mdc_current_reg_id_${getOfficialProvince(province)}`, regId);
+    } catch {}
+
+    // 2. Save directly into PostgreSQL DB-MDC table (pilot_agency_registrations)
+    try {
+      const saveRes = await registerPilotAgencyInSqlite({
         id: regId,
         province: (regProvince as PilotProvinceName) || province,
         region: PILOT_4_PROVINCES_META[(regProvince as PilotProvinceName) || province]?.region || 'ภาคกลาง',
@@ -1780,15 +1813,21 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
         trial_project_name: `การลงทะเบียนผู้ร่วมกิจกรรม ${trimmedName}`,
         trial_project_summary: `ลงทะเบียนเข้าร่วมกิจกรรมคุณธรรม 4 ภาค จังหวัด${regProvince || province} โดย ${trimmedName} (${regPosition.trim() || 'ผู้ร่วมกิจกรรม'} - ${regAgency.trim() || 'เครือข่ายคุณธรรม'})`
       });
+      if (!saveRes.ok) {
+        alert(`ไม่สามารถบันทึกการลงทะเบียนลง PostgreSQL (DB-MDC) ได้: ${saveRes.error || 'กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต'}`);
+        return;
+      }
       await reloadParticipants();
-    } catch (err) {
-      console.warn('SQLite registration sync warning:', err);
+    } catch (err: any) {
+      console.error('PostgreSQL registration error:', err);
+      alert(`เกิดข้อผิดพลาดในการบันทึกลง PostgreSQL (DB-MDC): ${err?.message || 'Unknown error'}`);
+      return;
     } finally {
       setIsSavingStep1(false);
     }
 
     // 3. Show save notification toast
-    setStep1SaveToast(`บันทึกข้อมูลการลงทะเบียน "${trimmedName}" ลงสู่ระบบสำเร็จเรียบร้อยแล้ว`);
+    setStep1SaveToast(`บันทึกข้อมูลการลงทะเบียน "${trimmedName}" ลงฐานข้อมูล PostgreSQL (DB-MDC) สำเร็จเรียบร้อยแล้ว`);
     setTimeout(() => {
       setStep1SaveToast(null);
     }, 5000);
@@ -1797,8 +1836,65 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     setCurrentStep(2);
   };
 
-  // Handle Step 2 Group Select
-  const handleStep2Next = () => {
+  // Handle Step 2 Coffee Group Selection (persist immediately to PostgreSQL DB-MDC)
+  const handleSelectCoffeeGroup = async (groupKey: CoffeeGroupKey) => {
+    setSelectedGroup(groupKey);
+
+    const activeRegId = currentRegistrationId || (() => {
+      try {
+        return sessionStorage.getItem(`mdc_current_reg_id_${getOfficialProvince(province)}`) || '';
+      } catch {
+        return '';
+      }
+    })();
+
+    // Update optimistic state so UI counter responds immediately
+    if (activeRegId) {
+      setRegisteredParticipantsList((prev) =>
+        prev.map((item) => (item.id === activeRegId ? { ...item, coffee_group: groupKey } : item))
+      );
+    }
+
+    if (activeRegId || regFullName.trim()) {
+      try {
+        const res = await updateParticipantCoffeeGroupInPostgres({
+          id: activeRegId || undefined,
+          province: regProvince || province,
+          fullName: regFullName.trim() || undefined,
+          coffeeGroup: groupKey
+        });
+        if (res.ok && res.agencies) {
+          setRegisteredParticipantsList(res.agencies);
+        }
+      } catch (err) {
+        console.warn('Failed updating selected coffee group in PostgreSQL:', err);
+      }
+    }
+  };
+
+  // Handle Step 2 Group Select Next
+  const handleStep2Next = async () => {
+    const activeRegId = currentRegistrationId || (() => {
+      try {
+        return sessionStorage.getItem(`mdc_current_reg_id_${getOfficialProvince(province)}`) || '';
+      } catch {
+        return '';
+      }
+    })();
+
+    if (activeRegId || regFullName.trim()) {
+      try {
+        const res = await updateParticipantCoffeeGroupInPostgres({
+          id: activeRegId || undefined,
+          province: regProvince || province,
+          fullName: regFullName.trim() || undefined,
+          coffeeGroup: selectedGroup
+        });
+        if (res.ok && res.agencies) {
+          setRegisteredParticipantsList(res.agencies);
+        }
+      } catch {}
+    }
     setCurrentStep(3);
   };
 
@@ -2099,7 +2195,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
 
     const currentGroupMeta = coffeeGroups.find((g) => g.key === selectedGroup) || coffeeGroups[0] || COFFEE_GROUPS.mocha;
 
-    const created = saveHackathonProject(
+    const { project: created, dbResult } = await saveHackathonProjectAsync(
       {
         province,
         groupKey: selectedGroup,
@@ -2128,13 +2224,17 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
 
     setPreCheckClickCount(0);
 
-    // Refresh state from SQLite DB
+    if (!dbResult.success) {
+      alert(`คำเตือน: บันทึกโครงการลง PostgreSQL (DB-MDC) ไม่สำเร็จ: ${dbResult.error || 'กรุณาตรวจสอบการเชื่อมต่อ'}`);
+    }
+
+    // Refresh state from PostgreSQL DB-MDC AFTER save finishes
     try {
       const freshCtx = await getComparativeBenchmarkAnchorsFromDb(province);
       setBenchmarkContext(freshCtx);
       const freshProjs = await fetchHackathonProjectsFromDb(province);
-      if (freshProjs && Array.isArray(freshProjs) && freshProjs.length > 0) {
-        setAllProjects(freshProjs);
+      if (Array.isArray(freshProjs)) {
+        setAllProjects(freshProjs.length > 0 ? freshProjs : [created]);
       } else {
         setAllProjects(getUserSubmittedProjects(province));
       }
@@ -3058,13 +3158,14 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
           <div className="coffee-groups-grid">
             {coffeeGroups.map((grp) => {
               const isSelected = selectedGroup === grp.key;
+              const gCounts = groupLevelCountsByKey[grp.key] || { policy: 0, practitioner: 0, citizen: 0, total: 0 };
 
               return (
                 <div
                   key={grp.key}
                   className={`coffee-group-button ${isSelected ? 'is-active' : ''}`}
                   style={{ backgroundImage: `url(${grp.bgImage})` }}
-                  onClick={() => setSelectedGroup(grp.key)}
+                  onClick={() => handleSelectCoffeeGroup(grp.key)}
                   role="button"
                   tabIndex={0}
                 >
@@ -3109,8 +3210,8 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
                     <h3 className="coffee-name">{grp.name}</h3>
 
                     <div className="coffee-members-bar">
-                      <span>สัดส่วนสมาชิก:</span>
-                      <span>🏛️ 2 นโยบาย • ⚙️ 4 ปฏิบัติการ • 👥 6 ประชาชน</span>
+                      <span>สัดส่วนสมาชิก ({gCounts.total} คน):</span>
+                      <span>🏛️ {gCounts.policy} นโยบาย • ⚙️ {gCounts.practitioner} ปฏิบัติการ • 👥 {gCounts.citizen} ประชาชน</span>
                     </div>
                   </div>
                 </div>

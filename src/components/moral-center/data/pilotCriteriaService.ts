@@ -265,6 +265,7 @@ export async function saveHackathonCriteriaToSqlite(
     const res = await fetch('/api/activity/hackathon-criteria', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
       body: JSON.stringify({
         id: fullRecord.id,
         province: fullRecord.province,
@@ -288,13 +289,13 @@ export async function saveHackathonCriteriaToSqlite(
       };
     }
   } catch (err) {
-    console.warn('SQLite saveHackathonCriteria network fallback:', err);
+    console.warn('PostgreSQL saveHackathonCriteria network warning:', err);
   }
 
   return {
-    ok: true,
+    ok: false,
     id: fullRecord.id,
-    dbPath: 'PostgreSQL 16 (DB-MDC) (Local Mirror)',
+    dbPath: 'PostgreSQL 16 (DB-MDC) (Offline)',
     updatedAt: fullRecord.updatedAt
   };
 }
@@ -304,15 +305,15 @@ export function resetToUniversalDefaultRubric(): UniversalRubricDimension[] {
 }
 
 // ============================================================================
-// 4. CRITERIA SELECTED VIRTUES PERSISTENCE (ADMIN SQLITE STORAGE)
+// 4. CRITERIA SELECTED VIRTUES PERSISTENCE (ADMIN POSTGRESQL DB-MDC STORAGE)
 // ============================================================================
 
 export async function fetchSelectedCriteriaVirtues(province: string, fallbackWeakness: string = 'พอเพียง'): Promise<string[]> {
-  const defaultVirtues = (province === 'อยุธยา' || province === 'ระยอง')
+  const defaultVirtues = (province === 'อยุธยา' || province === 'พระนครศรีอยุธยา' || province === 'ระยอง')
     ? ['พอเพียง', 'สุจริต']
     : [fallbackWeakness];
   try {
-    const res = await fetch(`/api/activity/criteria-virtues?province=${encodeURIComponent(province)}`);
+    const res = await fetch(`/api/activity/criteria-virtues?province=${encodeURIComponent(province)}`, { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
       if (data && data.ok && Array.isArray(data.virtues) && data.virtues.length > 0) {
@@ -321,7 +322,7 @@ export async function fetchSelectedCriteriaVirtues(province: string, fallbackWea
       }
     }
   } catch (err) {
-    console.warn('fetchSelectedCriteriaVirtues SQLite fallback:', err);
+    console.warn('fetchSelectedCriteriaVirtues PostgreSQL fallback:', err);
   }
 
   // Fallback to localStorage
@@ -348,11 +349,12 @@ export async function saveSelectedCriteriaVirtues(province: string, virtues: str
     const res = await fetch('/api/activity/criteria-virtues', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
       body: JSON.stringify({ province, virtues: safeVirtues })
     });
     return res.ok;
   } catch (err) {
-    console.warn('saveSelectedCriteriaVirtues SQLite fallback:', err);
+    console.warn('saveSelectedCriteriaVirtues PostgreSQL error:', err);
     return false;
   }
 }

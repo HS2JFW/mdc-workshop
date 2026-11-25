@@ -245,7 +245,7 @@ export async function fetchCoffeeGroupsFromDb(province?: string): Promise<Coffee
     : (province || 'พระนครศรีอยุธยา');
 
   try {
-    const res = await fetch(`/api/activity/coffee-groups?province=${encodeURIComponent(normProv)}`);
+    const res = await fetch(`/api/activity/coffee-groups?province=${encodeURIComponent(normProv)}`, { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
       if (data && data.ok && Array.isArray(data.groups) && data.groups.length > 0) {
@@ -277,11 +277,12 @@ export interface ActivityStatePollResult {
   syncTimestamp: string;
   coffeeGroups?: CoffeeGroupMeta[];
   submittedProjects?: HackathonProject[];
+  agencies?: any[];
 }
 
 /**
- * รวมศูนย์การ Polling ตรวจสอบความเปลี่ยนแปลงของ Coffee Groups และ Submitted Projects
- * ผ่าน /api/activity/state เส้นเดียว (Lightweight ~5-15KB)
+ * รวมศูนย์การ Polling ตรวจสอบความเปลี่ยนแปลงของ Coffee Groups, Registrations และ Submitted Projects
+ * ผ่าน /api/activity/state เส้นเดียว (PostgreSQL DB-MDC)
  */
 export async function pollActivityState(params: {
   province?: PilotProvinceName | string;
@@ -290,7 +291,7 @@ export async function pollActivityState(params: {
   const { province, lastRevision } = params;
   try {
     const query = province ? `?province=${encodeURIComponent(province)}` : '';
-    const res = await fetch(`/api/activity/state${query}`);
+    const res = await fetch(`/api/activity/state${query}`, { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
       const currentRev = data.revision || '';
@@ -321,13 +322,16 @@ export async function pollActivityState(params: {
         );
       }
 
+      const agencies = Array.isArray(data.agencies) ? data.agencies : undefined;
+
       return {
         ok: true,
         changed,
         revision: currentRev,
         syncTimestamp: data.syncTimestamp || new Date().toISOString(),
         coffeeGroups,
-        submittedProjects
+        submittedProjects,
+        agencies
       };
     }
   } catch (err) {
@@ -366,6 +370,7 @@ export async function addCoffeeGroupToDb(newGroup: Omit<CoffeeGroupMeta, 'key'> 
     const res = await fetch('/api/activity/coffee-groups', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
       body: JSON.stringify({ action: 'add', province: normProv, group: groupToAdd })
     });
     if (res.ok) {
@@ -409,6 +414,7 @@ export async function updateCoffeeGroupInDb(key: string, updates: Partial<Coffee
     const res = await fetch('/api/activity/coffee-groups', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
       body: JSON.stringify({ action: 'update', isEdit: true, originalKey: key, province: normProv, group: updatedGroup })
     });
     if (res.ok) {
@@ -443,7 +449,8 @@ export async function deleteCoffeeGroupFromDb(key: string, province?: string): P
 
   try {
     const res = await fetch(`/api/activity/coffee-groups?key=${encodeURIComponent(key)}&province=${encodeURIComponent(normProv)}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      cache: 'no-store'
     });
     if (res.ok) {
       const data = await res.json();
@@ -474,6 +481,7 @@ export async function resetCoffeeGroupsInDb(province?: string): Promise<CoffeeGr
     const res = await fetch('/api/activity/coffee-groups', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
       body: JSON.stringify({ action: 'reset', province: normProv })
     });
     if (res.ok) {
@@ -1587,7 +1595,7 @@ export async function fetchHackathonProjectsFromDb(province?: PilotProvinceName)
     const url = province
       ? `/api/activity/hackathon-projects?province=${encodeURIComponent(province)}`
       : '/api/activity/hackathon-projects';
-    const res = await fetch(url);
+    const res = await fetch(url, { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
       if (data && Array.isArray(data.data)) {
@@ -1595,24 +1603,25 @@ export async function fetchHackathonProjectsFromDb(province?: PilotProvinceName)
         const dbProjects = rawDbProjects.filter(
           p => p && p.id && !p.id.startsWith('precheck-') && !isSeedHackathonProject(p.id)
         );
-        if (typeof window !== 'undefined' && dbProjects.length > 0) {
-          const currentAll = getHackathonProjects();
-          const dbMap = new Map(dbProjects.map(p => [p.id, p]));
-          const merged = [...dbProjects, ...currentAll.filter(p => !dbMap.has(p.id))];
-          localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(merged));
+        if (typeof window !== 'undefined') {
+          const matchesProv = (pProvRaw?: string) => {
+            if (!province) return true;
+            const provStr = String(province);
+            const pProv = String(pProvRaw || '');
+            if (pProv === provStr) return true;
+            return (provStr === 'อยุธยา' || provStr === 'พระนครศรีอยุธยา') && (pProv === 'อยุธยา' || pProv === 'พระนครศรีอยุธยา');
+          };
+          const otherAll = getHackathonProjects().filter(p => !matchesProv(p.province));
+          localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify([...dbProjects, ...otherAll]));
 
-          const currentSubmitted = getUserSubmittedProjects(province);
-          const submittedMap = new Map(currentSubmitted.map(p => [p.id, p]));
-          for (const p of dbProjects) {
-            submittedMap.set(p.id, p);
-          }
-          localStorage.setItem(STORAGE_KEY_USER_SUBMITTED_PROJECTS, JSON.stringify(Array.from(submittedMap.values())));
+          const otherSubmitted = getUserSubmittedProjects().filter(p => !matchesProv(p.province));
+          localStorage.setItem(STORAGE_KEY_USER_SUBMITTED_PROJECTS, JSON.stringify([...dbProjects, ...otherSubmitted]));
         }
         return dbProjects;
       }
     }
   } catch (err) {
-    console.warn('SQLite fetchHackathonProjects fallback to local:', err);
+    console.warn('PostgreSQL fetchHackathonProjects fallback:', err);
   }
   return getUserSubmittedProjects(province);
 }
@@ -1620,21 +1629,24 @@ export async function fetchHackathonProjectsFromDb(province?: PilotProvinceName)
 export async function saveHackathonProjectToDb(
   project: HackathonProject,
   isPrecheck: boolean = false
-): Promise<{ success: boolean; id: string; dbPath?: string }> {
+): Promise<{ success: boolean; id: string; dbPath?: string; error?: string }> {
   try {
     const res = await fetch('/api/activity/hackathon-projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
       body: JSON.stringify({ ...project, isPrecheck })
     });
     if (res.ok) {
       const data = await res.json();
       return { success: true, id: data.id || project.id, dbPath: data.dbPath };
     }
-  } catch (err) {
-    console.warn('SQLite saveHackathonProjectToDb fallback to local:', err);
+    const errData = await res.json().catch(() => ({}));
+    return { success: false, id: project.id, error: errData.error || `Server responded with status ${res.status}` };
+  } catch (err: any) {
+    console.error('PostgreSQL saveHackathonProjectToDb error:', err);
+    return { success: false, id: project.id, error: err?.message || 'ไม่สามารถบันทึกโครงการลง PostgreSQL ได้' };
   }
-  return { success: true, id: project.id };
 }
 
 export async function resetHackathonDatabaseFromApi(
@@ -1645,6 +1657,7 @@ export async function resetHackathonDatabaseFromApi(
     const res = await fetch('/api/activity/hackathon-reset', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
       body: JSON.stringify({ province })
     });
     if (res.ok) {
@@ -1656,9 +1669,9 @@ export async function resetHackathonDatabaseFromApi(
       };
     }
   } catch (err) {
-    console.warn('SQLite resetHackathonDatabaseFromApi fallback:', err);
+    console.warn('PostgreSQL resetHackathonDatabaseFromApi error:', err);
   }
-  return { success: true, message: 'รีเซ็ตข้อมูลโครงการเรียบร้อยแล้ว (Local Mode)', deletedCount: 0 };
+  return { success: false, message: 'ไม่สามารถรีเซ็ตข้อมูลใน PostgreSQL ได้', deletedCount: 0 };
 }
 
 /**
@@ -1707,11 +1720,12 @@ export async function deleteHackathonProject(
     console.error('deleteHackathonProject: failed to update votes:', e);
   }
 
-  // 4. Delete from SQLite database via API
+  // 4. Delete from PostgreSQL database via API
   try {
     const res = await fetch('/api/activity/project-delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
       body: JSON.stringify({ id: projectId })
     });
     if (res.ok) {
@@ -1756,11 +1770,12 @@ export async function resetRegistrationsDatabaseFromApi(
     }
   }
 
-  // 2. ส่งคำขอลบไปยัง SQLite API
+  // 2. ส่งคำขอลบไปยัง PostgreSQL API
   try {
     const provQuery = province && province !== 'ALL' ? `?province=${encodeURIComponent(province)}` : '';
     const res = await fetch(`/api/activity/reset-registrations${provQuery}`, {
-      method: 'POST'
+      method: 'POST',
+      cache: 'no-store'
     });
     if (res.ok) {
       const data = await res.json();
@@ -1818,11 +1833,12 @@ export async function clearActivityVoteDatabase(): Promise<{
     }
   }
 
-  // 2. Call backend SQLite endpoint to wipe all 4 tables in PostgreSQL 16 (DB-MDC)
+  // 2. Call backend endpoint to wipe all 4 tables in PostgreSQL 16 (DB-MDC)
   try {
     const res = await fetch('/api/activity/clear-activity-vote-system', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store'
     });
     if (res.ok) {
       const data = await res.json();
@@ -2185,9 +2201,9 @@ function getTableDescription(name: string): string {
 export async function fetchSqliteDbTables(): Promise<{ success: boolean; tables: SqliteTableMeta[]; dbPath?: string }> {
   const allTables: SqliteTableMeta[] = [];
 
-  // 1. Fetch SQLite tables (/api/activity/tables)
+  // 1. Fetch PostgreSQL tables (/api/activity/tables)
   try {
-    const res = await fetch('/api/activity/tables');
+    const res = await fetch('/api/activity/tables', { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
       if (data && Array.isArray(data.tables)) {
@@ -2906,12 +2922,87 @@ export function saveHackathonProject(
     }
   }
 
-  // Also persist to SQLite Database
-  saveHackathonProjectToDb(newProject, false).catch((err) => {
+  // Sync to PostgreSQL (DB-MDC)
+  const dbSyncPromise = saveHackathonProjectToDb(newProject, false).catch((err) => {
     console.warn('saveHackathonProjectToDb error:', err);
+    return { success: false, id: newProject.id, error: String(err) };
   });
 
   return newProject;
+}
+
+/**
+ * บันทึกโครงการ Hackathon พร้อมรอผลจาก PostgreSQL (DB-MDC) ให้เสร็จก่อนโหลดตารางใหม่ (ป้องกัน iPad/เครื่องอื่นไม่เห็น)
+ */
+export async function saveHackathonProjectAsync(
+  input: Omit<HackathonProject, 'id' | 'createdAt' | 'communityVotes' | 'aiScore' | 'aiScoreBreakdown' | 'aiRecommendations'>,
+  customEvaluation?: {
+    aiScore: number;
+    aiScoreBreakdown: { alignment: number; feasibility: number; innovation: number; participation: number };
+    aiRecommendations: string;
+  }
+): Promise<{ project: HackathonProject; dbResult: { success: boolean; id: string; dbPath?: string; error?: string } }> {
+  const all = getHackathonProjects();
+
+  let evaluation = customEvaluation;
+  if (!evaluation) {
+    const compCtx = getComparativeBenchmarkAnchors(input.province);
+    const preResult = evaluatePreSubmissionWithRubric(
+      {
+        projectName: input.projectName,
+        targetMoralVirtue: input.targetMoralVirtue,
+        targetArea: input.targetArea,
+        targetAudience: input.targetAudience,
+        proposalDetails: input.proposalDetails,
+        activityPlan: input.activityPlan
+      },
+      input.challengeTopic || '',
+      input.evaluatedCriteriaVirtues || [],
+      UNIVERSAL_DEFAULT_RUBRIC,
+      compCtx
+    );
+    evaluation = {
+      aiScore: preResult.finalScore,
+      aiScoreBreakdown: {
+        alignment: Number(((preResult.finalScore * 0.3)).toFixed(1)),
+        feasibility: Number(((preResult.finalScore * 0.3)).toFixed(1)),
+        innovation: Number(((preResult.finalScore * 0.2)).toFixed(1)),
+        participation: Number(((preResult.finalScore * 0.2)).toFixed(1))
+      },
+      aiRecommendations: preResult.comparativeContext.comparativeRationale
+    };
+  }
+
+  const newProject: HackathonProject = {
+    ...input,
+    id: `proj-${input.groupKey}-${Date.now()}`,
+    aiScore: evaluation.aiScore,
+    aiScoreBreakdown: evaluation.aiScoreBreakdown,
+    aiRecommendations: evaluation.aiRecommendations,
+    challengeTopic: input.challengeTopic,
+    evaluatedCriteriaVirtues: input.evaluatedCriteriaVirtues,
+    communityVotes: 0,
+    createdAt: new Date().toISOString()
+  };
+
+  const updated = [newProject, ...all];
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(updated));
+
+    const currentSubmitted = getUserSubmittedProjects(input.province);
+    const updatedSubmitted = [
+      newProject,
+      ...currentSubmitted.filter(p => p.id !== newProject.id && !p.id.startsWith('precheck-') && !isSeedHackathonProject(p.id))
+    ];
+    localStorage.setItem(STORAGE_KEY_USER_SUBMITTED_PROJECTS, JSON.stringify(updatedSubmitted));
+
+    if (input.proposerName && input.proposerName.trim() && input.proposerName.trim() !== 'ผู้ร่วมกิจกรรม Hackathon') {
+      setActiveVoterByName(input.proposerName.trim());
+    }
+  }
+
+  const dbResult = await saveHackathonProjectToDb(newProject, false);
+  return { project: newProject, dbResult };
 }
 
 // ============================================================================
@@ -3809,7 +3900,7 @@ export async function fetchAiConfigFromDb(): Promise<{
   isConfigured: boolean;
 }> {
   try {
-    const res = await fetch('/api/activity/ai-config');
+    const res = await fetch('/api/activity/ai-config', { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
       if (data && data.ok) {
