@@ -1090,6 +1090,7 @@ export const Thailand3dShadedMap: React.FC<Thailand3dShadedMapProps> = ({
                   return (
                     <g
                       key={`dialog-${item.regionKey || 'reg'}-${idx}`}
+                      data-region-pin={item.regionKey}
                       className={`moral-dialog-3d-pin moral-compact-pin ${isSelected ? 'is-selected' : ''}`}
                       style={{
                         cursor: 'pointer',
@@ -1137,6 +1138,7 @@ export const Thailand3dShadedMap: React.FC<Thailand3dShadedMapProps> = ({
                         style={{ transition: 'transform 0.2s ease' }}
                       >
                         <rect
+                          data-region-pill={item.regionKey}
                           x={capX}
                           y={capY}
                           width={capWidth}
@@ -1237,6 +1239,7 @@ export const Thailand3dShadedMap: React.FC<Thailand3dShadedMapProps> = ({
                 return (
                   <g
                     key={`dialog-${item.regionKey || 'reg'}-${idx}`}
+                    data-region-pin={item.regionKey}
                     className={`moral-dialog-3d-pin ${isSelected ? 'is-selected' : ''}`}
                     style={{
                       cursor: 'pointer',

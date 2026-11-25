@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
   MapPin,
@@ -256,6 +256,7 @@ export const MoralSynergyRegionalMapCard: React.FC<MoralSynergyRegionalMapCardPr
 
   // Interactive Hover Dialogue State
   const stageRef = useRef<HTMLDivElement>(null);
+  const dialogueRef = useRef<HTMLDivElement>(null);
   const [hoveredDialogItem, setHoveredDialogItem] = useState<RegionalScoreDialogItem | null>(null);
   const [dialoguePos, setDialoguePos] = useState<{
     left: number;
@@ -600,63 +601,105 @@ export const MoralSynergyRegionalMapCard: React.FC<MoralSynergyRegionalMapCardPr
     return provData.color;
   };
 
-  // Smart Positioning Calculation for Hover Dialogue (Fixed Viewport Coordinates for Portal)
-  const calculateAndSetDialoguePos = (pinX: number, pinY: number, stageRect: DOMRect) => {
-    const dialogueWidth = 440;
-    const dialogueHeight = 360;
+  // Measure exact rendered screen bounding rect of a region's pill/pin button
+  const getRegionPinScreenRect = useCallback(
+    (regionKey: string, fallbackEl?: EventTarget | null): { left: number; right: number; top: number; height: number; width: number } | null => {
+      const stageEl = stageRef.current;
+      if (stageEl) {
+        const pillEl =
+          stageEl.querySelector(`[data-region-pill="${regionKey}"]`) ||
+          stageEl.querySelector(`[data-region-pin="${regionKey}"]`);
+        if (pillEl) {
+          const r = pillEl.getBoundingClientRect();
+          if (r.width > 0 || r.height > 0) {
+            return { left: r.left, right: r.right, top: r.top, height: r.height, width: r.width };
+          }
+        }
+      }
+      if (fallbackEl && typeof (fallbackEl as Element).getBoundingClientRect === 'function') {
+        const r = (fallbackEl as Element).getBoundingClientRect();
+        if (r.width > 0 || r.height > 0) {
+          return { left: r.left, right: r.right, top: r.top, height: r.height, width: r.width };
+        }
+      }
+      if (stageEl) {
+        const stageRect = stageEl.getBoundingClientRect();
+        const [cx, cy] = getRegionalDialogCoordinates(regionKey);
+        const pinX = stageRect.left + (cx / 560) * stageRect.width;
+        const pinY = stageRect.top + (cy / 980) * stageRect.height;
+        return { left: pinX - 36, right: pinX + 36, top: pinY - 36, height: 36, width: 72 };
+      }
+      return null;
+    },
+    []
+  );
 
-    // Viewport coordinates of the pin
-    const pinScreenX = stageRect.left + pinX;
-    const pinScreenY = stageRect.top + pinY;
+  // Smart Positioning Calculation: Always to the RIGHT of the hovered pin button & clamped strictly inside viewport
+  const repositionDialogueForRegion = useCallback(
+    (regionKey: string, fallbackEl?: EventTarget | null) => {
+      const anchor = getRegionPinScreenRect(regionKey, fallbackEl);
+      if (!anchor) return;
 
-    // Safe clearance (58px) so dialogue never overlaps the 72px-wide pin capsule (36px radius)
-    const safeMarginX = 58;
-    let left = 0;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const margin = 16;
+      const measuredW = dialogueRef.current?.offsetWidth || 0;
+      const measuredH = dialogueRef.current?.offsetHeight || 0;
+      const dialogW = measuredW > 0 ? measuredW : Math.min(520, vw - margin * 2);
+      const dialogH = measuredH > 0 ? measuredH : Math.min(430, vh - margin * 2);
 
-    // Horizontal placement:
-    // If pin is on right half of screen, position dialogue to the left of pin; otherwise to the right
-    if (pinScreenX > window.innerWidth * 0.48) {
-      left = pinScreenX - dialogueWidth - safeMarginX;
-    } else {
-      left = pinScreenX + safeMarginX;
-    }
+      // Horizontal placement: strictly to the RIGHT of the pin's right edge;
+      // if viewport right edge is tight, pull inward just enough to stay completely on screen.
+      const gap = 16;
+      let left = anchor.right + gap;
+      const maxLeft = Math.max(margin, vw - dialogW - margin);
+      if (left > maxLeft) {
+        left = maxLeft;
+      }
+      if (left < margin) {
+        left = margin;
+      }
 
-    // Ensure within viewport horizontally (minimum 16px from left screen edge, and at most window.innerWidth - dialogueWidth - 16px)
-    if (left < 16) {
-      left = 16;
-    }
-    if (left + dialogueWidth > window.innerWidth - 16) {
-      left = Math.max(16, window.innerWidth - dialogueWidth - 16);
-    }
+      // Vertical placement: align near pin vertical midpoint, strictly clamped so full dialog is visible without scrolling.
+      const anchorCenterY = anchor.top + anchor.height / 2;
+      let top = anchorCenterY - dialogH * 0.42;
+      const maxTop = Math.max(margin, vh - dialogH - margin);
+      if (top > maxTop) {
+        top = maxTop;
+      }
+      if (top < margin) {
+        top = margin;
+      }
 
-    // Vertical placement:
-    let top = pinScreenY - 110;
-    // Ensure within viewport vertically
-    if (top < 16) {
-      top = 16;
-    }
-    if (top + dialogueHeight > window.innerHeight - 16) {
-      top = Math.max(16, window.innerHeight - dialogueHeight - 16);
-    }
+      const nextLeft = Math.round(left);
+      const nextTop = Math.round(top);
+      setDialoguePos((prev) =>
+        prev && prev.left === nextLeft && prev.top === nextTop ? prev : { left: nextLeft, top: nextTop }
+      );
+    },
+    [getRegionPinScreenRect]
+  );
 
-    setDialoguePos({
-      left: Math.round(left),
-      top: Math.round(top)
+  // Re-measure actual rendered dialog dimensions & re-clamp immediately before paint + on content resize
+  useLayoutEffect(() => {
+    if (!hoveredDialogItem) return;
+    repositionDialogueForRegion(hoveredDialogItem.regionKey);
+
+    const el = dialogueRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      repositionDialogueForRegion(hoveredDialogItem.regionKey);
     });
-  };
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hoveredDialogItem, repositionDialogueForRegion]);
 
   // Sync dialogue fixed position on scroll or window resize without jerky unmounting
   useEffect(() => {
     if (!hoveredDialogItem) return;
 
     const handleScrollOrResize = () => {
-      if (hoveredDialogItem && stageRef.current) {
-        const stageRect = stageRef.current.getBoundingClientRect();
-        const [cx, cy] = getRegionalDialogCoordinates(hoveredDialogItem.regionKey);
-        const pinX = (cx / 560) * stageRect.width;
-        const pinY = (cy / 980) * stageRect.height;
-        calculateAndSetDialoguePos(pinX, pinY, stageRect);
-      }
+      repositionDialogueForRegion(hoveredDialogItem.regionKey);
     };
 
     window.addEventListener('scroll', handleScrollOrResize, true);
@@ -665,11 +708,11 @@ export const MoralSynergyRegionalMapCard: React.FC<MoralSynergyRegionalMapCardPr
       window.removeEventListener('scroll', handleScrollOrResize, true);
       window.removeEventListener('resize', handleScrollOrResize);
     };
-  }, [hoveredDialogItem]);
+  }, [hoveredDialogItem, repositionDialogueForRegion]);
 
   const handleDialogHover = (
     item: RegionalScoreDialogItem | null,
-    coords?: { cx: number; cy: number },
+    _coords?: { cx: number; cy: number },
     event?: React.MouseEvent
   ) => {
     if (!item) {
@@ -697,20 +740,7 @@ export const MoralSynergyRegionalMapCard: React.FC<MoralSynergyRegionalMapCardPr
     }
 
     setHoveredDialogItem(item);
-
-    if (stageRef.current) {
-      const stageRect = stageRef.current.getBoundingClientRect();
-      let pinX = coords ? (coords.cx / 560) * stageRect.width : stageRect.width / 2;
-      let pinY = coords ? (coords.cy / 980) * stageRect.height : stageRect.height / 2;
-
-      if (event?.currentTarget) {
-        const pinRect = (event.currentTarget as SVGGraphicsElement).getBoundingClientRect();
-        pinX = pinRect.left - stageRect.left + pinRect.width / 2;
-        pinY = pinRect.top - stageRect.top + pinRect.height / 2;
-      }
-
-      calculateAndSetDialoguePos(pinX, pinY, stageRect);
-    }
+    repositionDialogueForRegion(item.regionKey, event?.currentTarget);
   };
 
   const handleRegionalPinClick = (regionKey: string) => {
@@ -731,13 +761,7 @@ export const MoralSynergyRegionalMapCard: React.FC<MoralSynergyRegionalMapCardPr
         const dialogItem = regionalScoreDialogs.find(d => d.regionKey === matchZone.code || d.regionKey === matchZone.mdcRegionKey);
         if (dialogItem) {
           setHoveredDialogItem(dialogItem);
-          if (stageRef.current) {
-            const stageRect = stageRef.current.getBoundingClientRect();
-            const [cx, cy] = getRegionalDialogCoordinates(dialogItem.regionKey);
-            const pinX = (cx / 560) * stageRect.width;
-            const pinY = (cy / 980) * stageRect.height;
-            calculateAndSetDialoguePos(pinX, pinY, stageRect);
-          }
+          repositionDialogueForRegion(dialogItem.regionKey);
         }
       }
     }
@@ -758,13 +782,7 @@ export const MoralSynergyRegionalMapCard: React.FC<MoralSynergyRegionalMapCardPr
       const dialogItem = regionalScoreDialogs.find(d => d.regionKey === provData.zoneCode);
       if (dialogItem) {
         setHoveredDialogItem(dialogItem);
-        if (stageRef.current) {
-          const stageRect = stageRef.current.getBoundingClientRect();
-          const [cx, cy] = getRegionalDialogCoordinates(dialogItem.regionKey);
-          const pinX = (cx / 560) * stageRect.width;
-          const pinY = (cy / 980) * stageRect.height;
-          calculateAndSetDialoguePos(pinX, pinY, stageRect);
-        }
+        repositionDialogueForRegion(dialogItem.regionKey);
       }
     }
   };
@@ -905,13 +923,9 @@ export const MoralSynergyRegionalMapCard: React.FC<MoralSynergyRegionalMapCardPr
                         }
 
                         const dialogItem = regionalScoreDialogs.find((d) => d.regionKey === zoneItem.zoneCode);
-                        if (dialogItem && stageRef.current) {
+                        if (dialogItem) {
                           setHoveredDialogItem(dialogItem);
-                          const stageRect = stageRef.current.getBoundingClientRect();
-                          const [cx, cy] = getRegionalDialogCoordinates(dialogItem.regionKey);
-                          const pinX = (cx / 560) * stageRect.width;
-                          const pinY = (cy / 980) * stageRect.height;
-                          calculateAndSetDialoguePos(pinX, pinY, stageRect);
+                          repositionDialogueForRegion(dialogItem.regionKey);
                         }
                       }
                     }
@@ -942,6 +956,7 @@ export const MoralSynergyRegionalMapCard: React.FC<MoralSynergyRegionalMapCardPr
                 {hoveredDialogItem && dialoguePos && (
                   typeof document !== 'undefined' ? createPortal(
                     <div
+                      ref={dialogueRef}
                       className="synergy-map-hover-dialogue"
                       style={{
                         left: `${dialoguePos.left}px`,
