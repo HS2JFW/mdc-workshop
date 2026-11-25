@@ -6319,6 +6319,51 @@
   margin: 0;
   letter-spacing: -0.2px;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+}
+
+.btn-copy-challenge-topic {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #065f46;
+  border: 1.5px solid #6ee7b7;
+  border-radius: 999px;
+  font-family: 'Kanit', sans-serif;
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0;
+  text-shadow: none;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  box-shadow: 0 2px 6px rgba(6, 95, 70, 0.1);
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.btn-copy-challenge-topic:hover {
+  background: #ecfdf5;
+  border-color: #10b981;
+  color: #047857;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.18);
+}
+
+.btn-copy-challenge-topic:active {
+  transform: translateY(0);
+}
+
+.btn-copy-challenge-topic.is-copied {
+  background: #10b981;
+  border-color: #059669;
+  color: #ffffff;
+  box-shadow: 0 3px 10px rgba(16, 185, 129, 0.28);
 }
 
 .challenge-hero-meta-row {

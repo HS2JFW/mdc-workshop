@@ -705,6 +705,50 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
   }, [province]);
 
   const [challengeSelectFeedback, setChallengeSelectFeedback] = useState<string | null>(null);
+  const [isChallengeCopied, setIsChallengeCopied] = useState<boolean>(false);
+  const copyChallengeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleCopyChallengeTopic = useCallback(async (text: string) => {
+    const value = (text || '').trim();
+    if (!value) return;
+    let copied = false;
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(value);
+        copied = true;
+      }
+    } catch {
+      copied = false;
+    }
+
+    if (!copied && typeof document !== 'undefined') {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = value;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.top = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        ta.setSelectionRange(0, ta.value.length);
+        copied = document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch {
+        copied = false;
+      }
+    }
+
+    if (copied) {
+      setIsChallengeCopied(true);
+      if (copyChallengeTimerRef.current) {
+        clearTimeout(copyChallengeTimerRef.current);
+      }
+      copyChallengeTimerRef.current = setTimeout(() => {
+        setIsChallengeCopied(false);
+      }, 2000);
+    }
+  }, []);
 
   const normalizeVirtueName = (v: string): string => {
     if (!v) return 'พอเพียง';
@@ -4386,13 +4430,20 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
                     <Target size={16} />
                     <span>หัวข้อในการ Hackathon ประจำจังหวัด{province}</span>
                   </span>
-                  <span className="challenge-hero-virtue-pill" style={{ background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0' }}>
-                    🎯 เกณฑ์ตัดสิน: Rubric 4 เสาหลักแก้โจทย์พื้นที่ (100 คะแนนเต็ม)
-                  </span>
                 </div>
 
                 <h1 className="challenge-hero-topic-title">
-                  {hackathonChallenge || defaultChallenge}
+                  <span>{hackathonChallenge || defaultChallenge}</span>
+                  <button
+                    type="button"
+                    className={`btn-copy-challenge-topic ${isChallengeCopied ? 'is-copied' : ''}`}
+                    onClick={() => handleCopyChallengeTopic(hackathonChallenge || defaultChallenge)}
+                    title="คัดลอกหัวข้อโจทย์เพื่อนำไปวางใน Prompt"
+                    aria-label="คัดลอกหัวข้อโจทย์"
+                  >
+                    {isChallengeCopied ? <Check size={15} /> : <Copy size={15} />}
+                    <span>{isChallengeCopied ? 'คัดลอกแล้ว' : 'คัดลอก'}</span>
+                  </button>
                 </h1>
 
                 <div className="challenge-hero-meta-row">
