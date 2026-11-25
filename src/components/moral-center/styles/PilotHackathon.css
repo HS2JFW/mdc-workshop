@@ -1397,8 +1397,12 @@
 
 /* --- Pre-submission AI Evaluation Modal Styles --- */
 .precheck-modal-container {
-  max-width: 980px;
-  width: 94%;
+  max-width: 1140px;
+  width: 95%;
+}
+
+.precheck-modal-container .criteria-modal-title {
+  font-size: 30px;
 }
 
 .precheck-header {
@@ -1411,15 +1415,15 @@
 }
 
 .precheck-body {
-  padding: 24px 28px;
-  max-height: 80vh;
+  padding: 26px 30px;
+  max-height: 82vh;
   overflow-y: auto;
 }
 
 .precheck-content-flow {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 22px;
 }
 
 /* Score Hero */
@@ -1427,8 +1431,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding: 24px 28px;
+  gap: 26px;
+  padding: 26px 30px;
   border-radius: 16px;
   flex-wrap: wrap;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
@@ -1461,7 +1465,7 @@
 .hero-score-left {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .hero-score-badge-wrap {
@@ -1472,13 +1476,13 @@
 
 .hero-score-number {
   font-family: 'Kanit', sans-serif;
-  font-size: 52px;
+  font-size: 64px;
   font-weight: 900;
   line-height: 1;
 }
 
 .hero-score-max {
-  font-size: 22px;
+  font-size: 28.5px;
   font-weight: 700;
   opacity: 0.75;
 }
@@ -1486,10 +1490,10 @@
 .hero-tier-tag {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
+  gap: 7px;
+  padding: 7px 16px;
   border-radius: 999px;
-  font-size: 16px;
+  font-size: 21px;
   font-weight: 800;
   background: rgba(255, 255, 255, 0.8);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
@@ -1501,7 +1505,7 @@
   min-width: 280px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .hero-meta-row {
@@ -1511,24 +1515,24 @@
 }
 
 .hero-meta-label {
-  font-size: 13.5px;
+  font-size: 17.5px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.4px;
   opacity: 0.85;
 }
 
 .hero-meta-value {
-  font-size: 16px;
+  font-size: 21px;
   line-height: 1.45;
 }
 
 .hero-criteria-pill {
   display: inline-block;
-  padding: 6px 12px;
+  padding: 7px 14px;
   background: rgba(255, 255, 255, 0.85);
   border-radius: 8px;
-  font-size: 14.5px;
+  font-size: 19px;
   font-weight: 700;
   width: fit-content;
 }
@@ -1541,7 +1545,7 @@
   background: #f5f3ff;
   border: 1px solid #ddd6fe;
   border-radius: 10px;
-  font-size: 14.5px;
+  font-size: 19px;
   color: #5b21b6;
   font-weight: 600;
 }
@@ -1552,7 +1556,7 @@
   align-items: center;
   gap: 8px;
   font-family: 'Kanit', sans-serif;
-  font-size: 18.5px;
+  font-size: 24px;
   font-weight: 800;
   color: #0f172a;
   margin: 0 0 14px 0;
@@ -1561,18 +1565,18 @@
 .precheck-dimension-grid {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 }
 
 .precheck-dimension-card {
-  padding: 18px 22px;
+  padding: 20px 24px;
   background: #ffffff;
   border: 1.5px solid #e2e8f0;
   border-radius: 14px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 .dim-card-header {
@@ -1586,21 +1590,21 @@
 .dim-title-group {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   flex: 1;
 }
 
 .dim-virtue-title {
   font-family: 'Kanit', sans-serif;
-  font-size: 17.5px;
+  font-size: 23px;
   font-weight: 800;
   color: #0f172a;
 }
 
 .dim-subpillar-title {
-  font-size: 13.5px;
+  font-size: 17.5px;
   color: #64748b;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
 .dim-card-score-box {
@@ -1608,26 +1612,26 @@
   align-items: baseline;
   gap: 4px;
   background: #ede9fe;
-  padding: 6px 14px;
+  padding: 7px 16px;
   border-radius: 10px;
   border: 1px solid #ddd6fe;
 }
 
 .dim-score-num {
   font-family: 'Kanit', sans-serif;
-  font-size: 24px;
+  font-size: 31px;
   font-weight: 900;
   color: #6d28d9;
 }
 
 .dim-score-sub {
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 700;
   color: #7c3aed;
 }
 
 .dim-score-percent {
-  font-size: 13px;
+  font-size: 17px;
   font-weight: 600;
   color: #6d28d9;
   margin-left: 4px;
@@ -1641,41 +1645,41 @@
 }
 
 .dim-level-pill {
-  padding: 3px 10px;
+  padding: 4px 12px;
   background: #f1f5f9;
   color: #334155;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 17px;
   font-weight: 700;
 }
 
 .dim-bullet-pill {
-  padding: 3px 9px;
+  padding: 4px 11px;
   background: #ecfdf5;
   color: #065f46;
   border: 1px solid #a7f3d0;
   border-radius: 6px;
-  font-size: 12.5px;
+  font-size: 16px;
   font-weight: 600;
 }
 
 .dim-rationale-box {
-  padding: 12px 16px;
+  padding: 14px 18px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
 }
 
 .dim-rationale-header {
-  font-size: 13.5px;
+  font-size: 17.5px;
   font-weight: 750;
   color: #334155;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .dim-rationale-text {
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 18px;
+  line-height: 1.65;
   color: #1e293b;
   white-space: pre-line;
 }
@@ -2410,14 +2414,14 @@
 .btn-precheck-secondary {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 20px;
+  gap: 8px;
+  padding: 12px 24px;
   background: #ffffff;
   color: #475569;
   border: 1.5px solid #cbd5e1;
   border-radius: 10px;
   font-family: 'Kanit', sans-serif;
-  font-size: 15.5px;
+  font-size: 20px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -2433,13 +2437,13 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 24px;
+  padding: 12px 28px;
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: #ffffff;
   border: none;
   border-radius: 10px;
   font-family: 'Kanit', sans-serif;
-  font-size: 15.5px;
+  font-size: 20px;
   font-weight: 800;
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
