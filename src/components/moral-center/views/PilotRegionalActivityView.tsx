@@ -186,6 +186,7 @@ import {
   GOV_GRANT_APPLICATION_TIPS,
   generateFullGovGrantProposal,
   exportGrantProposalToDocx,
+  exportGrantProposalToPdf,
   type GovGrantAgencyItem
 } from '../data/govGrantProposalService';
 import '../styles/PilotHackathon.css';
@@ -1523,6 +1524,8 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
   const [fullProposalModelName, setFullProposalModelName] = useState<string>('');
   const [selectedGrantAgency, setSelectedGrantAgency] = useState<GovGrantAgencyItem | null>(null);
   const [isFullProposalCopied, setIsFullProposalCopied] = useState<boolean>(false);
+  const [isExportingDocx, setIsExportingDocx] = useState<boolean>(false);
+  const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const fullProposalSectionRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -5271,12 +5274,46 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
                   <button
                     type="button"
                     className="full-grant-action-btn is-docx"
-                    onClick={() => exportGrantProposalToDocx(propProjectName || hackathonChallenge, fullProposalText, selectedGrantAgency?.name)}
-                    disabled={isGeneratingFullProposal || !fullProposalText.trim()}
-                    title="ดาวน์โหลดเป็นไฟล์ Microsoft Word (.docx)"
+                    onClick={async () => {
+                      if (isExportingDocx) return;
+                      setIsExportingDocx(true);
+                      try {
+                        await exportGrantProposalToDocx(
+                          propProjectName || hackathonChallenge,
+                          fullProposalText,
+                          selectedGrantAgency?.name
+                        );
+                      } finally {
+                        setIsExportingDocx(false);
+                      }
+                    }}
+                    disabled={isGeneratingFullProposal || isExportingDocx || isExportingPdf || !fullProposalText.trim()}
+                    title="ดาวน์โหลดเป็นไฟล์ Microsoft Word (.docx) พร้อมตารางจัดรูปสมบูรณ์"
                   >
                     <Download size={15} />
-                    <span>ดาวน์โหลด Word (.docx)</span>
+                    <span>{isExportingDocx ? 'กำลังสร้าง Word...' : 'ดาวน์โหลด Word (.docx)'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="full-grant-action-btn is-pdf"
+                    onClick={async () => {
+                      if (isExportingPdf) return;
+                      setIsExportingPdf(true);
+                      try {
+                        await exportGrantProposalToPdf(
+                          propProjectName || hackathonChallenge,
+                          fullProposalText,
+                          selectedGrantAgency?.name
+                        );
+                      } finally {
+                        setIsExportingPdf(false);
+                      }
+                    }}
+                    disabled={isGeneratingFullProposal || isExportingDocx || isExportingPdf || !fullProposalText.trim()}
+                    title="ดาวน์โหลดเป็นไฟล์ PDF ขนาด A4 แนวตั้งพร้อมส่งขอทุน"
+                  >
+                    <Download size={15} />
+                    <span>{isExportingPdf ? 'กำลังสร้าง PDF...' : 'ดาวน์โหลด PDF (.pdf)'}</span>
                   </button>
                 </div>
               </div>

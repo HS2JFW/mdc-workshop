@@ -6554,6 +6554,12 @@
   color: #1d4ed8;
 }
 
+.full-grant-action-btn.is-pdf {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
 .full-grant-action-btn.is-copied {
   background: #10b981;
   border-color: #059669;

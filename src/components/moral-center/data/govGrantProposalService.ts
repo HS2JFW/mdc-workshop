@@ -1,4 +1,20 @@
-import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx';
+import {
+  AlignmentType,
+  BorderStyle,
+  Document,
+  HeadingLevel,
+  Packer,
+  Paragraph,
+  Table,
+  TableCell,
+  TableLayoutType,
+  TableRow,
+  TextRun,
+  VerticalAlign,
+  WidthType
+} from 'docx';
+import { jsPDF } from 'jspdf';
+import { domToCanvas } from 'modern-screenshot';
 import {
   fetchOpenRouterWithBackoff,
   getStoredOpenRouterApiKey,
@@ -334,19 +350,17 @@ ${input.activityPlan || '1) ระดับนโยบาย: ประสา�
 --------------------------------------------------------------------
 11. รายละเอียดงบประมาณ (แยกตามหมวดรายจ่ายมาตรฐานสำนักงบประมาณ)
 หมายเหตุ: อัตราเบิกจ่ายปรับให้ตรงตามระเบียบกระทรวงการคลังและเงื่อนไขของแหล่งทุนเป้าหมายที่เลือก (ไม่ตั้งเกินจริง)
-1) หมวดค่าตอบแทน (ผู้เชี่ยวชาญ / วิทยากร / ที่ปรึกษาชุมชน)
-   - ค่าตอบแทนวิทยากรกระบวนการและพี่เลี้ยงเชิงพฤติกรรม: 2 คน x 6 ชั่วโมง x 5 ครั้ง x 1,200 บาท = 72,000 บาท
-   - ค่าตอบแทนผู้ช่วยประสานงานและเก็บข้อมูลภาคสนาม: 2 คน x 6 เดือน x 6,000 บาท = 72,000 บาท
-2) หมวดค่าใช้สอย (จัดเวที อบรม ลงพื้นที่ ค่าจ้างเหมา ค่าเดินทาง)
-   - ค่าจัดเวทีประชุมเชิงปฏิบัติการร่วมภาคี 3 ระดับและชุมชน: 60 คน x 2 ครั้ง x 350 บาท = 42,000 บาท
-   - ค่าพาหนะและค่าเดินทางลงพื้นที่ติดตามประเมินผล: 4 ครั้ง x 3 คัน x 2,000 บาท = 24,000 บาท
-   - ค่าจ้างเหมาออกแบบสื่อรณรงค์/ระบบเก็บข้อมูลออนไลน์: 1 งาน x 35,000 บาท = 35,000 บาท
-3) หมวดค่าวัสดุ (วัสดุสำนักงาน วัสดุการจัดกิจกรรม อุปกรณ์สิ้นเปลือง)
-   - ค่าวัสดุสำนักงานและชุดเครื่องมือทำกิจกรรมในชุมชน: 10 กลุ่ม x 2,500 บาท = 25,000 บาท
-   - ค่าจัดพิมพ์คู่มือและชุดสื่อความรู้ชุมชน: 300 เล่ม x 100 บาท = 30,000 บาท
-4) หมวดค่าครุภัณฑ์
-   - 0 บาท (งดตั้งงบจัดซื้อครุภัณฑ์ตามแนวทางกองทุนที่ไม่สนับสนุนค่าครุภัณฑ์ โดยใช้ทรัพยากรเดิมของหน่วยงาน)
-* รวมงบประมาณขอรับการสนับสนุนทั้งสิ้น: 300,000 บาท (สามแสนบาทถ้วน — ปรับเพิ่ม/ลดให้ตรงเพดานกองทุนได้)
+| หมวดรายจ่าย | รายการค่าใช้จ่ายและตัวคูณคำนวณ | จำนวนเงิน (บาท) | หมายเหตุ |
+|---|---|---|---|
+| 1. หมวดค่าตอบแทน | ค่าตอบแทนวิทยากรกระบวนการและพี่เลี้ยงเชิงพฤติกรรม (2 คน x 6 ชั่วโมง x 5 ครั้ง x 1,200 บาท) | 72,000 | ตามเกณฑ์ราชการ |
+| 1. หมวดค่าตอบแทน | ค่าตอบแทนผู้ช่วยประสานงานและเก็บข้อมูลภาคสนาม (2 คน x 6 เดือน x 6,000 บาท) | 72,000 | งานภาคสนาม 6 เดือน |
+| 2. หมวดค่าใช้สอย | ค่าจัดเวทีประชุมเชิงปฏิบัติการร่วมภาคี 3 ระดับและชุมชน (60 คน x 2 ครั้ง x 350 บาท) | 42,000 | ค่าอาหาร/สถานที่ |
+| 2. หมวดค่าใช้สอย | ค่าพาหนะและค่าเดินทางลงพื้นที่ติดตามประเมินผล (4 ครั้ง x 3 คัน x 2,000 บาท) | 24,000 | เบิกจ่ายตามจริง |
+| 2. หมวดค่าใช้สอย | ค่าจ้างเหมาออกแบบสื่อรณรงค์และระบบเก็บข้อมูลออนไลน์ (1 งาน x 35,000 บาท) | 35,000 | ตรวจรับตามงวดงาน |
+| 3. หมวดค่าวัสดุ | ค่าวัสดุสำนักงานและชุดเครื่องมือทำกิจกรรมในชุมชน (10 กลุ่ม x 2,500 บาท) | 25,000 | วัสดุฝึกปฏิบัติ |
+| 3. หมวดค่าวัสดุ | ค่าจัดพิมพ์คู่มือและชุดสื่อความรู้ชุมชน (300 เล่ม x 100 บาท) | 30,000 | สื่อเผยแพร่ |
+| 4. หมวดค่าครุภัณฑ์ | งดตั้งงบจัดซื้อครุภัณฑ์ (ใช้ทรัพยากรเดิมของหน่วยงาน) | 0 | เป็นไปตามเกณฑ์ทุน |
+| รวมทั้งสิ้น | รวมงบประมาณขอรับการสนับสนุนทั้งโครงการ (สามแสนบาทถ้วน) | 300,000 | ปรับเพิ่ม/ลดได้ตามเพดานทุน |
 
 12. งบประมาณสมทบจากหน่วยงานเจ้าของโครงการและภาคี (In-Cash & In-Kind)
 - งบประมาณสมทบที่เป็นตัวเงิน (In-Cash): สนับสนุนเพิ่มเติมจากองค์กร/เครือข่ายท้องถิ่นตามความเหมาะสม (เช่น ค่าอาหารว่างเสริม หรือรางวัลเชิดชูเกียรติ) ประมาณ 20,000 บาท
@@ -470,9 +484,9 @@ export async function generateFullGovGrantProposal(
 - ส่วนที่ 3: แผนการดำเนินงานและเทคนิควิธีการ
   8. ขอบเขตและวิธีดำเนินงาน (ขยายความจากรายละเอียดและแผน 3 ระดับในส่วนที่ 2 แบ่งเป็นระยะและกิจกรรมหลักสอดคล้องกับวัตถุประสงค์ทุกข้อ)
   9. ระยะเวลาดำเนินงาน (ระบุระยะเวลารวม เช่น 6 เดือน หรือ 1 ปีงบประมาณ พร้อมช่วงเริ่มต้น-สิ้นสุดโดยประมาณ)
-  10. แผนปฏิบัติการ (ทำเป็นตาราง Gantt Chart ข้อความอ่านง่าย เรียงรายเดือน สอดคล้องกับกิจกรรมในข้อ 8 พร้อมผู้รับผิดชอบและผลส่งมอบแต่ละช่วง)
+  10. แผนปฏิบัติการ (จัดทำเป็นตาราง Markdown Gantt Chart ที่มีหัวตารางและบรรทัดคั่น |---| โดยใช้ [x] แทนช่วงดำเนินการและ [ ] แทนช่วงไม่ได้ทำ เรียงรายเดือน สอดคล้องกับกิจกรรมในข้อ 8 พร้อมผู้รับผิดชอบและผลส่งมอบแต่ละช่วง)
 - ส่วนที่ 4: งบประมาณและความคุ้มค่า
-  11. รายละเอียดงบประมาณ (คำนวณให้สอดคล้องกับกิจกรรมที่เขียนไว้ในข้อ 8 และ 10 แยกหมวดรายจ่ายมาตรฐานสำนักงบประมาณ 4 หมวด: หมวดค่าตอบแทน, หมวดค่าใช้สอย, หมวดค่าวัสดุ, หมวดค่าครุภัณฑ์ — แสดงสูตรคำนวณตัวคูณให้ตรวจสอบได้ทุกบรรทัด และระบุเกณฑ์ครุภัณฑ์)
+  11. รายละเอียดงบประมาณ (จัดทำเป็นตาราง Markdown ที่มีหัวตารางและบรรทัดคั่น |---| คอลัมน์: | หมวดรายจ่าย | รายการค่าใช้จ่ายและตัวคูณคำนวณ | จำนวนเงิน (บาท) | หมายเหตุ | ให้สอดคล้องกับกิจกรรมที่เขียนไว้ในข้อ 8 และ 10 แยกครบ 4 หมวด: หมวดค่าตอบแทน, หมวดค่าใช้สอย, หมวดค่าวัสดุ, หมวดค่าครุภัณฑ์ — แสดงสูตรตัวคูณตรวจสอบได้ทุกแถว และมีแถวสรุป "รวมทั้งสิ้น")
   12. งบประมาณสมทบ (ระบุสัดส่วนทั้งตัวเงิน In-Cash และที่ไม่ใช่ตัวเงิน In-Kind เช่น ค่าแรงบุคลากร สถานที่ เครื่องมือเดิม)
 - ส่วนที่ 5: ตัวชี้วัด การประเมินผล และความยั่งยืน
   13. ผลที่คาดว่าจะได้รับและตัวชี้วัดความสำเร็จ (ยึด KPI จากส่วนที่ 2 มาจัดแบ่ง 3 ระดับ: ผลผลิต Output, ผลลัพธ์ Outcome, ผลกระทบ Impact ทั้งเชิงปริมาณและคุณภาพ)
@@ -574,44 +588,370 @@ ${evalRationale ? `${evalRationale}\n` : ''}${dimFeedbackLines ? `ผลรา�
   }
 }
 
+type ProposalBlock =
+  | { type: 'section'; text: string }
+  | { type: 'subtopic'; text: string }
+  | { type: 'subheading'; text: string }
+  | { type: 'bullet'; text: string; indentLevel: number }
+  | { type: 'paragraph'; text: string }
+  | { type: 'table'; headers: string[]; rows: string[][] }
+  | { type: 'spacer' };
+
+interface InlineSegment {
+  text: string;
+  bold: boolean;
+}
+
+function sanitizeExportFilename(title: string): string {
+  return (title || 'Grant_Proposal')
+    .replace(/[\\/:*?"<>|]/g, '')
+    .replace(/\s+/g, '_')
+    .slice(0, 70);
+}
+
+function normalizeTableCellText(raw: string): string {
+  return raw
+    .trim()
+    .replace(/\[[xX]\]/g, '✓')
+    .replace(/\[\s\]/g, '-')
+    .replace(/`/g, '');
+}
+
+function parsePipeRow(line: string): string[] {
+  let working = line.trim();
+  if (working.startsWith('|')) {
+    working = working.slice(1);
+  }
+  if (working.endsWith('|')) {
+    working = working.slice(0, -1);
+  }
+  return working.split('|').map((cell) => normalizeTableCellText(cell));
+}
+
+function isMarkdownTableLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+  if (trimmed.startsWith('|') && trimmed.includes('|', 1)) return true;
+  const pipeCount = (trimmed.match(/\|/g) || []).length;
+  return pipeCount >= 2;
+}
+
+function isMarkdownSeparatorRow(cells: string[]): boolean {
+  if (cells.length === 0) return false;
+  return cells.every((cell) => /^:?-{2,}:?$/.test(cell.replace(/\s+/g, '')));
+}
+
+function parseInlineBoldSegments(text: string): InlineSegment[] {
+  const cleaned = text.replace(/`/g, '');
+  const parts = cleaned.split(/(\*\*[^*]+\*\*)/g);
+  const segments: InlineSegment[] = [];
+
+  for (const part of parts) {
+    if (!part) continue;
+    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+      segments.push({ text: part.slice(2, -2), bold: true });
+    } else {
+      segments.push({ text: part.replace(/\*\*/g, ''), bold: false });
+    }
+  }
+
+  return segments.length > 0 ? segments : [{ text: '', bold: false }];
+}
+
+function parseProposalDocumentBlocks(proposalContent: string): ProposalBlock[] {
+  const lines = (proposalContent || '').split(/\r?\n/);
+  const blocks: ProposalBlock[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const rawLine = lines[i];
+    const trimmed = rawLine.trim();
+
+    if (!trimmed) {
+      if (blocks.length > 0 && blocks[blocks.length - 1].type !== 'spacer') {
+        blocks.push({ type: 'spacer' });
+      }
+      i += 1;
+      continue;
+    }
+
+    // Skip pure ASCII divider lines (e.g. ==== or ----) for clean print/Word output
+    if (/^[=\-_]{5,}$/.test(trimmed)) {
+      i += 1;
+      continue;
+    }
+
+    // Collect consecutive Markdown table lines
+    if (isMarkdownTableLine(rawLine)) {
+      const parsedRows: string[][] = [];
+      while (i < lines.length && isMarkdownTableLine(lines[i])) {
+        const cells = parsePipeRow(lines[i]);
+        if (!isMarkdownSeparatorRow(cells) && cells.some((c) => c.length > 0)) {
+          parsedRows.push(cells);
+        }
+        i += 1;
+      }
+
+      if (parsedRows.length > 0) {
+        const colCount = Math.max(...parsedRows.map((r) => r.length));
+        const normalizedRows = parsedRows.map((row) => {
+          const padded = [...row];
+          while (padded.length < colCount) {
+            padded.push('');
+          }
+          return padded;
+        });
+        blocks.push({
+          type: 'table',
+          headers: normalizedRows[0],
+          rows: normalizedRows.slice(1)
+        });
+      }
+      continue;
+    }
+
+    const mdHeadingMatch = trimmed.match(/^(#{1,4})\s+(.+)$/);
+    const effectiveLine = mdHeadingMatch ? mdHeadingMatch[2].trim() : trimmed;
+
+    if (/^ส่วนที่\s*\d+/.test(effectiveLine)) {
+      blocks.push({ type: 'section', text: effectiveLine.replace(/\*\*/g, '') });
+      i += 1;
+      continue;
+    }
+
+    if (/^\d+\.\s+/.test(effectiveLine)) {
+      blocks.push({ type: 'subtopic', text: effectiveLine.replace(/\*\*/g, '') });
+      i += 1;
+      continue;
+    }
+
+    if (mdHeadingMatch) {
+      blocks.push({ type: 'subheading', text: effectiveLine.replace(/\*\*/g, '') });
+      i += 1;
+      continue;
+    }
+
+    const bulletMatch = rawLine.match(/^(\s*)([-*•]|\d+\))\s+(.+)$/);
+    if (bulletMatch) {
+      const indentSpaces = bulletMatch[1].length;
+      const marker = bulletMatch[2].endsWith(')') ? `${bulletMatch[2]} ` : '• ';
+      blocks.push({
+        type: 'bullet',
+        text: `${marker}${bulletMatch[3].trim()}`,
+        indentLevel: indentSpaces >= 2 ? 1 : 0
+      });
+      i += 1;
+      continue;
+    }
+
+    blocks.push({ type: 'paragraph', text: trimmed });
+    i += 1;
+  }
+
+  return blocks;
+}
+
+function computeTableColumnWidths(headers: string[], rows: string[][], totalDxa: number): {
+  dxaWidths: number[];
+  pctWidths: number[];
+  alignments: ('left' | 'center' | 'right')[];
+} {
+  const colCount = Math.max(1, headers.length);
+  const weights: number[] = [];
+  const alignments: ('left' | 'center' | 'right')[] = [];
+
+  for (let c = 0; c < colCount; c += 1) {
+    const headerText = headers[c] || '';
+    const colValues = rows.map((r) => r[c] || '');
+    const maxLen = Math.max(headerText.length, ...colValues.map((v) => v.length));
+
+    const isShortMarkerCol =
+      maxLen <= 5 &&
+      colValues.every((v) => v === '' || v === '✓' || v === '-' || /^\d{1,3}$/.test(v));
+    const isCurrencyCol =
+      /บาท|จำนวนเงิน|งบประมาณ|ราคา/i.test(headerText) &&
+      colValues.some((v) => /^[\d,.\-]+$/.test(v.trim()));
+
+    if (isShortMarkerCol) {
+      alignments.push('center');
+      weights.push(Math.max(4, Math.min(7, maxLen + 2)));
+    } else if (isCurrencyCol) {
+      alignments.push('right');
+      weights.push(Math.max(11, Math.min(16, maxLen + 2)));
+    } else {
+      alignments.push('left');
+      weights.push(Math.max(12, Math.min(34, Math.round(maxLen * 0.72) + 6)));
+    }
+  }
+
+  const weightSum = weights.reduce((acc, w) => acc + w, 0) || colCount;
+  const pctWidths = weights.map((w) => Math.max(4, Math.round((w / weightSum) * 1000) / 10));
+  const dxaWidths = weights.map((w) => Math.max(420, Math.floor((w / weightSum) * totalDxa)));
+
+  // Adjust rounding remainder onto the widest column
+  const dxaSum = dxaWidths.reduce((acc, v) => acc + v, 0);
+  if (dxaSum !== totalDxa && dxaWidths.length > 0) {
+    let widestIdx = 0;
+    for (let c = 1; c < dxaWidths.length; c += 1) {
+      if (dxaWidths[c] > dxaWidths[widestIdx]) widestIdx = c;
+    }
+    dxaWidths[widestIdx] += totalDxa - dxaSum;
+  }
+
+  return { dxaWidths, pctWidths, alignments };
+}
+
+function buildDocxTextRuns(
+  text: string,
+  options: { size: number; color?: string; forceBold?: boolean; font?: string }
+): TextRun[] {
+  const segments = parseInlineBoldSegments(text);
+  return segments.map(
+    (seg) =>
+      new TextRun({
+        text: seg.text,
+        bold: Boolean(options.forceBold || seg.bold),
+        size: options.size,
+        color: options.color || '0F172A',
+        font: options.font || 'TH Sarabun New'
+      })
+  );
+}
+
+function toDocxAlignment(align: 'left' | 'center' | 'right') {
+  if (align === 'center') return AlignmentType.CENTER;
+  if (align === 'right') return AlignmentType.RIGHT;
+  return AlignmentType.LEFT;
+}
+
+function buildDocxTable(headers: string[], rows: string[][]): Table {
+  // A4 width = 11906 twips, margins 1080 twips each side -> 9746 twips content width
+  const TOTAL_TABLE_DXA = 9746;
+  const { dxaWidths, alignments } = computeTableColumnWidths(headers, rows, TOTAL_TABLE_DXA);
+  const isDenseTable = headers.length >= 8;
+  const fontSize = isDenseTable ? 22 : 24;
+  const cellHorizontalPad = isDenseTable ? 60 : 100;
+
+  const cellBorders = {
+    top: { style: BorderStyle.SINGLE, size: 4, color: '94A3B8' },
+    bottom: { style: BorderStyle.SINGLE, size: 4, color: '94A3B8' },
+    left: { style: BorderStyle.SINGLE, size: 4, color: '94A3B8' },
+    right: { style: BorderStyle.SINGLE, size: 4, color: '94A3B8' }
+  };
+
+  const makeCell = (
+    text: string,
+    colIdx: number,
+    opts: { isHeader?: boolean; isTotalRow?: boolean; isZebra?: boolean }
+  ) =>
+    new TableCell({
+      width: { size: dxaWidths[colIdx], type: WidthType.DXA },
+      verticalAlign: VerticalAlign.CENTER,
+      margins: {
+        top: 80,
+        bottom: 80,
+        left: cellHorizontalPad,
+        right: cellHorizontalPad
+      },
+      borders: cellBorders,
+      shading: opts.isHeader
+        ? { fill: 'DBEAFE' }
+        : opts.isTotalRow
+          ? { fill: 'EFF6FF' }
+          : opts.isZebra
+            ? { fill: 'F8FAFC' }
+            : undefined,
+      children: [
+        new Paragraph({
+          alignment: toDocxAlignment(opts.isHeader ? (alignments[colIdx] === 'right' ? 'right' : alignments[colIdx]) : alignments[colIdx]),
+          spacing: { before: 0, after: 0 },
+          children: buildDocxTextRuns(text || '-', {
+            size: fontSize,
+            forceBold: Boolean(opts.isHeader || opts.isTotalRow),
+            color: opts.isHeader ? '1E3A8A' : '0F172A'
+          })
+        })
+      ]
+    });
+
+  const tableRows: TableRow[] = [
+    new TableRow({
+      tableHeader: true,
+      cantSplit: true,
+      children: headers.map((h, colIdx) => makeCell(h, colIdx, { isHeader: true }))
+    })
+  ];
+
+  rows.forEach((row, rowIdx) => {
+    const firstCell = (row[0] || '').trim();
+    const isTotalRow = /^รวม/.test(firstCell) || /รวมทั้งสิ้น/.test(row.join(' '));
+    tableRows.push(
+      new TableRow({
+        cantSplit: true,
+        children: row.map((cellText, colIdx) =>
+          makeCell(cellText, colIdx, {
+            isTotalRow,
+            isZebra: !isTotalRow && rowIdx % 2 === 1
+          })
+        )
+      })
+    );
+  });
+
+  return new Table({
+    width: { size: TOTAL_TABLE_DXA, type: WidthType.DXA },
+    columnWidths: dxaWidths,
+    layout: TableLayoutType.FIXED,
+    rows: tableRows
+  });
+}
+
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 /**
- * ส่งออกข้อเสนอโครงการฉบับสมบูรณ์เป็นไฟล์ Word (.docx)
+ * ส่งออกข้อเสนอโครงการฉบับสมบูรณ์เป็นไฟล์ Word (.docx) พร้อมตาราง Word แท้
  */
 export async function exportGrantProposalToDocx(
   projectTitle: string,
   proposalContent: string,
   targetAgencyName?: string
 ): Promise<void> {
-  const safeName = (projectTitle || 'Grant_Proposal')
-    .replace(/[\\/:*?"<>|]/g, '')
-    .replace(/\s+/g, '_')
-    .slice(0, 70);
-
-  const lines = (proposalContent || '').split(/\r?\n/);
-  const paragraphs: Paragraph[] = [
+  const safeName = sanitizeExportFilename(projectTitle);
+  const docChildren: (Paragraph | Table)[] = [
     new Paragraph({
       heading: HeadingLevel.HEADING_1,
       children: [
         new TextRun({
           text: projectTitle || 'ข้อเสนอโครงการฉบับสมบูรณ์เพื่อขอรับการสนับสนุนงบประมาณจากหน่วยงานภาครัฐ',
           bold: true,
-          size: 32,
-          font: 'TH Sarabun New'
+          size: 36,
+          font: 'TH Sarabun New',
+          color: '1E3A8A'
         })
       ],
-      spacing: { after: 160 }
+      spacing: { after: 140 }
     })
   ];
 
   if (targetAgencyName) {
-    paragraphs.push(
+    docChildren.push(
       new Paragraph({
         children: [
           new TextRun({
             text: `แหล่งทุนเป้าหมาย: ${targetAgencyName}`,
             bold: true,
-            size: 26,
-            font: 'TH Sarabun New'
+            size: 28,
+            font: 'TH Sarabun New',
+            color: '334155'
           })
         ],
         spacing: { after: 200 }
@@ -619,43 +959,429 @@ export async function exportGrantProposalToDocx(
     );
   }
 
-  for (const rawLine of lines) {
-    const trimmed = rawLine.trim();
-    const isSectionHeader =
-      /^ส่วนที่\s*\d+/.test(trimmed) ||
-      /^\d+\.\s+/.test(trimmed) ||
-      trimmed.startsWith('===');
-    paragraphs.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: rawLine,
-            bold: isSectionHeader,
-            size: isSectionHeader ? 28 : 24,
-            font: 'TH Sarabun New'
+  const blocks = parseProposalDocumentBlocks(proposalContent);
+
+  for (const block of blocks) {
+    switch (block.type) {
+      case 'spacer':
+        docChildren.push(new Paragraph({ children: [], spacing: { after: 80 } }));
+        break;
+      case 'section':
+        docChildren.push(
+          new Paragraph({
+            heading: HeadingLevel.HEADING_2,
+            shading: { fill: 'EFF6FF' },
+            border: {
+              bottom: { style: BorderStyle.SINGLE, size: 6, color: '2563EB' }
+            },
+            spacing: { before: 220, after: 120 },
+            children: [
+              new TextRun({
+                text: block.text,
+                bold: true,
+                size: 32,
+                font: 'TH Sarabun New',
+                color: '1E3A8A'
+              })
+            ]
           })
-        ],
-        spacing: { after: trimmed === '' ? 120 : 80 }
-      })
-    );
+        );
+        break;
+      case 'subtopic':
+        docChildren.push(
+          new Paragraph({
+            heading: HeadingLevel.HEADING_3,
+            spacing: { before: 160, after: 80 },
+            children: [
+              new TextRun({
+                text: block.text,
+                bold: true,
+                size: 30,
+                font: 'TH Sarabun New',
+                color: '0F172A'
+              })
+            ]
+          })
+        );
+        break;
+      case 'subheading':
+        docChildren.push(
+          new Paragraph({
+            spacing: { before: 100, after: 60 },
+            children: buildDocxTextRuns(block.text, {
+              size: 28,
+              forceBold: true,
+              color: '1E293B'
+            })
+          })
+        );
+        break;
+      case 'bullet':
+        docChildren.push(
+          new Paragraph({
+            indent: { left: block.indentLevel > 0 ? 540 : 280 },
+            spacing: { after: 60 },
+            children: buildDocxTextRuns(block.text, { size: 28 })
+          })
+        );
+        break;
+      case 'table':
+        docChildren.push(buildDocxTable(block.headers, block.rows));
+        docChildren.push(new Paragraph({ children: [], spacing: { after: 120 } }));
+        break;
+      case 'paragraph':
+      default:
+        docChildren.push(
+          new Paragraph({
+            spacing: { after: 80 },
+            children: buildDocxTextRuns(block.text, { size: 28 })
+          })
+        );
+        break;
+    }
   }
 
   const doc = new Document({
     sections: [
       {
-        properties: {},
-        children: paragraphs
+        properties: {
+          page: {
+            size: { width: 11906, height: 16838 },
+            margin: { top: 1080, right: 1080, bottom: 1080, left: 1080 }
+          }
+        },
+        children: docChildren
       }
     ]
   });
 
   const blob = await Packer.toBlob(doc);
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${safeName}_ข้อเสนอโครงการขอทุนรัฐ.docx`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  triggerBlobDownload(blob, `${safeName}_ข้อเสนอโครงการขอทุนรัฐ.docx`);
+}
+
+function appendInlineHtmlSegments(parent: HTMLElement, text: string): void {
+  const segments = parseInlineBoldSegments(text);
+  for (const seg of segments) {
+    if (seg.bold) {
+      const strong = document.createElement('strong');
+      strong.textContent = seg.text;
+      strong.style.fontWeight = '700';
+      parent.appendChild(strong);
+    } else {
+      parent.appendChild(document.createTextNode(seg.text));
+    }
+  }
+}
+
+function buildPdfTableSectionElement(
+  headers: string[],
+  rows: string[][],
+  pctWidths: number[],
+  alignments: ('left' | 'center' | 'right')[]
+): HTMLTableElement {
+  const table = document.createElement('table');
+  const isDense = headers.length >= 8;
+  table.style.width = '100%';
+  table.style.borderCollapse = 'collapse';
+  table.style.tableLayout = 'fixed';
+  table.style.margin = '6px 0 10px 0';
+  table.style.fontSize = isDense ? '10.5px' : '12px';
+  table.style.lineHeight = '1.45';
+
+  const colgroup = document.createElement('colgroup');
+  pctWidths.forEach((pct) => {
+    const col = document.createElement('col');
+    col.style.width = `${pct}%`;
+    colgroup.appendChild(col);
+  });
+  table.appendChild(colgroup);
+
+  const thead = document.createElement('thead');
+  const headerTr = document.createElement('tr');
+  headers.forEach((h, colIdx) => {
+    const th = document.createElement('th');
+    th.style.border = '1px solid #94a3b8';
+    th.style.background = '#dbeafe';
+    th.style.color = '#1e3a8a';
+    th.style.fontWeight = '700';
+    th.style.padding = isDense ? '5px 4px' : '6px 8px';
+    th.style.textAlign = alignments[colIdx] || 'left';
+    th.style.verticalAlign = 'middle';
+    th.style.wordBreak = 'break-word';
+    appendInlineHtmlSegments(th, h || '-');
+    headerTr.appendChild(th);
+  });
+  thead.appendChild(headerTr);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  rows.forEach((row, rowIdx) => {
+    const tr = document.createElement('tr');
+    const firstCell = (row[0] || '').trim();
+    const isTotalRow = /^รวม/.test(firstCell) || /รวมทั้งสิ้น/.test(row.join(' '));
+    const rowBg = isTotalRow ? '#eff6ff' : rowIdx % 2 === 1 ? '#f8fafc' : '#ffffff';
+
+    row.forEach((cellText, colIdx) => {
+      const td = document.createElement('td');
+      td.style.border = '1px solid #cbd5e1';
+      td.style.background = rowBg;
+      td.style.color = '#0f172a';
+      td.style.fontWeight = isTotalRow ? '700' : '400';
+      td.style.padding = isDense ? '4px 4px' : '5px 8px';
+      td.style.textAlign = alignments[colIdx] || 'left';
+      td.style.verticalAlign = 'middle';
+      td.style.wordBreak = 'break-word';
+      appendInlineHtmlSegments(td, cellText || '-');
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+
+  return table;
+}
+
+/**
+ * ส่งออกข้อเสนอโครงการฉบับสมบูรณ์เป็นไฟล์ PDF ขนาด A4 แนวตั้ง พร้อมตารางที่จัดหน้าอัตโนมัติ
+ */
+export async function exportGrantProposalToPdf(
+  projectTitle: string,
+  proposalContent: string,
+  targetAgencyName?: string
+): Promise<void> {
+  const safeName = sanitizeExportFilename(projectTitle);
+  const A4_WIDTH_PX = 794;
+  const A4_HEIGHT_PX = 1123;
+  const PAD_X = 48;
+  const PAD_TOP = 44;
+  const PAD_BOTTOM = 48;
+  const CONTENT_WIDTH_PX = A4_WIDTH_PX - PAD_X * 2;
+  const MAX_CONTENT_HEIGHT_PX = A4_HEIGHT_PX - PAD_TOP - PAD_BOTTOM - 22;
+
+  const stagingRoot = document.createElement('div');
+  stagingRoot.style.position = 'fixed';
+  stagingRoot.style.left = '-10000px';
+  stagingRoot.style.top = '0';
+  stagingRoot.style.width = `${A4_WIDTH_PX}px`;
+  stagingRoot.style.background = '#ffffff';
+  stagingRoot.style.color = '#0f172a';
+  stagingRoot.style.fontFamily = "'TH Sarabun New', 'Sarabun', 'Kanit', 'Noto Sans Thai', sans-serif";
+  stagingRoot.style.zIndex = '-1';
+  stagingRoot.style.pointerEvents = 'none';
+  document.body.appendChild(stagingRoot);
+
+  try {
+    if (document.fonts?.ready) {
+      await document.fonts.ready;
+    }
+
+    const blocks = parseProposalDocumentBlocks(proposalContent);
+
+    const createPageWrapper = (): { page: HTMLDivElement; body: HTMLDivElement } => {
+      const page = document.createElement('div');
+      page.style.width = `${A4_WIDTH_PX}px`;
+      page.style.height = `${A4_HEIGHT_PX}px`;
+      page.style.boxSizing = 'border-box';
+      page.style.padding = `${PAD_TOP}px ${PAD_X}px ${PAD_BOTTOM}px ${PAD_X}px`;
+      page.style.background = '#ffffff';
+      page.style.color = '#0f172a';
+      page.style.display = 'flex';
+      page.style.flexDirection = 'column';
+      page.style.justifyContent = 'space-between';
+      page.style.fontFamily = "'TH Sarabun New', 'Sarabun', 'Kanit', 'Noto Sans Thai', sans-serif";
+
+      const body = document.createElement('div');
+      body.style.width = `${CONTENT_WIDTH_PX}px`;
+      body.style.boxSizing = 'border-box';
+      page.appendChild(body);
+      stagingRoot.appendChild(page);
+      return { page, body };
+    };
+
+    const pages: { page: HTMLDivElement; body: HTMLDivElement }[] = [createPageWrapper()];
+    let current = pages[0];
+
+    const startNewPage = () => {
+      current = createPageWrapper();
+      pages.push(current);
+    };
+
+    const appendBlockWithPagination = (el: HTMLElement) => {
+      current.body.appendChild(el);
+      if (current.body.scrollHeight > MAX_CONTENT_HEIGHT_PX && current.body.children.length > 1) {
+        current.body.removeChild(el);
+        startNewPage();
+        current.body.appendChild(el);
+      }
+    };
+
+    // Cover header at top of page 1
+    const headerBox = document.createElement('div');
+    headerBox.style.borderBottom = '2px solid #1e3a8a';
+    headerBox.style.paddingBottom = '10px';
+    headerBox.style.marginBottom = '12px';
+
+    const titleEl = document.createElement('h1');
+    titleEl.textContent = projectTitle || 'ข้อเสนอโครงการฉบับสมบูรณ์เพื่อขอรับการสนับสนุนงบประมาณจากหน่วยงานภาครัฐ';
+    titleEl.style.margin = '0 0 4px 0';
+    titleEl.style.fontSize = '19px';
+    titleEl.style.fontWeight = '700';
+    titleEl.style.lineHeight = '1.35';
+    titleEl.style.color = '#1e3a8a';
+    headerBox.appendChild(titleEl);
+
+    if (targetAgencyName) {
+      const agencyEl = document.createElement('div');
+      agencyEl.textContent = `แหล่งทุนเป้าหมาย: ${targetAgencyName}`;
+      agencyEl.style.fontSize = '13.5px';
+      agencyEl.style.fontWeight = '600';
+      agencyEl.style.color = '#334155';
+      headerBox.appendChild(agencyEl);
+    }
+    appendBlockWithPagination(headerBox);
+
+    for (const block of blocks) {
+      if (block.type === 'spacer') {
+        const spacer = document.createElement('div');
+        spacer.style.height = '5px';
+        appendBlockWithPagination(spacer);
+        continue;
+      }
+
+      if (block.type === 'table') {
+        const { pctWidths, alignments } = computeTableColumnWidths(block.headers, block.rows, 9746);
+        let remainingRows = [...block.rows];
+
+        while (remainingRows.length > 0 || block.rows.length === 0) {
+          const tableEl = buildPdfTableSectionElement(block.headers, remainingRows, pctWidths, alignments);
+          current.body.appendChild(tableEl);
+
+          if (current.body.scrollHeight <= MAX_CONTENT_HEIGHT_PX) {
+            break;
+          }
+
+          // Inspect how many rows fit on current page
+          const tbody = tableEl.querySelector('tbody');
+          const trList = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
+          let fitCount = 0;
+
+          if (trList.length > 0) {
+            // Remove rows from bottom until table fits or 0 rows fit
+            while (trList.length - fitCount > 0 && current.body.scrollHeight > MAX_CONTENT_HEIGHT_PX) {
+              const lastTr = tbody?.lastElementChild;
+              if (!lastTr) break;
+              tbody?.removeChild(lastTr);
+              fitCount += 1;
+            }
+          }
+
+          const keptCount = remainingRows.length - fitCount;
+          if (keptCount <= 0) {
+            // Even header + 1 row didn't fit on current page: move to fresh page if current page isn't empty
+            current.body.removeChild(tableEl);
+            if (current.body.children.length > 0) {
+              startNewPage();
+              continue;
+            } else {
+              // Empty fresh page: render full table chunk to prevent infinite loop
+              const fallbackTable = buildPdfTableSectionElement(block.headers, remainingRows, pctWidths, alignments);
+              current.body.appendChild(fallbackTable);
+              break;
+            }
+          }
+
+          remainingRows = remainingRows.slice(keptCount);
+          if (remainingRows.length > 0) {
+            startNewPage();
+          } else {
+            break;
+          }
+        }
+        continue;
+      }
+
+      const p = document.createElement('div');
+      p.style.wordBreak = 'break-word';
+
+      if (block.type === 'section') {
+        p.style.margin = '12px 0 6px 0';
+        p.style.padding = '5px 10px';
+        p.style.background = '#eff6ff';
+        p.style.borderLeft = '4px solid #2563eb';
+        p.style.fontSize = '15.5px';
+        p.style.fontWeight = '700';
+        p.style.color = '#1e3a8a';
+        p.style.lineHeight = '1.4';
+        p.textContent = block.text;
+      } else if (block.type === 'subtopic') {
+        p.style.margin = '9px 0 4px 0';
+        p.style.fontSize = '14.5px';
+        p.style.fontWeight = '700';
+        p.style.color = '#0f172a';
+        p.style.lineHeight = '1.4';
+        p.textContent = block.text;
+      } else if (block.type === 'subheading') {
+        p.style.margin = '6px 0 3px 0';
+        p.style.fontSize = '13.5px';
+        p.style.fontWeight = '700';
+        p.style.color = '#1e293b';
+        p.style.lineHeight = '1.45';
+        appendInlineHtmlSegments(p, block.text);
+      } else if (block.type === 'bullet') {
+        p.style.margin = '2px 0 3px 0';
+        p.style.paddingLeft = block.indentLevel > 0 ? '28px' : '14px';
+        p.style.fontSize = '13px';
+        p.style.lineHeight = '1.5';
+        appendInlineHtmlSegments(p, block.text);
+      } else {
+        p.style.margin = '2px 0 4px 0';
+        p.style.fontSize = '13px';
+        p.style.lineHeight = '1.5';
+        appendInlineHtmlSegments(p, block.text);
+      }
+
+      appendBlockWithPagination(p);
+    }
+
+    const totalPages = pages.length;
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+    for (let idx = 0; idx < totalPages; idx += 1) {
+      const { page } = pages[idx];
+      const footer = document.createElement('div');
+      footer.style.borderTop = '1px solid #e2e8f0';
+      footer.style.paddingTop = '6px';
+      footer.style.display = 'flex';
+      footer.style.justifyContent = 'space-between';
+      footer.style.fontSize = '10.5px';
+      footer.style.color = '#64748b';
+
+      const leftSpan = document.createElement('span');
+      leftSpan.textContent = projectTitle
+        ? projectTitle.slice(0, 80)
+        : 'ข้อเสนอโครงการฉบับสมบูรณ์เพื่อขอรับการสนับสนุนงบประมาณจากหน่วยงานภาครัฐ';
+      const rightSpan = document.createElement('span');
+      rightSpan.textContent = `หน้า ${idx + 1} / ${totalPages}`;
+
+      footer.appendChild(leftSpan);
+      footer.appendChild(rightSpan);
+      page.appendChild(footer);
+
+      const canvas = await domToCanvas(page, {
+        scale: 2,
+        backgroundColor: '#ffffff'
+      });
+      const imgData = canvas.toDataURL('image/png');
+      if (idx > 0) {
+        pdf.addPage('a4', 'portrait');
+      }
+      pdf.addImage(imgData, 'PNG', 0, 0, 210, 297);
+    }
+
+    pdf.save(`${safeName}_ข้อเสนอโครงการขอทุนรัฐ.pdf`);
+  } finally {
+    if (stagingRoot.parentNode) {
+      stagingRoot.parentNode.removeChild(stagingRoot);
+    }
+  }
 }
