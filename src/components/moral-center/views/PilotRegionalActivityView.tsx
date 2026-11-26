@@ -56,7 +56,10 @@ import {
   Loader2,
   ChevronDown,
   Target,
-  LogIn
+  LogIn,
+  FileText,
+  Download,
+  Landmark
 } from 'lucide-react';
 import {
   PILOT_4_PROVINCES_META,
@@ -178,6 +181,13 @@ import {
   PROVINCE_HERO_BG_MOBILE,
   detectProvinceFromText
 } from '../data/pilotGeographyService';
+import {
+  GOV_GRANT_AGENCIES_DIRECTORY,
+  GOV_GRANT_APPLICATION_TIPS,
+  generateFullGovGrantProposal,
+  exportGrantProposalToDocx,
+  type GovGrantAgencyItem
+} from '../data/govGrantProposalService';
 import '../styles/PilotHackathon.css';
 import '../styles/PilotCriteriaModals.css';
 
@@ -1499,6 +1509,136 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
   const [isPreChecking, setIsPreChecking] = useState<boolean>(false);
   const [preCheckResult, setPreCheckResult] = useState<PreSubmissionEvaluationResult | null>(null);
   const [latestCriteriaRecord, setLatestCriteriaRecord] = useState<PilotHackathonCriteriaRecord | null>(null);
+
+  // ส่วนที่ 3 และ ส่วนที่ 4: ข้อเสนอโครงการฉบับสมบูรณ์ขอทุนรัฐ + แหล่งทุนภาครัฐ
+  const [isFullProposalSectionOpen, setIsFullProposalSectionOpen] = useState<boolean>(false);
+  const [fullProposalText, setFullProposalText] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(`mdc_full_grant_proposal_v1_${province}`) || '';
+    }
+    return '';
+  });
+  const [isGeneratingFullProposal, setIsGeneratingFullProposal] = useState<boolean>(false);
+  const [fullProposalSource, setFullProposalSource] = useState<'llm_api' | 'template' | null>(null);
+  const [fullProposalModelName, setFullProposalModelName] = useState<string>('');
+  const [selectedGrantAgency, setSelectedGrantAgency] = useState<GovGrantAgencyItem | null>(null);
+  const [isFullProposalCopied, setIsFullProposalCopied] = useState<boolean>(false);
+  const fullProposalSectionRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setIsFullProposalSectionOpen(false);
+    setSelectedGrantAgency(null);
+    if (typeof window !== 'undefined') {
+      setFullProposalText(localStorage.getItem(`mdc_full_grant_proposal_v1_${province}`) || '');
+    } else {
+      setFullProposalText('');
+    }
+  }, [province]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (fullProposalText) {
+        localStorage.setItem(`mdc_full_grant_proposal_v1_${province}`, fullProposalText);
+      }
+    } catch {}
+  }, [fullProposalText, province]);
+
+  const handleWriteFullProposal = useCallback(async (targetAgencyOverride?: GovGrantAgencyItem | null) => {
+    const activeAgency = targetAgencyOverride !== undefined ? targetAgencyOverride : selectedGrantAgency;
+    if (targetAgencyOverride !== undefined) {
+      setSelectedGrantAgency(targetAgencyOverride);
+    }
+
+    setIsPreCheckModalOpen(false);
+    setIsFullProposalSectionOpen(true);
+    setIsGeneratingFullProposal(true);
+
+    setTimeout(() => {
+      fullProposalSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 90);
+
+    try {
+      const result = await generateFullGovGrantProposal({
+        province: effectiveProvince || province,
+        challengeTopic: hackathonChallenge,
+        aiPromptInput,
+        projectName: propProjectName,
+        targetMoralVirtue: propTargetVirtue || research.weaknessVirtue,
+        targetAudience: propTargetAudience,
+        targetArea: propTargetArea,
+        proposalDetails: propProposalDetails,
+        activityPlan: propActivityPlan,
+        behavioralKpi: propBehavioralKpi,
+        proposerName: regFullName.trim() || `${regFirstName} ${regLastName}`.trim(),
+        proposerPosition: regPosition.trim(),
+        proposerAgency: regAgency.trim(),
+        evaluationResult: preCheckResult,
+        targetGrantAgency: activeAgency
+      });
+      setFullProposalText(result.text);
+      setFullProposalSource(result.source);
+      setFullProposalModelName(result.modelName);
+    } catch (err) {
+      console.error('handleWriteFullProposal error:', err);
+    } finally {
+      setIsGeneratingFullProposal(false);
+    }
+  }, [
+    selectedGrantAgency,
+    effectiveProvince,
+    province,
+    hackathonChallenge,
+    aiPromptInput,
+    propProjectName,
+    propTargetVirtue,
+    research.weaknessVirtue,
+    propTargetAudience,
+    propTargetArea,
+    propProposalDetails,
+    propActivityPlan,
+    propBehavioralKpi,
+    regFullName,
+    regFirstName,
+    regLastName,
+    regPosition,
+    regAgency,
+    preCheckResult
+  ]);
+
+  const handleCopyFullProposal = useCallback(async () => {
+    const text = (fullProposalText || '').trim();
+    if (!text) return;
+    let ok = false;
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(text);
+        ok = true;
+      }
+    } catch {
+      ok = false;
+    }
+    if (!ok && typeof document !== 'undefined') {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        ta.setSelectionRange(0, ta.value.length);
+        ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch {
+        ok = false;
+      }
+    }
+    if (ok) {
+      setIsFullProposalCopied(true);
+      setTimeout(() => setIsFullProposalCopied(false), 2000);
+    }
+  }, [fullProposalText]);
 
   // OpenRouter Config Change Listener
   const [apiKeyRefreshKey, setApiKeyRefreshKey] = useState<number>(0);
@@ -5074,6 +5214,184 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
               </button>
             </div>
           </form>
+
+          {/* =================================================================
+              ส่วนที่ 3: ข้อเสนอโครงการฉบับสมบูรณ์พร้อมขอทุนหน่วยงานภาครัฐ (5 ส่วนหลัก / 16 หัวข้อย่อย)
+              ================================================================= */}
+          {isFullProposalSectionOpen && (
+            <div ref={fullProposalSectionRef} id="hackathon-section-3-full-proposal" className="full-grant-proposal-card">
+              <div className="full-grant-header">
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '6px' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 12px', borderRadius: '999px', background: '#4f46e5', color: '#ffffff', fontSize: '12.5px', fontWeight: 700 }}>
+                      <FileText size={14} />
+                      <span>ส่วนที่ 3: โครงการฉบับสมบูรณ์ (พร้อมยื่นขอทุนรัฐ 16 หัวข้อย่อย)</span>
+                    </span>
+                    {fullProposalSource && !isGeneratingFullProposal && (
+                      <span style={{ padding: '4px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: 700, background: fullProposalSource === 'llm_api' ? '#ecfdf5' : '#fffbeb', color: fullProposalSource === 'llm_api' ? '#047857' : '#b45309', border: `1px solid ${fullProposalSource === 'llm_api' ? '#a7f3d0' : '#fde68a'}` }}>
+                        {fullProposalSource === 'llm_api' ? `✨ สังเคราะห์โดย AI (${fullProposalModelName})` : '📋 โครงสร้างฉบับสมบูรณ์มาตรฐาน'}
+                      </span>
+                    )}
+                    {selectedGrantAgency && (
+                      <span style={{ padding: '4px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: 700, background: '#f5f3ff', color: '#5b21b6', border: '1px solid #c4b5fd' }}>
+                        🎯 แหล่งทุนเป้าหมาย: {selectedGrantAgency.name}
+                      </span>
+                    )}
+                  </div>
+                  <h3 style={{ fontFamily: 'Kanit, sans-serif', fontSize: '21px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                    ส่วนที่ 3: เอกสารข้อเสนอโครงการฉบับสมบูรณ์ (แก้ไขได้อิสระ)
+                  </h3>
+                  <p style={{ margin: '4px 0 0', fontSize: '13.5px', color: '#475569' }}>
+                    นำข้อมูลส่วนที่ 1 และส่วนที่ 2 ด้านบนมาเรียบเรียงตามโครงสร้างมาตรฐานขอรับงบประมาณจากหน่วยงานภาครัฐ ครบทั้ง 16 หัวข้อย่อย (บันทึกร่างอัตโนมัติในเครื่อง)
+                  </p>
+                </div>
+
+                <div className="full-grant-actions">
+                  <button
+                    type="button"
+                    className="full-grant-action-btn is-primary"
+                    onClick={() => handleWriteFullProposal()}
+                    disabled={isGeneratingFullProposal}
+                    title="ให้ AI เขียนเรียบเรียงโครงการฉบับสมบูรณ์ใหม่อีกครั้งจากข้อมูลส่วนที่ 1 และ 2 ปัจจุบัน"
+                  >
+                    {isGeneratingFullProposal ? <Loader2 size={15} className="spin-animation" /> : <Sparkles size={15} />}
+                    <span>{isGeneratingFullProposal ? 'กำลังเขียนโครงการ...' : 'ให้ AI เขียนใหม่'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`full-grant-action-btn ${isFullProposalCopied ? 'is-copied' : ''}`}
+                    onClick={handleCopyFullProposal}
+                    disabled={isGeneratingFullProposal || !fullProposalText.trim()}
+                  >
+                    {isFullProposalCopied ? <Check size={15} /> : <Copy size={15} />}
+                    <span>{isFullProposalCopied ? 'คัดลอกแล้ว' : 'คัดลอกทั้งหมด'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="full-grant-action-btn is-docx"
+                    onClick={() => exportGrantProposalToDocx(propProjectName || hackathonChallenge, fullProposalText, selectedGrantAgency?.name)}
+                    disabled={isGeneratingFullProposal || !fullProposalText.trim()}
+                    title="ดาวน์โหลดเป็นไฟล์ Microsoft Word (.docx)"
+                  >
+                    <Download size={15} />
+                    <span>ดาวน์โหลด Word (.docx)</span>
+                  </button>
+                </div>
+              </div>
+
+              {isGeneratingFullProposal && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', borderRadius: '10px', background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', fontSize: '14px', fontWeight: 600 }}>
+                  <Loader2 size={18} className="spin-animation" />
+                  <span>AI กำลังเรียบเรียงข้อเสนอโครงการฉบับสมบูรณ์ครบ 16 หัวข้อย่อย จากข้อมูลส่วนที่ 1 และส่วนที่ 2 กรุณารอสักครู่...</span>
+                </div>
+              )}
+
+              <textarea
+                id="hackathon-full-grant-proposal-textarea"
+                className="full-grant-textarea"
+                value={fullProposalText}
+                onChange={(e) => setFullProposalText(e.target.value)}
+                placeholder="ข้อมูลข้อเสนอโครงการฉบับสมบูรณ์ทั้ง 16 หัวข้อย่อยจะแสดงที่นี่..."
+                rows={24}
+              />
+            </div>
+          )}
+
+          {/* =================================================================
+              ส่วนที่ 4: ข้อมูลหน่วยงานรัฐที่ให้ทุนสำหรับการขอโครงการ
+              ================================================================= */}
+          {isFullProposalSectionOpen && (
+            <div id="hackathon-section-4-gov-grants" className="gov-grant-directory-card">
+              <div>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 12px', borderRadius: '999px', background: '#0f172a', color: '#ffffff', fontSize: '12.5px', fontWeight: 700, marginBottom: '6px' }}>
+                  <Landmark size={14} />
+                  <span>ส่วนที่ 4: แหล่งทุนภาครัฐและองค์การมหาชน ({GOV_GRANT_AGENCIES_DIRECTORY.reduce((sum, g) => sum + g.agencies.length, 0)} หน่วยงาน)</span>
+                </span>
+                <h3 style={{ fontFamily: 'Kanit, sans-serif', fontSize: '21px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                  ส่วนที่ 4: ข้อมูลหน่วยงานรัฐที่ให้ทุนสำหรับการขอโครงการ
+                </h3>
+                <p style={{ margin: '4px 0 0', fontSize: '14px', color: '#475569' }}>
+                  แหล่งทุนภาครัฐและองค์การมหาชนในประเทศไทยที่เปิดให้บุคคลทั่วไป กลุ่มวิสาหกิจ ผู้ประกอบการ (SME/Startup) รวมถึงหน่วยงานรัฐด้วยกัน เขียนข้อเสนอโครงการเพื่อขอรับงบประมาณสนับสนุน แบ่งตามหมวดหมู่ภารกิจและกลุ่มเป้าหมายหลัก (สามารถกด <strong>"เลือกเป็นแหล่งทุนเป้าหมาย"</strong> เพื่อให้ AI ช่วยปรับร่างส่วนที่ 3 ให้ตรงเกณฑ์กองทุนนั้นได้ทันที)
+                </p>
+              </div>
+
+              {GOV_GRANT_AGENCIES_DIRECTORY.map((group) => (
+                <div key={group.id} className="gov-grant-group-block">
+                  <div className="gov-grant-group-header" style={{ background: group.bgTint, borderLeft: `5px solid ${group.accentColor}` }}>
+                    <h4 style={{ margin: 0, fontFamily: 'Kanit, sans-serif', fontSize: '17px', fontWeight: 800, color: '#0f172a' }}>
+                      {group.number}. {group.title}
+                    </h4>
+                    <p style={{ margin: '4px 0 0', fontSize: '13.5px', color: '#334155', lineHeight: 1.5 }}>
+                      {group.subtitle}
+                    </p>
+                  </div>
+
+                  <div className="gov-grant-table-wrap">
+                    <table className="gov-grant-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: '25%' }}>หน่วยงาน / กองทุน</th>
+                          <th style={{ width: '43%' }}>ลักษณะทุนและผู้มีสิทธิ์ขอ</th>
+                          <th style={{ width: '17%' }}>เว็บไซต์หลัก</th>
+                          <th style={{ width: '15%', textAlign: 'center' }}>ปรับร่างตามทุน</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {group.agencies.map((ag) => {
+                          const isSelected = selectedGrantAgency?.id === ag.id;
+                          return (
+                            <tr key={ag.id} className={isSelected ? 'is-selected-fund' : ''}>
+                              <td style={{ fontWeight: 700, color: '#0f172a' }}>{ag.name}</td>
+                              <td>{ag.description}</td>
+                              <td>
+                                <a
+                                  href={ag.website}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: group.accentColor, fontWeight: 600, wordBreak: 'break-all', textDecoration: 'underline' }}
+                                >
+                                  <span>{ag.website}</span>
+                                  <ExternalLink size={12} />
+                                </a>
+                              </td>
+                              <td style={{ textAlign: 'center' }}>
+                                <button
+                                  type="button"
+                                  className={`gov-grant-select-btn ${isSelected ? 'is-active' : ''}`}
+                                  disabled={isGeneratingFullProposal}
+                                  onClick={() => handleWriteFullProposal(ag)}
+                                  title={`เลือก ${ag.name} และให้ AI ปรับร่างโครงการในส่วนที่ 3 ให้สอดคล้องกับกองทุนนี้`}
+                                >
+                                  <Sparkles size={13} />
+                                  <span>{isSelected ? 'เลือกแล้ว / ปรับใหม่' : 'ปรับตามทุนนี้'}</span>
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+
+              <div className="gov-grant-tips-box">
+                <h4 style={{ margin: '0 0 8px', fontFamily: 'Kanit, sans-serif', fontSize: '16px', fontWeight: 800, color: '#92400e', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <AlertTriangle size={17} />
+                  <span>ข้อแนะนำเพิ่มเติมก่อนยื่นขอทุน</span>
+                </h4>
+                <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '14px', lineHeight: 1.65 }}>
+                  {GOV_GRANT_APPLICATION_TIPS.map((tip, idx) => (
+                    <li key={idx} style={{ marginBottom: idx === 0 ? '6px' : 0 }}>
+                      {tip}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
           </>
           )}
 
@@ -5435,6 +5753,7 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
         evaluationResult={preCheckResult}
         isLoading={isPreChecking}
         onConfirmSubmit={handleConfirmSubmitFromPreCheck}
+        onWriteFullProposal={() => handleWriteFullProposal()}
         isAdmin={isAdmin}
         onResetHistory={() => {
           clearTempEvaluationHistory(province);

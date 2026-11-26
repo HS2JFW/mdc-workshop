@@ -48,6 +48,7 @@ interface PreSubmissionEvaluationModalProps {
   evaluationResult: PreSubmissionEvaluationResult | null;
   isLoading: boolean;
   onConfirmSubmit: () => void;
+  onWriteFullProposal?: () => void;
   isAdmin?: boolean;
   onResetHistory?: () => void;
   onOpenApiKeySettings?: () => void;
@@ -59,6 +60,7 @@ export const PreSubmissionEvaluationModal: React.FC<PreSubmissionEvaluationModal
   evaluationResult,
   isLoading,
   onConfirmSubmit,
+  onWriteFullProposal,
   isAdmin: propIsAdmin,
   onResetHistory,
   onOpenApiKeySettings
@@ -1186,6 +1188,18 @@ export const PreSubmissionEvaluationModal: React.FC<PreSubmissionEvaluationModal
                 : 'ส่งโครงการ'}
             </span>
           </button>
+
+          {onWriteFullProposal && !isLoading && (
+            <button
+              type="button"
+              className="btn-precheck-grant-proposal"
+              onClick={onWriteFullProposal}
+              title="นำข้อมูลส่วนที่ 1 และส่วนที่ 2 มาเขียนเป็นข้อเสนอโครงการฉบับสมบูรณ์พร้อมยื่นขอทุนหน่วยงานภาครัฐ"
+            >
+              <FileText size={18} />
+              <span>เขียนโครงการฉบับสมบูรณ์</span>
+            </button>
+          )}
         </div>
       </div>
     </div>
