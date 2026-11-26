@@ -1510,6 +1510,8 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
   const [isPreChecking, setIsPreChecking] = useState<boolean>(false);
   const [preCheckResult, setPreCheckResult] = useState<PreSubmissionEvaluationResult | null>(null);
   const [latestCriteriaRecord, setLatestCriteriaRecord] = useState<PilotHackathonCriteriaRecord | null>(null);
+  const [isAiPromptEmptyModalOpen, setIsAiPromptEmptyModalOpen] = useState<boolean>(false);
+  const [isSubmittingDirectProject, setIsSubmittingDirectProject] = useState<boolean>(false);
 
   // ส่วนที่ 3 และ ส่วนที่ 4: ข้อเสนอโครงการฉบับสมบูรณ์ขอทุนรัฐ + แหล่งทุนภาครัฐ
   const [isFullProposalSectionOpen, setIsFullProposalSectionOpen] = useState<boolean>(false);
@@ -2107,6 +2109,10 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
   // Handle AI Ideation trigger (คิดค้นโครงการใหม่โดย AI สังเคราะห์ลงฟอร์มส่วนที่ 2 อัตโนมัติ)
   const handleTriggerAiIdeation = async (customPrompt?: string) => {
     const promptInput = customPrompt !== undefined ? customPrompt : aiPromptInput;
+    if (!promptInput || !promptInput.trim()) {
+      setIsAiPromptEmptyModalOpen(true);
+      return;
+    }
 
     // เริ่มแสดงสถานะกำลังคิดทันที (ไอคอนหมุนวน) โดยไม่บล็อกด้วยหน้าต่าง Popup
     setIsAiGenerating(true);
@@ -2357,12 +2363,33 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
     }
   };
 
-  // Submit Logic (shared between Step 4 Submit and PreCheck Confirm Submit)
-  const doSubmitProject = async (customEval?: {
-    aiScore: number;
-    aiScoreBreakdown: { alignment: number; feasibility: number; innovation: number; participation: number };
-    aiRecommendations: string;
-  }) => {
+  // Snapshot ล่าสุดที่เคยผ่านการตรวจสอบคะแนนโครงการสำหรับปุ่มส่งโครงการลัดใต้ปุ่มตรวจคะแนน
+  const latestCheckedSnapshot = useMemo(() => {
+    return getLatestTempSnapshot(province);
+  }, [province, preCheckResult, preCheckClickCount, isPreChecking, allProjects.length]);
+
+  // Submit Logic (shared between Step 4 Submit, Direct Submit button, and PreCheck Confirm Submit)
+  const doSubmitProject = async (
+    customEval?: {
+      aiScore: number;
+      aiScoreBreakdown: { alignment: number; feasibility: number; innovation: number; participation: number };
+      aiRecommendations: string;
+    },
+    projectOverride?: {
+      projectName?: string;
+      targetMoralVirtue?: string;
+      targetAudience?: string;
+      targetArea?: string;
+      proposalDetails?: string;
+      activityPlan?: string;
+      behavioralKpi?: string;
+      challengeTopic?: string;
+      proposerName?: string;
+      proposerAgency?: string;
+      rawAiScore?: number;
+      preCheckCount?: number;
+    }
+  ) => {
     const candFirst = regFirstName.trim();
     const candLast = regLastName.trim();
 
@@ -2375,7 +2402,8 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
       }
     }
 
-    if (!propProjectName.trim()) {
+    const effectiveProjectName = (projectOverride?.projectName ?? propProjectName).trim();
+    if (!effectiveProjectName) {
       alert('กรุณาระบุชื่อโครงการที่ต้องการนำเสนอ');
       return;
     }
@@ -2387,28 +2415,30 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
         province,
         groupKey: selectedGroup,
         groupName: currentGroupMeta.name,
-        projectName: propProjectName,
-        targetMoralVirtue: propTargetVirtue || research.weaknessVirtue,
-        targetAudience: propTargetAudience || 'ประชาชนและชุมชนในพื้นที่',
-        targetArea: propTargetArea || `จ.${province}`,
-        proposalDetails: propProposalDetails || 'แนวคิดกิจกรรมปรับเปลี่ยนพฤติกรรมคุณธรรม',
-        activityPlan: propActivityPlan || 'การบูรณาการกลไก 3 ระดับ: นโยบาย ผู้ปฏิบัติการ และประชาชน',
-        behavioralKpi: propBehavioralKpi || 'ร้อยละพฤติกรรมเชิงบวกที่เพิ่มขึ้นอย่างเป็นรูปธรรม',
-        proposerName: regFullName || `${candFirst} ${candLast}`.trim() || 'ผู้ร่วมกิจกรรม Hackathon',
+        projectName: effectiveProjectName,
+        targetMoralVirtue: projectOverride?.targetMoralVirtue ?? (propTargetVirtue || research.weaknessVirtue),
+        targetAudience: projectOverride?.targetAudience ?? (propTargetAudience || 'ประชาชนและชุมชนในพื้นที่'),
+        targetArea: projectOverride?.targetArea ?? (propTargetArea || `จ.${province}`),
+        proposalDetails: projectOverride?.proposalDetails ?? (propProposalDetails || 'แนวคิดกิจกรรมปรับเปลี่ยนพฤติกรรมคุณธรรม'),
+        activityPlan: projectOverride?.activityPlan ?? (propActivityPlan || 'การบูรณาการกลไก 3 ระดับ: นโยบาย ผู้ปฏิบัติการ และประชาชน'),
+        behavioralKpi: projectOverride?.behavioralKpi ?? (propBehavioralKpi || 'ร้อยละพฤติกรรมเชิงบวกที่เพิ่มขึ้นอย่างเป็นรูปธรรม'),
+        proposerName: projectOverride?.proposerName ?? (regFullName || `${candFirst} ${candLast}`.trim() || 'ผู้ร่วมกิจกรรม Hackathon'),
         proposerFirstName: candFirst || undefined,
         proposerLastName: candLast || undefined,
         proposerPosition: regPosition || undefined,
-        proposerAgency: regAgency || `เครือข่ายคุณธรรม จ.${province}`,
+        proposerAgency: projectOverride?.proposerAgency ?? (regAgency || `เครือข่ายคุณธรรม จ.${province}`),
         proposerLevel: regLevel,
-        challengeTopic: hackathonChallenge,
+        challengeTopic: projectOverride?.challengeTopic ?? hackathonChallenge,
         evaluatedCriteriaVirtues: selectedCriteriaVirtues,
-        rawAiScore: preCheckResult?.rawScore ?? customEval?.aiScore,
-        preCheckCount: preCheckResult?.checkCount ?? (preCheckClickCount || 1),
+        rawAiScore: projectOverride?.rawAiScore ?? preCheckResult?.rawScore ?? customEval?.aiScore,
+        preCheckCount: projectOverride?.preCheckCount ?? preCheckResult?.checkCount ?? (preCheckClickCount || 1),
         preCheckPenalty: 0
       },
       customEval
     );
 
+    clearTempEvaluationHistory(province);
+    setPreCheckResult(null);
     setPreCheckClickCount(0);
 
     if (!dbResult.success) {
@@ -2462,6 +2492,55 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
       });
     } else {
       doSubmitProject();
+    }
+  };
+
+  // ส่งโครงการล่าสุดที่เคยตรวจคะแนนแล้วเข้าสู่ขั้นตอนที่ 5 ทันที
+  const handleDirectSubmitLatestCheckedProject = async () => {
+    if (isSubmittingDirectProject || isPreChecking) return;
+    const snap = getLatestTempSnapshot(province);
+    if (!snap) {
+      alert('ไม่พบข้อมูลโครงการที่เคยตรวจคะแนนล่าสุด กรุณากด "ตรวจสอบคะแนนโครงการ" ก่อนส่งโครงการ');
+      return;
+    }
+
+    setIsSubmittingDirectProject(true);
+    try {
+      const evalSummaryText =
+        preCheckResult &&
+        preCheckResult.iteration === snap.iteration &&
+        preCheckResult.finalScore === snap.finalScore
+          ? preCheckResult.comparativeContext.comparativeRationale
+          : `ผลประเมินล่าสุด (${snap.qualityTier}) คะแนน ${snap.finalScore.toFixed(2)}/100 (ตรวจครั้งที่ ${snap.iteration})`;
+
+      await doSubmitProject(
+        {
+          aiScore: snap.finalScore,
+          aiScoreBreakdown: {
+            alignment: Number((snap.finalScore * 0.3).toFixed(1)),
+            feasibility: Number((snap.finalScore * 0.3).toFixed(1)),
+            innovation: Number((snap.finalScore * 0.2).toFixed(1)),
+            participation: Number((snap.finalScore * 0.2).toFixed(1))
+          },
+          aiRecommendations: evalSummaryText
+        },
+        {
+          projectName: snap.projectData.projectName,
+          targetMoralVirtue: snap.projectData.targetMoralVirtue,
+          targetAudience: snap.projectData.targetAudience,
+          targetArea: snap.projectData.targetArea,
+          proposalDetails: snap.projectData.proposalDetails,
+          activityPlan: snap.projectData.activityPlan,
+          behavioralKpi: snap.projectData.behavioralKpi,
+          challengeTopic: snap.challengeTopic,
+          proposerName: snap.projectData.proposerName,
+          proposerAgency: snap.projectData.proposerAgency,
+          rawAiScore: snap.finalScore,
+          preCheckCount: snap.iteration
+        }
+      );
+    } finally {
+      setIsSubmittingDirectProject(false);
     }
   };
 
@@ -4708,9 +4787,10 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
 
             <button
               type="button"
-              className={`hackathon-ai-trigger-btn ${isAiGenerating ? 'is-generating' : ''}`}
+              className={`hackathon-ai-trigger-btn ${isAiGenerating ? 'is-generating' : !aiPromptInput.trim() ? 'is-prompt-empty' : ''}`}
               onClick={() => handleTriggerAiIdeation()}
               disabled={isAiGenerating}
+              title={!aiPromptInput.trim() ? 'กรุณาใส่แนวคิดโครงการในช่อง Prompt ด้านบนก่อนกดปุ่ม' : 'คลิกเพื่อให้ AI ช่วยคิดโครงร่างโครงการตามแนวคิดที่ระบุ'}
             >
               {isAiGenerating ? (
                 <>
@@ -5215,6 +5295,30 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
                     : 'ตรวจสอบคะแนนโครงการ'}
                 </span>
               </button>
+
+              {latestCheckedSnapshot && !checkDuplicateSubmitter(regFirstName, regLastName, allProjects).isDuplicate && (
+                <button
+                  type="button"
+                  className="hackathon-direct-submit-btn"
+                  onClick={handleDirectSubmitLatestCheckedProject}
+                  disabled={isSubmittingDirectProject || isPreChecking}
+                  title={`ส่งโครงการ "${latestCheckedSnapshot.projectData.projectName}" (คะแนนล่าสุด ${latestCheckedSnapshot.finalScore.toFixed(2)}/100) ไปยังขั้นตอนที่ 5`}
+                >
+                  {isSubmittingDirectProject ? (
+                    <Loader2 size={22} className="spin-animation" />
+                  ) : (
+                    <Send size={20} />
+                  )}
+                  <div className="hackathon-direct-submit-btn-text">
+                    <span className="hackathon-direct-submit-main">
+                      {isSubmittingDirectProject ? 'กำลังส่งโครงการเข้าสู่ระบบ...' : 'ส่งโครงการ'}
+                    </span>
+                    <span className="hackathon-direct-submit-sub">
+                      ล่าสุดที่ตรวจ: &ldquo;{latestCheckedSnapshot.projectData.projectName}&rdquo; ({latestCheckedSnapshot.finalScore.toFixed(2)}/100)
+                    </span>
+                  </div>
+                </button>
+              )}
             </div>
           </form>
 
@@ -5811,6 +5915,58 @@ export const PilotRegionalActivityView: React.FC<PilotRegionalActivityViewProps>
         project={lastSubmittedProject}
         onGoToSummary={handleGoToSubmittedProjectsSummary}
       />
+
+      {/* Dialog แจ้งเตือนเมื่อยังไม่พิมพ์แนวคิดโครงการในช่อง Prompt ส่วนที่ 1 */}
+      {isAiPromptEmptyModalOpen && (
+        <div className="criteria-modal-backdrop" onClick={() => setIsAiPromptEmptyModalOpen(false)}>
+          <div className="ai-prompt-warning-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="ai-prompt-warning-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div className="ai-prompt-warning-icon-wrap">
+                  <AlertTriangle size={22} color="#d97706" />
+                </div>
+                <h3 style={{ margin: 0, fontFamily: 'Kanit, sans-serif', fontSize: '18.5px', fontWeight: 800, color: '#0f172a' }}>
+                  กรุณาใส่แนวคิดโครงการที่ต้องการ
+                </h3>
+              </div>
+              <button
+                type="button"
+                className="criteria-modal-close-btn"
+                onClick={() => setIsAiPromptEmptyModalOpen(false)}
+                aria-label="ปิดหน้าต่างแจ้งเตือน"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="ai-prompt-warning-body">
+              <p style={{ margin: '0 0 10px 0', fontSize: '15.5px', color: '#334155', lineHeight: 1.65 }}>
+                โปรดพิมพ์ <strong>แนวคิดโครงการหรือความต้องการของโครงการ</strong> ลงในช่อง Prompt ในส่วนที่ 1 ก่อนกดปุ่ม &ldquo;ให้ AI ช่วยคิดโครงการ&rdquo; เพื่อให้ AI ออกแบบโครงการได้ตรงประเด็น
+              </p>
+              <p style={{ margin: 0, fontSize: '13.5px', color: '#64748b', lineHeight: 1.5 }}>
+                💡 หรือสามารถคลิกเลือกจากปุ่ม <strong>คีย์เวิร์ดแนะนำ</strong> ด้านบนช่องพิมพ์แล้วปรับแก้ข้อความต่อได้ทันที
+              </p>
+            </div>
+            <div className="ai-prompt-warning-footer">
+              <button
+                type="button"
+                className="ai-prompt-warning-confirm-btn"
+                onClick={() => {
+                  setIsAiPromptEmptyModalOpen(false);
+                  setTimeout(() => {
+                    const el = document.getElementById('hackathon-ai-prompt-textarea');
+                    if (el) {
+                      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      el.focus();
+                    }
+                  }, 80);
+                }}
+              >
+                ตกลง / ไปพิมพ์แนวคิด
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Hackathon Project Detail Modal (แสดง Dialog รายละเอียดโครงการทั้งหมดเมื่อกดปุ่ม icon view) */}
       <HackathonProjectDetailModal

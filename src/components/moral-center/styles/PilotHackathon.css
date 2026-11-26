@@ -1069,6 +1069,17 @@
   transform: translateY(-1px);
 }
 
+.hackathon-ai-trigger-btn.is-prompt-empty {
+  background: #94a3b8;
+  box-shadow: 0 2px 8px rgba(148, 163, 184, 0.3);
+  opacity: 0.92;
+}
+
+.hackathon-ai-trigger-btn.is-prompt-empty:hover {
+  background: #64748b;
+  transform: none;
+}
+
 .hackathon-ai-trigger-btn:disabled,
 .hackathon-ai-trigger-btn.is-generating {
   background: linear-gradient(135deg, #059669 0%, #0d9488 50%, #059669 100%);
@@ -1393,6 +1404,119 @@
 .hackathon-precheck-btn:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+}
+
+.hackathon-direct-submit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 14px 28px;
+  border-radius: 14px;
+  border: 2px solid #059669;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  font-family: 'Kanit', sans-serif;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.32);
+  transition: all 0.2s ease;
+  width: 100%;
+  margin-top: 12px;
+}
+
+.hackathon-direct-submit-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.44);
+}
+
+.hackathon-direct-submit-btn:disabled {
+  opacity: 0.68;
+  cursor: not-allowed;
+}
+
+.hackathon-direct-submit-btn-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  line-height: 1.25;
+}
+
+.hackathon-direct-submit-main {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.hackathon-direct-submit-sub {
+  font-family: 'Sarabun', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ecfdf5;
+  opacity: 0.95;
+}
+
+/* --- AI Prompt Empty Warning Dialog --- */
+.ai-prompt-warning-modal {
+  background: #ffffff;
+  border-radius: 18px;
+  max-width: 480px;
+  width: 92%;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+  border: 1px solid #fde68a;
+  overflow: hidden;
+  animation: modalFadeSlideUp 0.2s ease-out;
+}
+
+.ai-prompt-warning-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  border-bottom: 1px solid #fde68a;
+}
+
+.ai-prompt-warning-icon-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ai-prompt-warning-body {
+  padding: 20px;
+}
+
+.ai-prompt-warning-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 20px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+}
+
+.ai-prompt-warning-confirm-btn {
+  padding: 10px 22px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  color: #ffffff;
+  font-family: 'Kanit', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.28);
+  transition: all 0.15s ease;
+}
+
+.ai-prompt-warning-confirm-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(5, 150, 105, 0.36);
 }
 
 /* --- Pre-submission AI Evaluation Modal Styles --- */
